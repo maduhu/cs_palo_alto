@@ -47,6 +47,7 @@ import com.cloud.bridge.service.core.ec2.EC2DescribeInstances;
 import com.cloud.bridge.service.core.ec2.EC2DescribeInstancesResponse;
 import com.cloud.bridge.service.core.ec2.EC2DescribeKeyPairs;
 import com.cloud.bridge.service.core.ec2.EC2DescribeKeyPairsResponse;
+import com.cloud.bridge.service.core.ec2.EC2ImageLaunchPermission;
 import com.cloud.bridge.service.core.ec2.EC2ResourceTag;
 import com.cloud.bridge.service.core.ec2.EC2DescribeSecurityGroups;
 import com.cloud.bridge.service.core.ec2.EC2DescribeSecurityGroupsResponse;
@@ -595,31 +596,32 @@ public class EC2SoapServiceImpl implements AmazonEC2SkeletonInterface  {
             request.setImageId(miat.getImageId());
             request.setAttribute(ImageAttribute.launchPermission);
             if(launchPermOp.getAdd() != null){
-                request.setLaunchPermOperation(EC2ModifyImageAttribute.Operation.add);
-                setAccountOrGroupList(launchPermOp.getAdd().getItem(), request);
+                setAccountOrGroupList(launchPermOp.getAdd().getItem(), request, "add");
             }else if(launchPermOp.getRemove() != null){
-                request.setLaunchPermOperation(EC2ModifyImageAttribute.Operation.remove);
-                setAccountOrGroupList(launchPermOp.getRemove().getItem(), request);
+                setAccountOrGroupList(launchPermOp.getRemove().getItem(), request, "remove");
             }
             return toModifyImageAttributeResponse( engine.modifyImageAttribute( request ));
 		}
 		throw new EC2ServiceException( ClientError.Unsupported, "Unsupported - can only modify image description or launchPermission");
 	}	
 
-	private void setAccountOrGroupList(LaunchPermissionItemType[] items, EC2ModifyImageAttribute request){
-        
-        List<String>  launchPermissionAccountsOrGroupList = new ArrayList<String>();
-        
+    private void setAccountOrGroupList(LaunchPermissionItemType[] items, EC2ModifyImageAttribute request, String operation){
+        EC2ImageLaunchPermission launchPermission = new EC2ImageLaunchPermission();
+
+        if (operation.equalsIgnoreCase("add"))
+            launchPermission.setLaunchPermOp(EC2ImageLaunchPermission.Operation.add);
+        else
+            launchPermission.setLaunchPermOp(EC2ImageLaunchPermission.Operation.remove);
+
         for (LaunchPermissionItemType lpItem : items) {
             if(lpItem.getGroup() != null){
-                launchPermissionAccountsOrGroupList.add(lpItem.getGroup());
+                launchPermission.addLaunchPermission(lpItem.getGroup());
             }else if(lpItem.getUserId() != null){
-                launchPermissionAccountsOrGroupList.add(lpItem.getUserId());
+                launchPermission.addLaunchPermission(lpItem.getUserId());
             }
         }
-        
-        request.setLaunchPermissionAccountsOrGroupList(launchPermissionAccountsOrGroupList);
 
+        request.addLaunchPermission(launchPermission);
 	}
 	/**
 	 * Did not find a matching service offering so for now we just return disabled
@@ -702,7 +704,9 @@ public class EC2SoapServiceImpl implements AmazonEC2SkeletonInterface  {
 		if(elementType != null){
 		    request.setImageId( riat.getImageId());
 		    request.setAttribute(ImageAttribute.launchPermission);
-    		request.setLaunchPermOperation(EC2ModifyImageAttribute.Operation.reset);
+            EC2ImageLaunchPermission launchPermission = new EC2ImageLaunchPermission();
+            launchPermission.setLaunchPermOp(EC2ImageLaunchPermission.Operation.reset);
+            request.addLaunchPermission(launchPermission);
     		return toResetImageAttributeResponse( engine.modifyImageAttribute( request ));
 		}
 		throw new EC2ServiceException( ClientError.Unsupported, "Unsupported - can only reset image launchPermission" );
@@ -1379,7 +1383,7 @@ public class EC2SoapServiceImpl implements AmazonEC2SkeletonInterface  {
 	        param7.setDnsName( "" );
 	        param7.setReason( "" );
             param7.setKeyName( inst.getKeyPairName());
-	        param7.setAmiLaunchIndex( "" );
+            param7.setAmiLaunchIndex( null );
 	        param7.setInstanceType( inst.getServiceOffering());
 	        
 	        ProductCodesSetType param9 = new ProductCodesSetType();
@@ -1701,7 +1705,7 @@ public class EC2SoapServiceImpl implements AmazonEC2SkeletonInterface  {
 	        param7.setDnsName( "" );
 	        param7.setReason( "" );
             param7.setKeyName( inst.getKeyPairName());
-	        param7.setAmiLaunchIndex( "" );
+            param7.setAmiLaunchIndex( null );
 	        
 	        ProductCodesSetType param9 = new ProductCodesSetType();
 	        ProductCodesSetItemType param10 = new ProductCodesSetItemType();

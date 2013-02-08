@@ -29,6 +29,8 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import com.cloud.configuration.Config;
+import com.cloud.configuration.dao.ConfigurationDao;
 import com.cloud.exception.RequestLimitException;
 import com.cloud.user.Account;
 import com.cloud.user.AccountService;
@@ -43,11 +45,17 @@ public class ApiRateLimitTest {
 
 	static ApiRateLimitServiceImpl _limitService = new ApiRateLimitServiceImpl();
 	static AccountService _accountService = mock(AccountService.class);
+	static ConfigurationDao _configDao = mock(ConfigurationDao.class);
 	private static long acctIdSeq = 5L;
 	private static Account testAccount;
 
 	@BeforeClass
 	public static void setUp() throws ConfigurationException {
+
+	    when(_configDao.getValue(Config.ApiLimitInterval.key())).thenReturn(null);
+	    when(_configDao.getValue(Config.ApiLimitMax.key())).thenReturn(null);
+	    when(_configDao.getValue(Config.ApiLimitCacheSize.key())).thenReturn(null);
+	    _limitService._configDao = _configDao;
 
 		_limitService.configure("ApiRateLimitTest", Collections.<String, Object> emptyMap());
 
@@ -181,7 +189,7 @@ public class ApiRateLimitTest {
         assertTrue("The first request should be allowed", isUnderLimit(key));
 
         // Allow the token to expire
-        Thread.sleep(1001);
+        Thread.sleep(1020);
 
         assertTrue("Another request after interval should be allowed as well", isUnderLimit(key));
     }
@@ -219,7 +227,8 @@ public class ApiRateLimitTest {
         ApiLimitResponse response = _limitService.searchApiLimit(testAccount);
         assertEquals("apiIssued is incorrect", 5, response.getApiIssued());
         assertEquals("apiAllowed is incorrect", 5, response.getApiAllowed());
-        assertTrue("expiredAfter is incorrect", response.getExpireAfter() < 1000);
+        // using <= to account for inaccurate System.currentTimeMillis() clock in Windows environment
+        assertTrue("expiredAfter is incorrect", response.getExpireAfter() <= 1000);
 
     }
 
