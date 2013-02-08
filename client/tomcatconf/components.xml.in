@@ -166,6 +166,7 @@ under the License.
             <adapter name="SecurityGroupProvider" class="com.cloud.network.element.SecurityGroupElement"/>
             <adapter name="VpcVirtualRouter" class="com.cloud.network.element.VpcVirtualRouterElement"/>
             <adapter name="NiciraNvp" class="com.cloud.network.element.NiciraNvpElement"/>
+            <adapter name="PaloAlto" class="com.cloud.network.element.PaloAltoExternalFirewallElement"/>
         </adapters>
         <adapters key="com.cloud.network.element.FirewallServiceProvider">
             <adapter name="VirtualRouter" class="com.cloud.network.element.VirtualRouterElement"/>
@@ -238,6 +239,7 @@ under the License.
         <pluggableservice name="ApiDiscoveryService" key="org.apache.cloudstack.discovery.ApiDiscoveryService" class="org.apache.cloudstack.discovery.ApiDiscoveryServiceImpl"/>
         <pluggableservice name="VirtualRouterElementService" key="com.cloud.network.element.VirtualRouterElementService" class="com.cloud.network.element.VirtualRouterElement"/>
         <pluggableservice name="NiciraNvpElementService" key="com.cloud.network.element.NiciraNvpElementService" class="com.cloud.network.element.NiciraNvpElement"/>
+        <pluggableservice name="PaloAltoFirewallElementService" key="com.cloud.network.element.PaloAltoFirewallElementService" class="com.cloud.network.element.PaloAltoExternalFirewallElement"/>
         <pluggableservice name="ApiRateLimitService" key="org.apache.cloudstack.ratelimit.ApiRateLimitService" class="org.apache.cloudstack.ratelimit.ApiRateLimitServiceImpl"/>
         <dao name="OvsTunnelInterfaceDao" class="com.cloud.network.ovs.dao.OvsTunnelInterfaceDaoImpl" singleton="false"/>
         <dao name="OvsTunnelAccountDao" class="com.cloud.network.ovs.dao.OvsTunnelNetworkDaoImpl" singleton="false"/>

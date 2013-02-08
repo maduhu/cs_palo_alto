@@ -35,6 +35,7 @@
 /etc/cloud/management/virtualrouter_commands.properties
 /etc/cloud/management/f5bigip_commands.properties
 /etc/cloud/management/junipersrx_commands.properties
+/etc/cloud/management/paloalto_commands.properties
 /etc/cloud/management/netscalerloadbalancer_commands.properties
 /etc/cloud/management/cisconexusvsm_commands.properties
 /etc/cloud/management/Catalina

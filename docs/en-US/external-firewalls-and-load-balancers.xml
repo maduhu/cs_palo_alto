@@ -20,9 +20,9 @@
 -->
 <section id="external-firewalls-and-load-balancers">
   <title>External Firewalls and Load Balancers</title>
-  <para>&PRODUCT; is capable of replacing its Virtual Router with an external Juniper SRX device and
+  <para>&PRODUCT; is capable of replacing its Virtual Router with an external Juniper SRX or Palo Alto device and
     an optional external NetScaler or F5 load balancer for gateway and load balancing services. In
-    this case, the VMs use the SRX as their gateway.</para>
+    this case, the VMs use the SRX or Palo Alto as their gateway.</para>
   <xi:include href="using-netscaler-load-balancers.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
   <xi:include href="configure-snmp-rhel.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
   <xi:include href="initial-setup-of-external-firewalls-loadbalancers.xml"

@@ -115,6 +115,7 @@ public interface Network extends ControlledEntity, InternalIdentity, Identity {
 
         public static final Provider VirtualRouter = new Provider("VirtualRouter", false);
         public static final Provider JuniperSRX = new Provider("JuniperSRX", true);
+        public static final Provider PaloAlto = new Provider("PaloAlto", true);
         public static final Provider F5BigIp = new Provider("F5BigIp", true);
         public static final Provider Netscaler = new Provider("Netscaler", true);
         public static final Provider ExternalDhcpServer = new Provider("ExternalDhcpServer", true);

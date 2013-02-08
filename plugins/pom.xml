@@ -45,6 +45,7 @@
     <module>network-elements/elastic-loadbalancer</module>
     <module>network-elements/ovs</module>
     <module>network-elements/nicira-nvp</module>
+    <module>network-elements/palo-alto</module>
     <module>storage-allocators/random</module>
     <module>user-authenticators/ldap</module>
     <module>user-authenticators/md5</module>

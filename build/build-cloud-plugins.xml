@@ -297,6 +297,11 @@
   </target>
   <target name="build-srx" depends="compile-srx"/>
 
+  <target name="compile-palo-alto" depends="-init, compile-server" description="Compile Palo Alto plugin">
+    <ant antfile="${base.dir}/plugins/network-elements/palo-alto/build.xml" target="build"/>
+  </target>
+  <target name="build-palo-alto" depends="compile-palo-alto"/>
+
   <target name="compile-ovs" depends="-init, compile-server" description="Compile Ovs plugin">
   	<ant antfile="${base.dir}/plugins/network-elements/ovs/build.xml" target="build"/>
   </target>

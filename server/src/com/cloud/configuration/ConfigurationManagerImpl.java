@@ -3041,6 +3041,10 @@ public class ConfigurationManagerImpl implements ConfigurationManager, Configura
                         if (provider == Provider.JuniperSRX) {
                             firewallProvider = Provider.JuniperSRX;
                         }
+
+                        if (provider == Provider.PaloAlto) {
+                            firewallProvider = Provider.PaloAlto;
+                        }
                         
                         if ((service == Service.PortForwarding || service == Service.StaticNat) && provider == Provider.VirtualRouter){
                             firewallProvider = Provider.VirtualRouter;

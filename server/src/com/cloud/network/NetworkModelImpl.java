@@ -1707,9 +1707,10 @@ public class NetworkModelImpl  implements NetworkModel, Manager{
     public boolean networkIsConfiguredForExternalNetworking(long zoneId, long networkId) {
         boolean netscalerInNetwork = isProviderForNetwork(Network.Provider.Netscaler, networkId);
         boolean juniperInNetwork = isProviderForNetwork(Network.Provider.JuniperSRX, networkId);
+        boolean paloaltoInNetwork = isProviderForNetwork(Network.Provider.PaloAlto, networkId);
         boolean f5InNetwork = isProviderForNetwork(Network.Provider.F5BigIp, networkId);
     
-        if (netscalerInNetwork || juniperInNetwork || f5InNetwork) {
+        if (netscalerInNetwork || juniperInNetwork || f5InNetwork || paloaltoInNetwork) {
             return true;
         } else {
             return false;
