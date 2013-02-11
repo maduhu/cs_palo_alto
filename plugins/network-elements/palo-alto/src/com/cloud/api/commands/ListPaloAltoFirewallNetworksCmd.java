@@ -19,6 +19,8 @@ package com.cloud.api.commands;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.inject.Inject;
+
 import org.apache.cloudstack.api.*;
 import org.apache.log4j.Logger;
 
@@ -40,7 +42,7 @@ public class ListPaloAltoFirewallNetworksCmd extends BaseListCmd {
 
     public static final Logger s_logger = Logger.getLogger(ListPaloAltoFirewallNetworksCmd.class.getName());
     private static final String s_name = "listpaloaltofirewallnetworksresponse";
-    @PlugService PaloAltoFirewallElementService _paFwService;
+    @Inject PaloAltoFirewallElementService _paFwService;
 
     /////////////////////////////////////////////////////
     //////////////// API parameters /////////////////////

@@ -119,13 +119,13 @@ public class PaloAltoResource implements ServerResource {
         SRC_NAT_POOL_GETONE("src-nat-pool-getone.xml"), 
         SRC_NAT_RULE_ADD("src-nat-rule-add.xml"), 
         SRC_NAT_RULE_GETONE("src-nat-rule-getone.xml"), 
-        SRC_NAT_RULE_GETALL("src-nat-rule-getall.xml"),		
+        SRC_NAT_RULE_GETALL("src-nat-rule-getall.xml"),     
         DEST_NAT_POOL_ADD("dest-nat-pool-add.xml"),
         DEST_NAT_POOL_GETONE("dest-nat-pool-getone.xml"),
         DEST_NAT_POOL_GETALL("dest-nat-pool-getall.xml"),
         DEST_NAT_RULE_ADD("dest-nat-rule-add.xml"),
         DEST_NAT_RULE_GETONE("dest-nat-rule-getone.xml"),
-        DEST_NAT_RULE_GETALL("dest-nat-rule-getall.xml"),	
+        DEST_NAT_RULE_GETALL("dest-nat-rule-getall.xml"),   
         STATIC_NAT_RULE_ADD("static-nat-rule-add.xml"), 
         STATIC_NAT_RULE_GETONE("static-nat-rule-getone.xml"), 
         STATIC_NAT_RULE_GETALL("static-nat-rule-getall.xml"),
@@ -205,7 +205,7 @@ public class PaloAltoResource implements ServerResource {
                 return null;
             }
         }
-    }	
+    }   
 
     public class UsageFilter {
         private String name;
@@ -213,7 +213,7 @@ public class PaloAltoResource implements ServerResource {
         private String addressType;
 
         private UsageFilter(String name, String addressType, String counterIdentifier) {
-            this.name = name;    		
+            this.name = name;           
             this.addressType = addressType;
 
             if (_usageInterface != null) {
@@ -234,7 +234,7 @@ public class PaloAltoResource implements ServerResource {
         public String getAddressType() {
             return addressType;
         }
-    }	
+    }   
 
     public class FirewallFilterTerm {
         private String name;
@@ -296,7 +296,7 @@ public class PaloAltoResource implements ServerResource {
         public String getCountName() {
             return countName;
         }
-    }	
+    }   
 
     private enum PaloAltoCommand {
         LOGIN, OPEN_CONFIGURATION, CLOSE_CONFIGURATION, COMMIT, ROLLBACK, CHECK_IF_EXISTS, CHECK_IF_IN_USE, ADD, DELETE, GET_ALL;
@@ -349,9 +349,9 @@ public class PaloAltoResource implements ServerResource {
         } else if (cmd instanceof ExternalNetworkResourceUsageCommand) {
             return execute((ExternalNetworkResourceUsageCommand) cmd);
         } else if (cmd instanceof RemoteAccessVpnCfgCommand) {
-        	return execute((RemoteAccessVpnCfgCommand) cmd);
+            return execute((RemoteAccessVpnCfgCommand) cmd);
         } else if (cmd instanceof VpnUsersCfgCommand) {
-        	return execute((VpnUsersCfgCommand) cmd);
+            return execute((VpnUsersCfgCommand) cmd);
         } else {
             return Answer.createUnsupportedCommandAnswer(cmd);
         }
@@ -382,7 +382,7 @@ public class PaloAltoResource implements ServerResource {
             _password = (String) params.get("password");
             if (_password == null) {
                 throw new ConfigurationException("Unable to find password");
-            }			
+            }           
 
             _publicInterface = (String) params.get("publicinterface");
             if (_publicInterface == null) {
@@ -498,7 +498,7 @@ public class PaloAltoResource implements ServerResource {
     }
 
     private ExternalNetworkResourceUsageAnswer execute(ExternalNetworkResourceUsageCommand cmd) {
-        try {	
+        try {   
             return getUsageAnswer(cmd);
         } catch (ExecutionException e) {
             return new ExternalNetworkResourceUsageAnswer(cmd, e);
@@ -511,7 +511,7 @@ public class PaloAltoResource implements ServerResource {
 
     private boolean refreshPaloAltoConnection() {
         if (!(closeSocket() && openSocket())) {
-            return false;			
+            return false;           
         }
 
         try {
@@ -573,17 +573,17 @@ public class PaloAltoResource implements ServerResource {
 
     
     private boolean openUsageSocket() throws ExecutionException {
-    	try {
-    		Socket s = new Socket(_ip, 3221);
-    		s.setKeepAlive(true);
-    		s.setSoTimeout(_timeoutInSeconds * 1000);
-    		_UsagetoPaloAlto = new PrintWriter(s.getOutputStream(), true);
-    		_UsagefromPaloAlto = new BufferedReader(new InputStreamReader(s.getInputStream()));
-    		return usageLogin();
-    	} catch (IOException e) {
-    		s_logger.error(e);
-    		return false;
-    	}
+        try {
+            Socket s = new Socket(_ip, 3221);
+            s.setKeepAlive(true);
+            s.setSoTimeout(_timeoutInSeconds * 1000);
+            _UsagetoPaloAlto = new PrintWriter(s.getOutputStream(), true);
+            _UsagefromPaloAlto = new BufferedReader(new InputStreamReader(s.getInputStream()));
+            return usageLogin();
+        } catch (IOException e) {
+            s_logger.error(e);
+            return false;
+        }
     }
     
     private boolean closeUsageSocket() {
@@ -642,7 +642,7 @@ public class PaloAltoResource implements ServerResource {
 
         if (!sendRequestAndCheckResponse(PaloAltoCommand.COMMIT, xml)) {
             throw new ExecutionException(errorMsg);
-        } else {			
+        } else {            
             s_logger.debug(successMsg);
             closeConfiguration();
         }
@@ -653,7 +653,7 @@ public class PaloAltoResource implements ServerResource {
      */
 
     private synchronized Answer execute(IpAssocCommand cmd) {
-    	refreshPaloAltoConnection();
+        refreshPaloAltoConnection();
         return execute(cmd, _numRetries);
     }
 
@@ -689,11 +689,11 @@ public class PaloAltoResource implements ServerResource {
             
             Long publicVlanTag = null;
             if (ip.getVlanId() != null && !ip.getVlanId().equals("untagged")) {
-            	try {
-            		publicVlanTag = Long.parseLong(ip.getVlanId());
-            	} catch (Exception e) {
-            		throw new ExecutionException("Could not parse public VLAN tag: " + ip.getVlanId());
-            	}
+                try {
+                    publicVlanTag = Long.parseLong(ip.getVlanId());
+                } catch (Exception e) {
+                    throw new ExecutionException("Could not parse public VLAN tag: " + ip.getVlanId());
+                }
             } 
 
             openConfiguration();
@@ -735,12 +735,12 @@ public class PaloAltoResource implements ServerResource {
 
         if (type.equals(GuestNetworkType.SOURCE_NAT)) {
             manageSourceNatPool(PaloAltoCommand.ADD, publicIp);    
-            manageSourceNatRule(PaloAltoCommand.ADD, publicIp, privateSubnet); 		    				
-            manageProxyArp(PaloAltoCommand.ADD, publicVlanTag, publicIp);			
+            manageSourceNatRule(PaloAltoCommand.ADD, publicIp, privateSubnet);                           
+            manageProxyArp(PaloAltoCommand.ADD, publicVlanTag, publicIp);            
             manageUsageFilter(PaloAltoCommand.ADD, _usageFilterIPOutput, privateSubnet, null, genIpFilterTermName(publicIp));
             manageUsageFilter(PaloAltoCommand.ADD, _usageFilterIPInput, publicIp, null, genIpFilterTermName(publicIp));
-        } else if (type.equals(GuestNetworkType.INTERFACE_NAT)){		    
-            manageUsageFilter(PaloAltoCommand.ADD, _usageFilterVlanOutput, null, privateVlanTag, null);		    
+        } else if (type.equals(GuestNetworkType.INTERFACE_NAT)){            
+            manageUsageFilter(PaloAltoCommand.ADD, _usageFilterVlanOutput, null, privateVlanTag, null);          
             manageUsageFilter(PaloAltoCommand.ADD, _usageFilterVlanInput, null, privateVlanTag, null);
         }
 
@@ -749,7 +749,7 @@ public class PaloAltoResource implements ServerResource {
         s_logger.debug(msg);
     }
 
-    private void shutdownGuestNetwork(GuestNetworkType type, long accountId, Long publicVlanTag, String sourceNatIpAddress, long privateVlanTag, String privateGateway, String privateSubnet, long privateCidrSize) throws ExecutionException {	    
+    private void shutdownGuestNetwork(GuestNetworkType type, long accountId, Long publicVlanTag, String sourceNatIpAddress, long privateVlanTag, String privateGateway, String privateSubnet, long privateCidrSize) throws ExecutionException {     
         // Remove static and destination NAT rules for the guest network
         removeStaticAndDestNatRulesInPrivateVlan(privateVlanTag, privateGateway, privateCidrSize);
 
@@ -760,16 +760,16 @@ public class PaloAltoResource implements ServerResource {
         manageZoneInterface(PaloAltoCommand.DELETE, privateVlanTag);   
         deleteVpnObjectsForAccount(accountId);
 
-        if (type.equals(GuestNetworkType.SOURCE_NAT)) {		    
+        if (type.equals(GuestNetworkType.SOURCE_NAT)) {         
             manageSourceNatRule(PaloAltoCommand.DELETE, sourceNatIpAddress, privateSubnet);
             manageSourceNatPool(PaloAltoCommand.DELETE, sourceNatIpAddress);
             manageProxyArp(PaloAltoCommand.DELETE, publicVlanTag, sourceNatIpAddress);
             manageUsageFilter(PaloAltoCommand.DELETE, _usageFilterIPOutput, privateSubnet, null, genIpFilterTermName(sourceNatIpAddress));
-            manageUsageFilter(PaloAltoCommand.DELETE, _usageFilterIPInput, sourceNatIpAddress, null, genIpFilterTermName(sourceNatIpAddress));					    					   		    		   
+            manageUsageFilter(PaloAltoCommand.DELETE, _usageFilterIPInput, sourceNatIpAddress, null, genIpFilterTermName(sourceNatIpAddress));                                                                  
         } else if (type.equals(GuestNetworkType.INTERFACE_NAT)) {
             manageUsageFilter(PaloAltoCommand.DELETE, _usageFilterVlanOutput, null, privateVlanTag, null);         
-            manageUsageFilter(PaloAltoCommand.DELETE, _usageFilterVlanInput, null, privateVlanTag, null); 		       		    
-        }				
+            manageUsageFilter(PaloAltoCommand.DELETE, _usageFilterVlanInput, null, privateVlanTag, null);                        
+        }               
 
         String msg = "Shut down guest network with type " + type +". Guest VLAN tag: " + privateVlanTag + ", guest gateway: " + privateGateway;
         msg += type.equals(GuestNetworkType.SOURCE_NAT) ? ", source NAT IP: " + sourceNatIpAddress : "";
@@ -825,7 +825,7 @@ public class PaloAltoResource implements ServerResource {
      */
 
     private synchronized Answer execute(SetStaticNatRulesCommand cmd) {
-    	refreshPaloAltoConnection();
+        refreshPaloAltoConnection();
         return execute(cmd, _numRetries);
     }       
 
@@ -880,9 +880,9 @@ public class PaloAltoResource implements ServerResource {
         addSecurityPolicyAndApplications(SecurityPolicyType.STATIC_NAT, privateIp, extractApplications(rules));
 
         s_logger.debug("Added static NAT rule for public IP " + publicIp + ", and private IP " + privateIp);
-    }		
+    }       
 
-    private void removeStaticNatRule(Long publicVlanTag, String publicIp, String privateIp) throws ExecutionException {	    
+    private void removeStaticNatRule(Long publicVlanTag, String publicIp, String privateIp) throws ExecutionException {     
         manageStaticNatRule(PaloAltoCommand.DELETE, publicIp, privateIp);
         manageProxyArp(PaloAltoCommand.DELETE, publicVlanTag, publicIp);   
 
@@ -901,7 +901,7 @@ public class PaloAltoResource implements ServerResource {
             
             Long publicVlanTag = null;
             if (publicVlanTags.containsKey(staticNatRulePublicIp)) {
-            	publicVlanTag = publicVlanTags.get(staticNatRulePublicIp);
+                publicVlanTag = publicVlanTags.get(staticNatRulePublicIp);
             }
 
             if (privateVlanTag != null) {
@@ -917,35 +917,35 @@ public class PaloAltoResource implements ServerResource {
      */
     
     private synchronized Answer execute(RemoteAccessVpnCfgCommand cmd) {
-    	refreshPaloAltoConnection();
-    	return execute(cmd, _numRetries);
+        refreshPaloAltoConnection();
+        return execute(cmd, _numRetries);
     }
     
     private Answer execute(RemoteAccessVpnCfgCommand cmd, int numRetries) {
-    	long accountId = Long.parseLong(cmd.getAccessDetail(NetworkElementCommand.ACCOUNT_ID));
-    	String guestNetworkCidr = cmd.getAccessDetail(NetworkElementCommand.GUEST_NETWORK_CIDR);
-    	String preSharedKey = cmd.getPresharedKey();
-    	String[] ipRange = cmd.getIpRange().split("-");
-    	
-    	try {
-    		openConfiguration();
-    		
-    		// Delete existing VPN objects for this account
-    		deleteVpnObjectsForAccount(accountId);   		
-    		
-    		if (cmd.isCreate()) {
-    			// Add IKE policy
-    			manageIkePolicy(PaloAltoCommand.ADD, null, accountId, preSharedKey);
-    		
-    			// Add address pool
-    			manageAddressPool(PaloAltoCommand.ADD, null, accountId, guestNetworkCidr, ipRange[0], ipRange[1], _primaryDnsAddress);    		    			    			
-    		}
-    		
-    		commitConfiguration();
-    		
-    		return new Answer(cmd);
-    	} catch (ExecutionException e) {
-    		s_logger.error(e);
+        long accountId = Long.parseLong(cmd.getAccessDetail(NetworkElementCommand.ACCOUNT_ID));
+        String guestNetworkCidr = cmd.getAccessDetail(NetworkElementCommand.GUEST_NETWORK_CIDR);
+        String preSharedKey = cmd.getPresharedKey();
+        String[] ipRange = cmd.getIpRange().split("-");
+        
+        try {
+            openConfiguration();
+            
+            // Delete existing VPN objects for this account
+            deleteVpnObjectsForAccount(accountId);          
+            
+            if (cmd.isCreate()) {
+                // Add IKE policy
+                manageIkePolicy(PaloAltoCommand.ADD, null, accountId, preSharedKey);
+            
+                // Add address pool
+                manageAddressPool(PaloAltoCommand.ADD, null, accountId, guestNetworkCidr, ipRange[0], ipRange[1], _primaryDnsAddress);                                           
+            }
+            
+            commitConfiguration();
+            
+            return new Answer(cmd);
+        } catch (ExecutionException e) {
+            s_logger.error(e);
             closeConfiguration();
 
             if (numRetries > 0 && refreshPaloAltoConnection()) {
@@ -955,64 +955,64 @@ public class PaloAltoResource implements ServerResource {
             } else {
                 return new Answer(cmd, e);
             }
-    	}
-    	
+        }
+        
     }
     
     private void deleteVpnObjectsForAccount(long accountId) throws ExecutionException {
-    	// Delete all IKE policies
-		for (String ikePolicyName : getVpnObjectNames(PaloAltoXml.IKE_POLICY_GETALL, accountId)) {
-			manageIkePolicy(PaloAltoCommand.DELETE, ikePolicyName, null, null);
-		}
-		
-		// Delete all address pools
-		for (String addressPoolName : getVpnObjectNames(PaloAltoXml.ADDRESS_POOL_GETALL, accountId)) {
-			manageAddressPool(PaloAltoCommand.DELETE, addressPoolName, null, null, null, null, null);
-		}   		
-		
-		// Delete all IKE gateways
-		for (String ikeGatewayName : getVpnObjectNames(PaloAltoXml.IKE_GATEWAY_GETALL, accountId)) {
-			manageIkeGateway(PaloAltoCommand.DELETE, ikeGatewayName, null, null, null, null);
-		}
-		
-		// Delete all IPsec VPNs
-		for (String ipsecVpnName : getVpnObjectNames(PaloAltoXml.IPSEC_VPN_GETALL, accountId)) {
-			manageIpsecVpn(PaloAltoCommand.DELETE, ipsecVpnName, null, null, null, null);
-		}    		
+        // Delete all IKE policies
+        for (String ikePolicyName : getVpnObjectNames(PaloAltoXml.IKE_POLICY_GETALL, accountId)) {
+            manageIkePolicy(PaloAltoCommand.DELETE, ikePolicyName, null, null);
+        }
+        
+        // Delete all address pools
+        for (String addressPoolName : getVpnObjectNames(PaloAltoXml.ADDRESS_POOL_GETALL, accountId)) {
+            manageAddressPool(PaloAltoCommand.DELETE, addressPoolName, null, null, null, null, null);
+        }           
+        
+        // Delete all IKE gateways
+        for (String ikeGatewayName : getVpnObjectNames(PaloAltoXml.IKE_GATEWAY_GETALL, accountId)) {
+            manageIkeGateway(PaloAltoCommand.DELETE, ikeGatewayName, null, null, null, null);
+        }
+        
+        // Delete all IPsec VPNs
+        for (String ipsecVpnName : getVpnObjectNames(PaloAltoXml.IPSEC_VPN_GETALL, accountId)) {
+            manageIpsecVpn(PaloAltoCommand.DELETE, ipsecVpnName, null, null, null, null);
+        }           
 
-		// Delete all dynamic VPN clients
-		for (String dynamicVpnClientName : getVpnObjectNames(PaloAltoXml.DYNAMIC_VPN_CLIENT_GETALL, accountId)) {
-			manageDynamicVpnClient(PaloAltoCommand.DELETE, dynamicVpnClientName, null, null, null, null);
-		}    		
-		
-		// Delete all access profiles
-		for (String accessProfileName : getVpnObjectNames(PaloAltoXml.ACCESS_PROFILE_GETALL, accountId)) {
-			manageAccessProfile(PaloAltoCommand.DELETE, accessProfileName, null, null, null, null);
-		}     	
-		
-		// Delete all security policies
-		for (String securityPolicyName : getVpnObjectNames(PaloAltoXml.SECURITY_POLICY_GETALL, accountId)) {
-			manageSecurityPolicy(SecurityPolicyType.VPN, PaloAltoCommand.DELETE, accountId, null, null, null, securityPolicyName);
-		}
-		
-		// Delete all address book entries 
-		for (String addressBookEntryName : getVpnObjectNames(PaloAltoXml.ADDRESS_BOOK_ENTRY_GETALL, accountId)) {
-			manageAddressBookEntry(PaloAltoCommand.DELETE, _privateZone, null, addressBookEntryName);
-		}
+        // Delete all dynamic VPN clients
+        for (String dynamicVpnClientName : getVpnObjectNames(PaloAltoXml.DYNAMIC_VPN_CLIENT_GETALL, accountId)) {
+            manageDynamicVpnClient(PaloAltoCommand.DELETE, dynamicVpnClientName, null, null, null, null);
+        }           
+        
+        // Delete all access profiles
+        for (String accessProfileName : getVpnObjectNames(PaloAltoXml.ACCESS_PROFILE_GETALL, accountId)) {
+            manageAccessProfile(PaloAltoCommand.DELETE, accessProfileName, null, null, null, null);
+        }       
+        
+        // Delete all security policies
+        for (String securityPolicyName : getVpnObjectNames(PaloAltoXml.SECURITY_POLICY_GETALL, accountId)) {
+            manageSecurityPolicy(SecurityPolicyType.VPN, PaloAltoCommand.DELETE, accountId, null, null, null, securityPolicyName);
+        }
+        
+        // Delete all address book entries 
+        for (String addressBookEntryName : getVpnObjectNames(PaloAltoXml.ADDRESS_BOOK_ENTRY_GETALL, accountId)) {
+            manageAddressBookEntry(PaloAltoCommand.DELETE, _privateZone, null, addressBookEntryName);
+        }
 
     }
     
     public List<String> getVpnObjectNames(PaloAltoXml xmlObj, long accountId) throws ExecutionException {
-    	List<String> vpnObjectNames = new ArrayList<String>();    
-    	
-    	String xmlRequest = xmlObj.getXml();   	
-    	if (xmlObj.equals(PaloAltoXml.SECURITY_POLICY_GETALL)) {
-    		xmlRequest = replaceXmlValue(xmlRequest, "from-zone", _publicZone);
-    		xmlRequest = replaceXmlValue(xmlRequest, "to-zone", _privateZone);
-    	} else if (xmlObj.equals(PaloAltoXml.ADDRESS_BOOK_ENTRY_GETALL)) {
-    		xmlRequest = replaceXmlValue(xmlRequest, "zone", _privateZone);
-    	}
-    		
+        List<String> vpnObjectNames = new ArrayList<String>();    
+        
+        String xmlRequest = xmlObj.getXml();    
+        if (xmlObj.equals(PaloAltoXml.SECURITY_POLICY_GETALL)) {
+            xmlRequest = replaceXmlValue(xmlRequest, "from-zone", _publicZone);
+            xmlRequest = replaceXmlValue(xmlRequest, "to-zone", _privateZone);
+        } else if (xmlObj.equals(PaloAltoXml.ADDRESS_BOOK_ENTRY_GETALL)) {
+            xmlRequest = replaceXmlValue(xmlRequest, "zone", _privateZone);
+        }
+            
         String xmlResponse = sendRequest(xmlRequest);       
         Document doc = getDocument(xmlResponse);
         NodeList vpnObjectNameNodes = doc.getElementsByTagName("name");
@@ -1021,7 +1021,7 @@ public class PaloAltoResource implements ServerResource {
             for (int j = 0; j < vpnObjectNameEntries.getLength(); j++) {
                 String vpnObjectName = vpnObjectNameEntries.item(j).getNodeValue();
                 if (vpnObjectName.startsWith(genObjectName(_vpnObjectPrefix, String.valueOf(accountId)))) {
-                	vpnObjectNames.add(vpnObjectName);
+                    vpnObjectNames.add(vpnObjectName);
                 }
             }               
         }
@@ -1030,48 +1030,48 @@ public class PaloAltoResource implements ServerResource {
     }
     
     private synchronized Answer execute(VpnUsersCfgCommand cmd) {
-    	refreshPaloAltoConnection();
-    	return execute(cmd, _numRetries);
+        refreshPaloAltoConnection();
+        return execute(cmd, _numRetries);
     }
     
-    private Answer execute(VpnUsersCfgCommand cmd, int numRetries) {    	
-    	long accountId = Long.parseLong(cmd.getAccessDetail(NetworkElementCommand.ACCOUNT_ID));
-    	String guestNetworkCidr = cmd.getAccessDetail(NetworkElementCommand.GUEST_NETWORK_CIDR);
-    	String ikePolicyName = genIkePolicyName(accountId);
-    	UsernamePassword[] users = cmd.getUserpwds();
-    	
-    	try {
-    		openConfiguration();
-    		
-    		for (UsernamePassword user : users) {
-    			PaloAltoCommand PaloAltoCmd = user.isAdd() ? PaloAltoCommand.ADD : PaloAltoCommand.DELETE;
-    			
-    			String ipsecVpnName =  genIpsecVpnName(accountId, user.getUsername());
-    			
-    			// IKE gateway
-        		manageIkeGateway(PaloAltoCmd, null, accountId, ikePolicyName, _ikeGatewayHostname , user.getUsername()); 
+    private Answer execute(VpnUsersCfgCommand cmd, int numRetries) {        
+        long accountId = Long.parseLong(cmd.getAccessDetail(NetworkElementCommand.ACCOUNT_ID));
+        String guestNetworkCidr = cmd.getAccessDetail(NetworkElementCommand.GUEST_NETWORK_CIDR);
+        String ikePolicyName = genIkePolicyName(accountId);
+        UsernamePassword[] users = cmd.getUserpwds();
+        
+        try {
+            openConfiguration();
+            
+            for (UsernamePassword user : users) {
+                PaloAltoCommand paCmd = user.isAdd() ? PaloAltoCommand.ADD : PaloAltoCommand.DELETE;
+                
+                String ipsecVpnName =  genIpsecVpnName(accountId, user.getUsername());
+                
+                // IKE gateway
+                manageIkeGateway(paCmd, null, accountId, ikePolicyName, _ikeGatewayHostname , user.getUsername()); 
 
-        		// IPSec VPN
-        		manageIpsecVpn(PaloAltoCmd, null, accountId, guestNetworkCidr, user.getUsername(), _ipsecPolicyName);
+                // IPSec VPN
+                manageIpsecVpn(paCmd, null, accountId, guestNetworkCidr, user.getUsername(), _ipsecPolicyName);
 
-        		// Dynamic VPN client
-        		manageDynamicVpnClient(PaloAltoCmd, null, accountId, guestNetworkCidr, ipsecVpnName, user.getUsername());
-        		
-        		// Access profile
-        		manageAccessProfile(PaloAltoCmd, null, accountId, user.getUsername(), user.getPassword(), genAddressPoolName(accountId));
-    		
-        		// Address book entry
-    			manageAddressBookEntry(PaloAltoCmd, _privateZone , guestNetworkCidr, ipsecVpnName);
-    			
-    			// Security policy
-    			manageSecurityPolicy(SecurityPolicyType.VPN, PaloAltoCmd, null, null, guestNetworkCidr, null, ipsecVpnName);
-    		}
-    		
-    		commitConfiguration();
-    		
-    		return new Answer(cmd);
-    	} catch (ExecutionException e) {
-    		s_logger.error(e);
+                // Dynamic VPN client
+                manageDynamicVpnClient(paCmd, null, accountId, guestNetworkCidr, ipsecVpnName, user.getUsername());
+                
+                // Access profile
+                manageAccessProfile(paCmd, null, accountId, user.getUsername(), user.getPassword(), genAddressPoolName(accountId));
+            
+                // Address book entry
+                manageAddressBookEntry(paCmd, _privateZone , guestNetworkCidr, ipsecVpnName);
+                
+                // Security policy
+                manageSecurityPolicy(SecurityPolicyType.VPN, paCmd, null, null, guestNetworkCidr, null, ipsecVpnName);
+            }
+            
+            commitConfiguration();
+            
+            return new Answer(cmd);
+        } catch (ExecutionException e) {
+            s_logger.error(e);
             closeConfiguration();
 
             if (numRetries > 0 && refreshPaloAltoConnection()) {
@@ -1081,8 +1081,8 @@ public class PaloAltoResource implements ServerResource {
             } else {
                 return new Answer(cmd, e);
             }
-    	}
-    	
+        }
+        
     }
 
     /*
@@ -1090,7 +1090,7 @@ public class PaloAltoResource implements ServerResource {
      */
 
     private synchronized Answer execute (SetPortForwardingRulesCommand cmd) {
-    	refreshPaloAltoConnection();
+        refreshPaloAltoConnection();
         return execute(cmd, _numRetries);
     }
 
@@ -1118,7 +1118,7 @@ public class PaloAltoResource implements ServerResource {
 
                 // If there are active rules for the public/private IP address pair, add them back
                 for (FirewallRuleTO rule : activeRulesForIpPair) {
-                	Long publicVlanTag = getVlanTag(rule.getSrcVlanTag());
+                    Long publicVlanTag = getVlanTag(rule.getSrcVlanTag());
                     PortForwardingRuleTO portForwardingRule = (PortForwardingRuleTO) rule;
                     addDestinationNatRule(getProtocol(rule.getProtocol()), publicVlanTag, portForwardingRule.getSrcIp(), portForwardingRule.getDstIp(), 
                                           portForwardingRule.getSrcPortRange()[0], portForwardingRule.getSrcPortRange()[1],
@@ -1186,7 +1186,7 @@ public class PaloAltoResource implements ServerResource {
             
             Long publicVlanTag = null;
             if (publicVlanTags.containsKey(publicIp)) {
-            	publicVlanTag = publicVlanTags.get(publicIp);
+                publicVlanTag = publicVlanTags.get(publicIp);
             }
 
             if (privateVlanTag != null) {
@@ -1257,13 +1257,13 @@ public class PaloAltoResource implements ServerResource {
     }
     
     private Map<String, String> getVlanTagMap(FirewallRuleTO[] allRules) {
-    	Map<String, String> vlanTagMap = new HashMap<String, String>();
-    	
-    	for (FirewallRuleTO rule : allRules) {
-    		vlanTagMap.put(rule.getSrcIp(), rule.getSrcVlanTag());
-    	}
-    	
-    	return vlanTagMap;
+        Map<String, String> vlanTagMap = new HashMap<String, String>();
+        
+        for (FirewallRuleTO rule : allRules) {
+            vlanTagMap.put(rule.getSrcIp(), rule.getSrcVlanTag());
+        }
+        
+        return vlanTagMap;
     }
     
     /*
@@ -1271,347 +1271,347 @@ public class PaloAltoResource implements ServerResource {
      */
     
     private String genIkePolicyName(long accountId) {
-    	return genObjectName(_vpnObjectPrefix, String.valueOf(accountId));
+        return genObjectName(_vpnObjectPrefix, String.valueOf(accountId));
     }
     
     private boolean manageIkePolicy(PaloAltoCommand command, String ikePolicyName, Long accountId, String preSharedKey) throws ExecutionException {
-    	if (ikePolicyName == null) {
-    		ikePolicyName = genIkePolicyName(accountId);
-    	}
-    	
-    	String xml;
-    	
-    	switch(command) {
-    	
-    	case CHECK_IF_EXISTS:
-    		xml = PaloAltoXml.IKE_GATEWAY_GETONE.getXml();
-    		xml = setDelete(xml, false);
-    		xml = replaceXmlValue(xml, "policy-name", ikePolicyName);
-    		return sendRequestAndCheckResponse(command, xml, "name", ikePolicyName);
-    		
-    	case ADD:
-    		if (manageIkePolicy(PaloAltoCommand.CHECK_IF_EXISTS, ikePolicyName, accountId, preSharedKey)) {
-    			return true;
-    		}
+        if (ikePolicyName == null) {
+            ikePolicyName = genIkePolicyName(accountId);
+        }
+        
+        String xml;
+        
+        switch(command) {
+        
+        case CHECK_IF_EXISTS:
+            xml = PaloAltoXml.IKE_GATEWAY_GETONE.getXml();
+            xml = setDelete(xml, false);
+            xml = replaceXmlValue(xml, "policy-name", ikePolicyName);
+            return sendRequestAndCheckResponse(command, xml, "name", ikePolicyName);
+            
+        case ADD:
+            if (manageIkePolicy(PaloAltoCommand.CHECK_IF_EXISTS, ikePolicyName, accountId, preSharedKey)) {
+                return true;
+            }
 
-    		xml = PaloAltoXml.IKE_POLICY_ADD.getXml();
-    		xml = replaceXmlValue(xml, "policy-name", ikePolicyName);
-    		xml = replaceXmlValue(xml, "proposal-name", _ikeProposalName);
-    		xml = replaceXmlValue(xml, "pre-shared-key", preSharedKey);
+            xml = PaloAltoXml.IKE_POLICY_ADD.getXml();
+            xml = replaceXmlValue(xml, "policy-name", ikePolicyName);
+            xml = replaceXmlValue(xml, "proposal-name", _ikeProposalName);
+            xml = replaceXmlValue(xml, "pre-shared-key", preSharedKey);
 
-    		if (!sendRequestAndCheckResponse(command, xml)) {
-    			throw new ExecutionException("Failed to add IKE policy: " + ikePolicyName);
-    		} else {
-    			return true;
-    		}
-    		
-    	case DELETE:
-    		if (!manageIkePolicy(PaloAltoCommand.CHECK_IF_EXISTS, ikePolicyName, accountId, preSharedKey)) {
-    			return true;
-    		}
+            if (!sendRequestAndCheckResponse(command, xml)) {
+                throw new ExecutionException("Failed to add IKE policy: " + ikePolicyName);
+            } else {
+                return true;
+            }
+            
+        case DELETE:
+            if (!manageIkePolicy(PaloAltoCommand.CHECK_IF_EXISTS, ikePolicyName, accountId, preSharedKey)) {
+                return true;
+            }
 
-    		xml = PaloAltoXml.IKE_GATEWAY_GETONE.getXml();
-    		xml = setDelete(xml, true);
-    		xml = replaceXmlValue(xml, "policy-name", ikePolicyName);
+            xml = PaloAltoXml.IKE_GATEWAY_GETONE.getXml();
+            xml = setDelete(xml, true);
+            xml = replaceXmlValue(xml, "policy-name", ikePolicyName);
 
-    		if (!sendRequestAndCheckResponse(command, xml, "name", ikePolicyName)) {
-    			throw new ExecutionException("Failed to delete IKE policy: " + ikePolicyName);
-    		} else {
-    			return true;
-    		}
+            if (!sendRequestAndCheckResponse(command, xml, "name", ikePolicyName)) {
+                throw new ExecutionException("Failed to delete IKE policy: " + ikePolicyName);
+            } else {
+                return true;
+            }
 
-    	default:
-    		s_logger.debug("Unrecognized command.");
-    		return false;
-    	}
-    	
+        default:
+            s_logger.debug("Unrecognized command.");
+            return false;
+        }
+        
     }
     
     private String genIkeGatewayName(long accountId, String username) {
-    	return genObjectName(_vpnObjectPrefix, String.valueOf(accountId), username);
+        return genObjectName(_vpnObjectPrefix, String.valueOf(accountId), username);
     }
     
     private boolean manageIkeGateway(PaloAltoCommand command, String ikeGatewayName, Long accountId, String ikePolicyName, String ikeGatewayHostname, String username) throws ExecutionException {
-    	if (ikeGatewayName == null) {
-    		ikeGatewayName = genIkeGatewayName(accountId, username);
-    	}
-    	
-    	String xml;
-    	
-    	switch(command) {
-    	
-    	case CHECK_IF_EXISTS:
-    		xml = PaloAltoXml.IKE_GATEWAY_GETONE.getXml();
-    		xml = setDelete(xml, false);
-    		xml = replaceXmlValue(xml, "gateway-name", ikeGatewayName);
-    		return sendRequestAndCheckResponse(command, xml, "name", ikeGatewayName);
-    		
-    	case ADD:
-    		if (manageIkeGateway(PaloAltoCommand.CHECK_IF_EXISTS, ikeGatewayName, accountId, ikePolicyName, ikeGatewayHostname, username)) {
-    			return true;
-    		}
+        if (ikeGatewayName == null) {
+            ikeGatewayName = genIkeGatewayName(accountId, username);
+        }
+        
+        String xml;
+        
+        switch(command) {
+        
+        case CHECK_IF_EXISTS:
+            xml = PaloAltoXml.IKE_GATEWAY_GETONE.getXml();
+            xml = setDelete(xml, false);
+            xml = replaceXmlValue(xml, "gateway-name", ikeGatewayName);
+            return sendRequestAndCheckResponse(command, xml, "name", ikeGatewayName);
+            
+        case ADD:
+            if (manageIkeGateway(PaloAltoCommand.CHECK_IF_EXISTS, ikeGatewayName, accountId, ikePolicyName, ikeGatewayHostname, username)) {
+                return true;
+            }
 
-    		xml = PaloAltoXml.IKE_GATEWAY_ADD.getXml();
-    		xml = replaceXmlValue(xml, "gateway-name", ikeGatewayName);
-    		xml = replaceXmlValue(xml, "ike-policy-name", ikePolicyName);
-    		xml = replaceXmlValue(xml, "ike-gateway-hostname", ikeGatewayHostname);
-    		xml = replaceXmlValue(xml, "public-interface-name", _publicInterface);
-    		xml = replaceXmlValue(xml, "access-profile-name", genAccessProfileName(accountId, username));
+            xml = PaloAltoXml.IKE_GATEWAY_ADD.getXml();
+            xml = replaceXmlValue(xml, "gateway-name", ikeGatewayName);
+            xml = replaceXmlValue(xml, "ike-policy-name", ikePolicyName);
+            xml = replaceXmlValue(xml, "ike-gateway-hostname", ikeGatewayHostname);
+            xml = replaceXmlValue(xml, "public-interface-name", _publicInterface);
+            xml = replaceXmlValue(xml, "access-profile-name", genAccessProfileName(accountId, username));
 
-    		if (!sendRequestAndCheckResponse(command, xml)) {
-    			throw new ExecutionException("Failed to add IKE gateway: " + ikeGatewayName);
-    		} else {
-    			return true;
-    		}
-    		
-    	case DELETE:
-    		if (!manageIkeGateway(PaloAltoCommand.CHECK_IF_EXISTS, ikeGatewayName, accountId, ikePolicyName, ikeGatewayHostname, username)) {
-    			return true;
-    		}
+            if (!sendRequestAndCheckResponse(command, xml)) {
+                throw new ExecutionException("Failed to add IKE gateway: " + ikeGatewayName);
+            } else {
+                return true;
+            }
+            
+        case DELETE:
+            if (!manageIkeGateway(PaloAltoCommand.CHECK_IF_EXISTS, ikeGatewayName, accountId, ikePolicyName, ikeGatewayHostname, username)) {
+                return true;
+            }
 
-    		xml = PaloAltoXml.IKE_GATEWAY_GETONE.getXml();
-    		xml = setDelete(xml, true);
-    		xml = replaceXmlValue(xml, "gateway-name", ikeGatewayName);
+            xml = PaloAltoXml.IKE_GATEWAY_GETONE.getXml();
+            xml = setDelete(xml, true);
+            xml = replaceXmlValue(xml, "gateway-name", ikeGatewayName);
 
-    		if (!sendRequestAndCheckResponse(command, xml, "name", ikeGatewayName)) {
-    			throw new ExecutionException("Failed to delete IKE gateway: " + ikeGatewayName);
-    		} else {
-    			return true;
-    		}
+            if (!sendRequestAndCheckResponse(command, xml, "name", ikeGatewayName)) {
+                throw new ExecutionException("Failed to delete IKE gateway: " + ikeGatewayName);
+            } else {
+                return true;
+            }
 
-    	default:
-    		s_logger.debug("Unrecognized command.");
-    		return false;
-    	}
+        default:
+            s_logger.debug("Unrecognized command.");
+            return false;
+        }
     }
     
     private String genIpsecVpnName(long accountId, String username) {
-    	return genObjectName(_vpnObjectPrefix, String.valueOf(accountId), username);
+        return genObjectName(_vpnObjectPrefix, String.valueOf(accountId), username);
     }
     
     private boolean manageIpsecVpn(PaloAltoCommand command, String ipsecVpnName, Long accountId, String guestNetworkCidr, String username, String ipsecPolicyName) throws ExecutionException {
-    	if (ipsecVpnName == null) {
-    		ipsecVpnName = genIpsecVpnName(accountId, username);
-    	}
-    	
-    	String xml;
-    	
-    	switch(command) {
-    	
-    	case CHECK_IF_EXISTS:
-    		xml = PaloAltoXml.IPSEC_VPN_GETONE.getXml();
-    		xml = setDelete(xml, false);
-    		xml = replaceXmlValue(xml, "ipsec-vpn-name", ipsecVpnName);
-    		return sendRequestAndCheckResponse(command, xml, "name", ipsecVpnName);
-    		
-    	case ADD:
-    		if (manageIpsecVpn(PaloAltoCommand.CHECK_IF_EXISTS, ipsecVpnName, accountId, guestNetworkCidr, username, ipsecPolicyName)) {
-    			return true;
-    		}
-    		
-    		xml = PaloAltoXml.IPSEC_VPN_ADD.getXml();
-    		xml = replaceXmlValue(xml, "ipsec-vpn-name", ipsecVpnName);
-    		xml = replaceXmlValue(xml, "ike-gateway", genIkeGatewayName(accountId, username));
-    		xml = replaceXmlValue(xml, "ipsec-policy-name", ipsecPolicyName);
+        if (ipsecVpnName == null) {
+            ipsecVpnName = genIpsecVpnName(accountId, username);
+        }
+        
+        String xml;
+        
+        switch(command) {
+        
+        case CHECK_IF_EXISTS:
+            xml = PaloAltoXml.IPSEC_VPN_GETONE.getXml();
+            xml = setDelete(xml, false);
+            xml = replaceXmlValue(xml, "ipsec-vpn-name", ipsecVpnName);
+            return sendRequestAndCheckResponse(command, xml, "name", ipsecVpnName);
+            
+        case ADD:
+            if (manageIpsecVpn(PaloAltoCommand.CHECK_IF_EXISTS, ipsecVpnName, accountId, guestNetworkCidr, username, ipsecPolicyName)) {
+                return true;
+            }
+            
+            xml = PaloAltoXml.IPSEC_VPN_ADD.getXml();
+            xml = replaceXmlValue(xml, "ipsec-vpn-name", ipsecVpnName);
+            xml = replaceXmlValue(xml, "ike-gateway", genIkeGatewayName(accountId, username));
+            xml = replaceXmlValue(xml, "ipsec-policy-name", ipsecPolicyName);
 
-    		if (!sendRequestAndCheckResponse(command, xml)) {
-    			throw new ExecutionException("Failed to add IPSec VPN: " + ipsecVpnName);
-    		} else {
-    			return true;
-    		}
-    		
-    	case DELETE:
-    		if (!manageIpsecVpn(PaloAltoCommand.CHECK_IF_EXISTS, ipsecVpnName, accountId, guestNetworkCidr, username, ipsecPolicyName)) {
-    			return true;
-    		}
+            if (!sendRequestAndCheckResponse(command, xml)) {
+                throw new ExecutionException("Failed to add IPSec VPN: " + ipsecVpnName);
+            } else {
+                return true;
+            }
+            
+        case DELETE:
+            if (!manageIpsecVpn(PaloAltoCommand.CHECK_IF_EXISTS, ipsecVpnName, accountId, guestNetworkCidr, username, ipsecPolicyName)) {
+                return true;
+            }
 
-    		xml = PaloAltoXml.IPSEC_VPN_GETONE.getXml();
-    		xml = setDelete(xml, true);
-    		xml = replaceXmlValue(xml, "ipsec-vpn-name", ipsecVpnName);
+            xml = PaloAltoXml.IPSEC_VPN_GETONE.getXml();
+            xml = setDelete(xml, true);
+            xml = replaceXmlValue(xml, "ipsec-vpn-name", ipsecVpnName);
 
-    		if (!sendRequestAndCheckResponse(command, xml, "name", ipsecVpnName)) {
-    			throw new ExecutionException("Failed to delete IPSec VPN: " + ipsecVpnName);
-    		} else {
-    			return true;
-    		}
+            if (!sendRequestAndCheckResponse(command, xml, "name", ipsecVpnName)) {
+                throw new ExecutionException("Failed to delete IPSec VPN: " + ipsecVpnName);
+            } else {
+                return true;
+            }
 
-    	default:
-    		s_logger.debug("Unrecognized command.");
-    		return false;
-    	}
+        default:
+            s_logger.debug("Unrecognized command.");
+            return false;
+        }
     }
     
     private String genDynamicVpnClientName(long accountId, String username) {
-    	return genObjectName(_vpnObjectPrefix, String.valueOf(accountId), username);
+        return genObjectName(_vpnObjectPrefix, String.valueOf(accountId), username);
     }
     
     private boolean manageDynamicVpnClient(PaloAltoCommand command, String clientName, Long accountId, String guestNetworkCidr, String ipsecVpnName, String username) throws ExecutionException {
-    	if (clientName == null) {
-    		clientName = genDynamicVpnClientName(accountId, username);
-    	}
-    	
-    	String xml;
-    	
-    	switch(command) {
-    	
-    	case CHECK_IF_EXISTS:
-    		xml = PaloAltoXml.DYNAMIC_VPN_CLIENT_GETONE.getXml();
-    		xml = setDelete(xml, false);
-    		xml = replaceXmlValue(xml, "client-name", clientName);
-    		return sendRequestAndCheckResponse(command, xml, "name", clientName);
-    		
-    	case ADD:
-    		if (manageDynamicVpnClient(PaloAltoCommand.CHECK_IF_EXISTS, clientName, accountId, guestNetworkCidr, ipsecVpnName, username)) {
-    			return true;
-    		}
-    		
-    		xml = PaloAltoXml.DYNAMIC_VPN_CLIENT_ADD.getXml();
-    		xml = replaceXmlValue(xml, "client-name", clientName);
-    		xml = replaceXmlValue(xml, "guest-network-cidr", guestNetworkCidr);
-    		xml = replaceXmlValue(xml, "ipsec-vpn-name", ipsecVpnName);
-    		xml = replaceXmlValue(xml, "username", username);
+        if (clientName == null) {
+            clientName = genDynamicVpnClientName(accountId, username);
+        }
+        
+        String xml;
+        
+        switch(command) {
+        
+        case CHECK_IF_EXISTS:
+            xml = PaloAltoXml.DYNAMIC_VPN_CLIENT_GETONE.getXml();
+            xml = setDelete(xml, false);
+            xml = replaceXmlValue(xml, "client-name", clientName);
+            return sendRequestAndCheckResponse(command, xml, "name", clientName);
+            
+        case ADD:
+            if (manageDynamicVpnClient(PaloAltoCommand.CHECK_IF_EXISTS, clientName, accountId, guestNetworkCidr, ipsecVpnName, username)) {
+                return true;
+            }
+            
+            xml = PaloAltoXml.DYNAMIC_VPN_CLIENT_ADD.getXml();
+            xml = replaceXmlValue(xml, "client-name", clientName);
+            xml = replaceXmlValue(xml, "guest-network-cidr", guestNetworkCidr);
+            xml = replaceXmlValue(xml, "ipsec-vpn-name", ipsecVpnName);
+            xml = replaceXmlValue(xml, "username", username);
 
-    		if (!sendRequestAndCheckResponse(command, xml)) {
-    			throw new ExecutionException("Failed to add dynamic VPN client: " + clientName);
-    		} else {
-    			return true;
-    		}
-    		
-    	case DELETE:
-    		if (!manageDynamicVpnClient(PaloAltoCommand.CHECK_IF_EXISTS, clientName, accountId, guestNetworkCidr, ipsecVpnName, username)) {
-    			return true;
-    		}
+            if (!sendRequestAndCheckResponse(command, xml)) {
+                throw new ExecutionException("Failed to add dynamic VPN client: " + clientName);
+            } else {
+                return true;
+            }
+            
+        case DELETE:
+            if (!manageDynamicVpnClient(PaloAltoCommand.CHECK_IF_EXISTS, clientName, accountId, guestNetworkCidr, ipsecVpnName, username)) {
+                return true;
+            }
 
-    		xml = PaloAltoXml.DYNAMIC_VPN_CLIENT_GETONE.getXml();
-    		xml = setDelete(xml, true);
-    		xml = replaceXmlValue(xml, "client-name", clientName);
+            xml = PaloAltoXml.DYNAMIC_VPN_CLIENT_GETONE.getXml();
+            xml = setDelete(xml, true);
+            xml = replaceXmlValue(xml, "client-name", clientName);
 
-    		if (!sendRequestAndCheckResponse(command, xml, "name", clientName)) {
-    			throw new ExecutionException("Failed to delete dynamic VPN client: " + clientName);
-    		} else {
-    			return true;
-    		}
+            if (!sendRequestAndCheckResponse(command, xml, "name", clientName)) {
+                throw new ExecutionException("Failed to delete dynamic VPN client: " + clientName);
+            } else {
+                return true;
+            }
 
-    	default:
-    		s_logger.debug("Unrecognized command.");
-    		return false;
-    	}
+        default:
+            s_logger.debug("Unrecognized command.");
+            return false;
+        }
     }
     
     private String genAddressPoolName(long accountId) {
-    	return genObjectName(_vpnObjectPrefix, String.valueOf(accountId));
+        return genObjectName(_vpnObjectPrefix, String.valueOf(accountId));
     }
     
     private boolean manageAddressPool(PaloAltoCommand command, String addressPoolName, Long accountId, String guestNetworkCidr, String lowAddress, String highAddress, String primaryDnsAddress) throws ExecutionException {
-    	if (addressPoolName == null) {
-    		addressPoolName = genAddressPoolName(accountId);
-    	}
-    	
-    	String xml;
-    	
-    	switch(command) {
-    	
-    	case CHECK_IF_EXISTS:
-    		xml = PaloAltoXml.ADDRESS_POOL_GETONE.getXml();
-    		xml = setDelete(xml, false);
-    		xml = replaceXmlValue(xml, "address-pool-name", addressPoolName);
-    		return sendRequestAndCheckResponse(command, xml, "name", addressPoolName);
-    		
-    	case ADD:
-    		if (manageAddressPool(PaloAltoCommand.CHECK_IF_EXISTS, addressPoolName, accountId, guestNetworkCidr, lowAddress, highAddress, primaryDnsAddress)) {
-    			return true;
-    		}
-    		
-    		xml = PaloAltoXml.ADDRESS_POOL_ADD.getXml();
-    		xml = replaceXmlValue(xml, "address-pool-name", addressPoolName);
-    		xml = replaceXmlValue(xml, "guest-network-cidr", guestNetworkCidr);
-    		xml = replaceXmlValue(xml, "address-range-name", "r-" + addressPoolName);
-    		xml = replaceXmlValue(xml, "low-address", lowAddress);
-    		xml = replaceXmlValue(xml, "high-address", highAddress);
-    		xml = replaceXmlValue(xml, "primary-dns-address", primaryDnsAddress);
+        if (addressPoolName == null) {
+            addressPoolName = genAddressPoolName(accountId);
+        }
+        
+        String xml;
+        
+        switch(command) {
+        
+        case CHECK_IF_EXISTS:
+            xml = PaloAltoXml.ADDRESS_POOL_GETONE.getXml();
+            xml = setDelete(xml, false);
+            xml = replaceXmlValue(xml, "address-pool-name", addressPoolName);
+            return sendRequestAndCheckResponse(command, xml, "name", addressPoolName);
+            
+        case ADD:
+            if (manageAddressPool(PaloAltoCommand.CHECK_IF_EXISTS, addressPoolName, accountId, guestNetworkCidr, lowAddress, highAddress, primaryDnsAddress)) {
+                return true;
+            }
+            
+            xml = PaloAltoXml.ADDRESS_POOL_ADD.getXml();
+            xml = replaceXmlValue(xml, "address-pool-name", addressPoolName);
+            xml = replaceXmlValue(xml, "guest-network-cidr", guestNetworkCidr);
+            xml = replaceXmlValue(xml, "address-range-name", "r-" + addressPoolName);
+            xml = replaceXmlValue(xml, "low-address", lowAddress);
+            xml = replaceXmlValue(xml, "high-address", highAddress);
+            xml = replaceXmlValue(xml, "primary-dns-address", primaryDnsAddress);
 
-    		if (!sendRequestAndCheckResponse(command, xml)) {
-    			throw new ExecutionException("Failed to add address pool: " + addressPoolName);
-    		} else {
-    			return true;
-    		}
-    		
-    	case DELETE:
-    		if (!manageAddressPool(PaloAltoCommand.CHECK_IF_EXISTS, addressPoolName, accountId, guestNetworkCidr, lowAddress, highAddress, primaryDnsAddress)) {
-    			return true;
-    		}
+            if (!sendRequestAndCheckResponse(command, xml)) {
+                throw new ExecutionException("Failed to add address pool: " + addressPoolName);
+            } else {
+                return true;
+            }
+            
+        case DELETE:
+            if (!manageAddressPool(PaloAltoCommand.CHECK_IF_EXISTS, addressPoolName, accountId, guestNetworkCidr, lowAddress, highAddress, primaryDnsAddress)) {
+                return true;
+            }
 
-    		xml = PaloAltoXml.ADDRESS_POOL_GETONE.getXml();
-    		xml = setDelete(xml, true);
-    		xml = replaceXmlValue(xml, "address-pool-name", addressPoolName);
+            xml = PaloAltoXml.ADDRESS_POOL_GETONE.getXml();
+            xml = setDelete(xml, true);
+            xml = replaceXmlValue(xml, "address-pool-name", addressPoolName);
 
-    		if (!sendRequestAndCheckResponse(command, xml, "name", addressPoolName)) {
-    			throw new ExecutionException("Failed to delete address pool: " + addressPoolName);
-    		} else {
-    			return true;
-    		}
+            if (!sendRequestAndCheckResponse(command, xml, "name", addressPoolName)) {
+                throw new ExecutionException("Failed to delete address pool: " + addressPoolName);
+            } else {
+                return true;
+            }
 
-    	default:
-    		s_logger.debug("Unrecognized command.");
-    		return false;
-    	}
+        default:
+            s_logger.debug("Unrecognized command.");
+            return false;
+        }
     }
     
     private String genAccessProfileName(long accountId, String username) {
-    	return genObjectName(_vpnObjectPrefix, String.valueOf(accountId), username);
+        return genObjectName(_vpnObjectPrefix, String.valueOf(accountId), username);
     }
     
     private boolean manageAccessProfile(PaloAltoCommand command, String accessProfileName, Long accountId, String username, String password, String addressPoolName) throws ExecutionException {
-    	if (accessProfileName == null) {
-    		accessProfileName = genAccessProfileName(accountId, username);
-    	}
-    	
-    	String xml;
-    	
-    	switch(command) {
-    	
-    	case CHECK_IF_EXISTS:
-    		xml = PaloAltoXml.ACCESS_PROFILE_GETONE.getXml();
-    		xml = setDelete(xml, false);
-    		xml = replaceXmlValue(xml, "access-profile-name", accessProfileName);
-    		return sendRequestAndCheckResponse(command, xml, "name", username);
-    		
-    	case ADD:
-    		if (manageAccessProfile(PaloAltoCommand.CHECK_IF_EXISTS, accessProfileName, accountId, username, password, addressPoolName)) {
-    			return true;
-    		}
-    		
-    		xml = PaloAltoXml.ACCESS_PROFILE_ADD.getXml();
-    		xml = replaceXmlValue(xml, "access-profile-name", accessProfileName);
-    		xml = replaceXmlValue(xml, "username", username);
-    		xml = replaceXmlValue(xml, "password", password);
-    		xml = replaceXmlValue(xml, "address-pool-name", addressPoolName);
+        if (accessProfileName == null) {
+            accessProfileName = genAccessProfileName(accountId, username);
+        }
+        
+        String xml;
+        
+        switch(command) {
+        
+        case CHECK_IF_EXISTS:
+            xml = PaloAltoXml.ACCESS_PROFILE_GETONE.getXml();
+            xml = setDelete(xml, false);
+            xml = replaceXmlValue(xml, "access-profile-name", accessProfileName);
+            return sendRequestAndCheckResponse(command, xml, "name", username);
+            
+        case ADD:
+            if (manageAccessProfile(PaloAltoCommand.CHECK_IF_EXISTS, accessProfileName, accountId, username, password, addressPoolName)) {
+                return true;
+            }
+            
+            xml = PaloAltoXml.ACCESS_PROFILE_ADD.getXml();
+            xml = replaceXmlValue(xml, "access-profile-name", accessProfileName);
+            xml = replaceXmlValue(xml, "username", username);
+            xml = replaceXmlValue(xml, "password", password);
+            xml = replaceXmlValue(xml, "address-pool-name", addressPoolName);
 
-    		if (!sendRequestAndCheckResponse(command, xml)) {
-    			throw new ExecutionException("Failed to add access profile: " + accessProfileName);
-    		} else {
-    			return true;
-    		}
-    		
-    	case DELETE:
-    		if (!manageAccessProfile(PaloAltoCommand.CHECK_IF_EXISTS, accessProfileName, accountId, username, password, addressPoolName)) {
-    			return true;
-    		}
+            if (!sendRequestAndCheckResponse(command, xml)) {
+                throw new ExecutionException("Failed to add access profile: " + accessProfileName);
+            } else {
+                return true;
+            }
+            
+        case DELETE:
+            if (!manageAccessProfile(PaloAltoCommand.CHECK_IF_EXISTS, accessProfileName, accountId, username, password, addressPoolName)) {
+                return true;
+            }
 
-    		xml = PaloAltoXml.ACCESS_PROFILE_GETONE.getXml();
-    		xml = setDelete(xml, true);
-    		xml = replaceXmlValue(xml, "access-profile-name", accessProfileName);
+            xml = PaloAltoXml.ACCESS_PROFILE_GETONE.getXml();
+            xml = setDelete(xml, true);
+            xml = replaceXmlValue(xml, "access-profile-name", accessProfileName);
 
-    		if (!sendRequestAndCheckResponse(command, xml, "name", username)) {
-    			throw new ExecutionException("Failed to delete access profile: " + accessProfileName);
-    		} else {
-    			return true;
-    		}
+            if (!sendRequestAndCheckResponse(command, xml, "name", username)) {
+                throw new ExecutionException("Failed to delete access profile: " + accessProfileName);
+            } else {
+                return true;
+            }
 
-    	default:
-    		s_logger.debug("Unrecognized command.");
-    		return false;
-    	}
+        default:
+            s_logger.debug("Unrecognized command.");
+            return false;
+        }
     }
 
     /*
@@ -1675,21 +1675,21 @@ public class PaloAltoResource implements ServerResource {
     }
     
     private Long getVlanTagFromInterfaceName(String interfaceName) throws ExecutionException {
-    	Long vlanTag = null;
-    	
-    	if (interfaceName.contains(".")) {
-    		try {
-    			String unitNum = interfaceName.split("\\.")[1];
-    			if (!unitNum.equals("0")) {
-    				vlanTag = Long.parseLong(unitNum);
-    			}
-    		} catch (Exception e) {
-    			s_logger.error(e);
-    			throw new ExecutionException("Unable to parse VLAN tag from interface name: " + interfaceName);
-    		}
-    	}
+        Long vlanTag = null;
+        
+        if (interfaceName.contains(".")) {
+            try {
+                String unitNum = interfaceName.split("\\.")[1];
+                if (!unitNum.equals("0")) {
+                    vlanTag = Long.parseLong(unitNum);
+                }
+            } catch (Exception e) {
+                s_logger.error(e);
+                throw new ExecutionException("Unable to parse VLAN tag from interface name: " + interfaceName);
+            }
+        }
     
-    	return vlanTag;
+        return vlanTag;
     }
 
     /*
@@ -1697,7 +1697,7 @@ public class PaloAltoResource implements ServerResource {
      */
 
     private boolean manageProxyArp(PaloAltoCommand command, Long publicVlanTag, String publicIp) throws ExecutionException {
-    	String publicInterface = genPublicInterface(publicVlanTag);
+        String publicInterface = genPublicInterface(publicVlanTag);
         String xml;
 
         switch (command) {
@@ -1710,16 +1710,16 @@ public class PaloAltoResource implements ServerResource {
             return sendRequestAndCheckResponse(command, xml, "name", publicIp + "/32");
 
         case CHECK_IF_IN_USE:
-        	// Check if any NAT rules are using this proxy ARP entry
-        	String poolName = genSourceNatPoolName(publicIp);
+            // Check if any NAT rules are using this proxy ARP entry
+            String poolName = genSourceNatPoolName(publicIp);
                
-        	String allStaticNatRules = sendRequest(PaloAltoXml.STATIC_NAT_RULE_GETALL.getXml());
-        	String allDestNatRules = sendRequest(replaceXmlValue(PaloAltoXml.DEST_NAT_RULE_GETALL.getXml(), "rule-set", _publicZone));
-        	String allSrcNatRules = sendRequest(PaloAltoXml.SRC_NAT_RULE_GETALL.getXml());
+            String allStaticNatRules = sendRequest(PaloAltoXml.STATIC_NAT_RULE_GETALL.getXml());
+            String allDestNatRules = sendRequest(replaceXmlValue(PaloAltoXml.DEST_NAT_RULE_GETALL.getXml(), "rule-set", _publicZone));
+            String allSrcNatRules = sendRequest(PaloAltoXml.SRC_NAT_RULE_GETALL.getXml());
     
-        	return (allStaticNatRules.contains(publicIp) ||
-        			allDestNatRules.contains(publicIp) ||
-        			allSrcNatRules.contains(poolName));
+            return (allStaticNatRules.contains(publicIp) ||
+                    allDestNatRules.contains(publicIp) ||
+                    allSrcNatRules.contains(poolName));
 
         case ADD:
             if (manageProxyArp(PaloAltoCommand.CHECK_IF_EXISTS, publicVlanTag, publicIp)) {
@@ -1765,10 +1765,10 @@ public class PaloAltoResource implements ServerResource {
     }
 
     private Map<String, Long> getPublicVlanTagsForPublicIps(List<String> publicIps) throws ExecutionException {
-    	Map<String, Long> publicVlanTags = new HashMap<String, Long>();
+        Map<String, Long> publicVlanTags = new HashMap<String, Long>();
 
-    	List<String> interfaceNames = new ArrayList<String>();
-    	
+        List<String> interfaceNames = new ArrayList<String>();
+        
         String xmlRequest = PaloAltoXml.PROXY_ARP_GETALL.getXml();
         xmlRequest = replaceXmlValue(xmlRequest, "interface-name", "");
         String xmlResponse = sendRequest(xmlRequest);       
@@ -1776,72 +1776,72 @@ public class PaloAltoResource implements ServerResource {
         Document doc = getDocument(xmlResponse);
         NodeList interfaces = doc.getElementsByTagName("interface");
         for (int i = 0; i < interfaces.getLength(); i++) {
-        	String interfaceName = null;
+            String interfaceName = null;
             NodeList interfaceEntries = interfaces.item(i).getChildNodes();               
             for (int j = 0; j < interfaceEntries.getLength(); j++) {
                 Node interfaceEntry = interfaceEntries.item(j);
                 if (interfaceEntry.getNodeName().equals("name")) {
-                	interfaceName = interfaceEntry.getFirstChild().getNodeValue();
-                	break;
+                    interfaceName = interfaceEntry.getFirstChild().getNodeValue();
+                    break;
                 } 
             }
             
             if (interfaceName != null) {
-            	interfaceNames.add(interfaceName);
+                interfaceNames.add(interfaceName);
             }
         }
         
         if (interfaceNames.size() == 1) {
-        	populatePublicVlanTagsMap(xmlResponse, interfaceNames.get(0), publicIps, publicVlanTags);
+            populatePublicVlanTagsMap(xmlResponse, interfaceNames.get(0), publicIps, publicVlanTags);
         } else if (interfaceNames.size() > 1) {
-        	for (String interfaceName : interfaceNames) {
-        		xmlRequest = PaloAltoXml.PROXY_ARP_GETALL.getXml();
-        		xmlRequest = replaceXmlValue(xmlRequest, "interface-name", interfaceName);
-        		xmlResponse = sendRequest(xmlRequest);
-        		populatePublicVlanTagsMap(xmlResponse, interfaceName, publicIps, publicVlanTags);
-        	}
+            for (String interfaceName : interfaceNames) {
+                xmlRequest = PaloAltoXml.PROXY_ARP_GETALL.getXml();
+                xmlRequest = replaceXmlValue(xmlRequest, "interface-name", interfaceName);
+                xmlResponse = sendRequest(xmlRequest);
+                populatePublicVlanTagsMap(xmlResponse, interfaceName, publicIps, publicVlanTags);
+            }
         }
         
         return publicVlanTags;
     }
     
     private void populatePublicVlanTagsMap(String xmlResponse, String interfaceName, List<String> publicIps, Map<String, Long> publicVlanTags) throws ExecutionException {
-    	Long publicVlanTag = getVlanTagFromInterfaceName(interfaceName);
-    	if (publicVlanTag != null) {
-    		for (String publicIp : publicIps) {
-    			if (xmlResponse.contains(publicIp)) {
-    				publicVlanTags.put(publicIp, publicVlanTag);
-    			}
-    		}
-    	}
+        Long publicVlanTag = getVlanTagFromInterfaceName(interfaceName);
+        if (publicVlanTag != null) {
+            for (String publicIp : publicIps) {
+                if (xmlResponse.contains(publicIp)) {
+                    publicVlanTags.put(publicIp, publicVlanTag);
+                }
+            }
+        }
     }
     
     private Map<String, Long> getPublicVlanTagsForNatRules(List<String[]> natRules) throws ExecutionException {
-    	List<String> publicIps = new ArrayList<String>();
-    	addPublicIpsToList(natRules, publicIps);
-    	return getPublicVlanTagsForPublicIps(publicIps);
+        List<String> publicIps = new ArrayList<String>();
+        addPublicIpsToList(natRules, publicIps);
+        return getPublicVlanTagsForPublicIps(publicIps);
     }
     
     private void addPublicIpsToList(List<String[]> natRules, List<String> publicIps) {
-    	for (String[] natRule : natRules) {
-    		if (!publicIps.contains(natRule[0])) {
-    			publicIps.add(natRule[0]);
-    		}
-    	}
+        for (String[] natRule : natRules) {
+            if (!publicIps.contains(natRule[0])) {
+                publicIps.add(natRule[0]);
+            }
+        }
     }
     
     private String genPublicInterface(Long vlanTag) {
-    	String publicInterface = _publicInterface;
-    	
-    	if (!publicInterface.contains(".")) {
-    		if (vlanTag == null) {
-    			publicInterface += ".0";
-    		} else {
-    			publicInterface += "." + vlanTag;
-    		}
-    	}
-    	
-    	return publicInterface;
+        String publicInterface = _publicInterface;
+        
+        if (!publicInterface.contains(".")) {
+            if (vlanTag == null) {
+                publicInterface += ".0";
+            } else {
+                publicInterface += "." + vlanTag;
+            }
+        }
+        
+        return publicInterface;
     }
     
     /*
@@ -2385,7 +2385,7 @@ public class PaloAltoResource implements ServerResource {
         }
 
         if (entryName == null) {
-        	entryName = genAddressBookEntryName(ip);
+            entryName = genAddressBookEntryName(ip);
         }
 
         String xml;
@@ -2471,7 +2471,7 @@ public class PaloAltoResource implements ServerResource {
         Integer startPort;
         Integer endPort;
         try {
-            protocol = getProtocol(applicationComponents[0]);			
+            protocol = getProtocol(applicationComponents[0]);           
             startPort = Integer.parseInt(applicationComponents[1]);
             endPort = Integer.parseInt(applicationComponents[2]);
         } catch (Exception e) {
@@ -2605,10 +2605,10 @@ public class PaloAltoResource implements ServerResource {
 
     private String genSecurityPolicyName(SecurityPolicyType type, Long accountId, String username, String fromZone, String toZone, String translatedIp) {
         if (type.equals(SecurityPolicyType.VPN)) {
-        	return genObjectName(_vpnObjectPrefix, String.valueOf(accountId), username);
+            return genObjectName(_vpnObjectPrefix, String.valueOf(accountId), username);
         } else {
-        	return genObjectName(type.getIdentifier(), fromZone, toZone, genIpIdentifier(translatedIp));
-        }    		    
+            return genObjectName(type.getIdentifier(), fromZone, toZone, genIpIdentifier(translatedIp));
+        }               
     }
 
     private boolean manageSecurityPolicy(SecurityPolicyType type, PaloAltoCommand command, Long accountId, String username, String privateIp, List<String> applicationNames, String ipsecVpnName) throws ExecutionException {
@@ -2619,10 +2619,10 @@ public class PaloAltoResource implements ServerResource {
         String addressBookEntryName;
         
         if (type.equals(SecurityPolicyType.VPN) && ipsecVpnName != null) {
-        	securityPolicyName = ipsecVpnName;
-        	addressBookEntryName = ipsecVpnName;
+            securityPolicyName = ipsecVpnName;
+            addressBookEntryName = ipsecVpnName;
         } else {
-        	securityPolicyName = genSecurityPolicyName(type, accountId, username, fromZone, toZone, privateIp);
+            securityPolicyName = genSecurityPolicyName(type, accountId, username, fromZone, toZone, privateIp);
             addressBookEntryName = genAddressBookEntryName(privateIp);
         }        
 
@@ -2649,7 +2649,7 @@ public class PaloAltoResource implements ServerResource {
                 rulesToCheck = getDestNatRules(RuleMatchCondition.ALL, null, null, null, null);
             } else {
                 return false;
-            }					
+            }                   
 
             for (String[] rule : rulesToCheck) {
                 String rulePrivateIp = rule[1];
@@ -2665,7 +2665,7 @@ public class PaloAltoResource implements ServerResource {
                 throw new ExecutionException("No address book entry for policy: " + securityPolicyName);
             }
 
-            xml = PaloAltoXml.SECURITY_POLICY_ADD.getXml();            	            	
+            xml = PaloAltoXml.SECURITY_POLICY_ADD.getXml();                              
             xml = replaceXmlValue(xml, "from-zone", fromZone);
             xml = replaceXmlValue(xml, "to-zone", toZone);            
             xml = replaceXmlValue(xml, "policy-name", securityPolicyName);            
@@ -2673,17 +2673,17 @@ public class PaloAltoResource implements ServerResource {
             xml = replaceXmlValue(xml, "dest-address", addressBookEntryName);
             
             if (type.equals(SecurityPolicyType.VPN) && ipsecVpnName != null) {
-            	xml = replaceXmlValue(xml, "tunnel", "<tunnel><ipsec-vpn>" + ipsecVpnName + "</ipsec-vpn></tunnel>");
-            } else {      	
-            	xml = replaceXmlValue(xml, "tunnel", "");
+                xml = replaceXmlValue(xml, "tunnel", "<tunnel><ipsec-vpn>" + ipsecVpnName + "</ipsec-vpn></tunnel>");
+            } else {        
+                xml = replaceXmlValue(xml, "tunnel", "");
             }
                         
             String applications;
             if (applicationNames == null) {
-            	applications = "<application>any</application>";
+                applications = "<application>any</application>";
             } else {
-            	applications = "";
-            	for (String applicationName : applicationNames) {
+                applications = "";
+                for (String applicationName : applicationNames) {
                     applications += "<application>" + applicationName + "</application>";
                 }
             }           
@@ -2747,7 +2747,7 @@ public class PaloAltoResource implements ServerResource {
             return false;
 
         }
-    }	
+    }   
     
     private boolean addSecurityPolicyAndApplications(SecurityPolicyType type, String privateIp, List<Object[]> applications) throws ExecutionException {
         // Add all necessary applications
@@ -2800,8 +2800,8 @@ public class PaloAltoResource implements ServerResource {
 
             Protocol protocol = (Protocol) applicationComponents[0];
             Integer startPort = (Integer) applicationComponents[1];
-            Integer endPort = (Integer) applicationComponents[2];			
-            manageApplication(PaloAltoCommand.DELETE, protocol, startPort, endPort);	
+            Integer endPort = (Integer) applicationComponents[2];           
+            manageApplication(PaloAltoCommand.DELETE, protocol, startPort, endPort); 
         }
 
         return true;
@@ -2815,19 +2815,19 @@ public class PaloAltoResource implements ServerResource {
         return genIpIdentifier(ipAddress);
     }
 
-    private boolean manageUsageFilter(PaloAltoCommand command, UsageFilter filter, String ip, Long guestVlanTag, String filterTermName) throws ExecutionException {	    	    
+    private boolean manageUsageFilter(PaloAltoCommand command, UsageFilter filter, String ip, Long guestVlanTag, String filterTermName) throws ExecutionException {              
         String filterName;
         String filterDescription;
         String xml;
 
         if (filter.equals(_usageFilterIPInput) || filter.equals(_usageFilterIPOutput)) {
-            assert (ip != null && guestVlanTag == null);	        
+            assert (ip != null && guestVlanTag == null);            
             filterName = filter.getName();
             filterDescription = filter.toString() + ", public IP = " + ip;
             xml = PaloAltoXml.PUBLIC_IP_FILTER_TERM_ADD.getXml();
         } else if (filter.equals(_usageFilterVlanInput) || filter.equals(_usageFilterVlanOutput)) {
-            assert (ip == null && guestVlanTag != null);	        
-            filterName = filter.getName() + "-" + guestVlanTag;	     
+            assert (ip == null && guestVlanTag != null);            
+            filterName = filter.getName() + "-" + guestVlanTag;      
             filterDescription = filter.toString() + ", guest VLAN tag = " + guestVlanTag;
             filterTermName = filterName;
             xml = PaloAltoXml.GUEST_VLAN_FILTER_TERM_ADD.getXml();
@@ -2844,7 +2844,7 @@ public class PaloAltoResource implements ServerResource {
             xml = replaceXmlValue(xml, "term-name", filterTermName);
             return sendRequestAndCheckResponse(command, xml, "name", filterTermName);
 
-        case ADD:	
+        case ADD:   
             if (manageUsageFilter(PaloAltoCommand.CHECK_IF_EXISTS, filter, ip, guestVlanTag, filterTermName)) {
                 return true;
             }
@@ -2885,7 +2885,7 @@ public class PaloAltoResource implements ServerResource {
             return false;
 
         }
-    }	
+    }   
 
     private String genNameValueEntry(String name, String value) {
         String xml = PaloAltoXml.TEMPLATE_ENTRY.getXml();
@@ -2925,7 +2925,7 @@ public class PaloAltoResource implements ServerResource {
         return result;
     }
     
-    private boolean manageFirewallFilter(PaloAltoCommand command, FirewallFilterTerm term, String filterName) throws ExecutionException {	    	    
+    private boolean manageFirewallFilter(PaloAltoCommand command, FirewallFilterTerm term, String filterName) throws ExecutionException {                
         String xml;
 
         switch(command) {
@@ -2937,7 +2937,7 @@ public class PaloAltoResource implements ServerResource {
             xml = replaceXmlValue(xml, "term-name", term.getName());
             return sendRequestAndCheckResponse(command, xml, "name", term.getName());
 
-        case ADD:	
+        case ADD:   
             if (manageFirewallFilter(PaloAltoCommand.CHECK_IF_EXISTS, term, filterName)) {
                 return true;
             }
@@ -2987,24 +2987,24 @@ public class PaloAltoResource implements ServerResource {
             return false;
 
         }
-    }	
+    }   
 
     /*
-     * Usage	
+     * Usage    
      */
 
     private ExternalNetworkResourceUsageAnswer getUsageAnswer(ExternalNetworkResourceUsageCommand cmd) throws ExecutionException {
-        try {	
-        	String socOpenException = "Failed to open a connection for Usage data.";
-        	String socCloseException = "Unable to close connection for Usage data.";
-        	if (!openUsageSocket()) {
-        		throw new ExecutionException(socOpenException);
-        	}
+        try {   
+            String socOpenException = "Failed to open a connection for Usage data.";
+            String socCloseException = "Unable to close connection for Usage data.";
+            if (!openUsageSocket()) {
+                throw new ExecutionException(socOpenException);
+            }
  
             ExternalNetworkResourceUsageAnswer answer = new ExternalNetworkResourceUsageAnswer(cmd);
 
             String xml = PaloAltoXml.FIREWALL_FILTER_BYTES_GETALL.getXml();
-            String rawUsageData = sendUsageRequest(xml);		
+            String rawUsageData = sendUsageRequest(xml);        
             Document doc = getDocument(rawUsageData);
 
             NodeList counters = doc.getElementsByTagName("counter");
@@ -3026,27 +3026,27 @@ public class PaloAltoResource implements ServerResource {
                                 s_logger.debug(e);
                                 byteCount = 0;
                             }
-                        }	            		
+                        }                       
                     }
 
                     if (byteCount >= 0) {
-                    	updateUsageAnswer(answer, counterName, byteCount);     
+                        updateUsageAnswer(answer, counterName, byteCount);     
                     }
                 } 
             }
             if (!closeUsageSocket()) {
-            	throw new ExecutionException(socCloseException);
+                throw new ExecutionException(socCloseException);
             }
             return answer;
         } catch (Exception e) {
-        	closeUsageSocket();
-        	throw new ExecutionException(e.getMessage());
+            closeUsageSocket();
+            throw new ExecutionException(e.getMessage());
         }
 
-    }		
+    }       
 
     private void updateBytesMap(Map<String, long[]> bytesMap, UsageFilter filter, String usageAnswerKey, long additionalBytes) {
-        long[] bytesSentAndReceived = bytesMap.get(usageAnswerKey);	    
+        long[] bytesSentAndReceived = bytesMap.get(usageAnswerKey);     
         if (bytesSentAndReceived == null) {
             bytesSentAndReceived = new long[]{0,0};
         }
@@ -3118,14 +3118,14 @@ public class PaloAltoResource implements ServerResource {
     private void updateUsageAnswer(ExternalNetworkResourceUsageAnswer answer, String counterName, long byteCount) {
         if (counterName == null || byteCount <= 0) {
             return;                   
-        }	    	    
+        }               
 
-        UsageFilter filter = getUsageFilter(counterName);	    
+        UsageFilter filter = getUsageFilter(counterName);       
         if (filter == null) {
             s_logger.debug("Failed to parse counter name in usage answer: " + counterName);
             return;
         }
-        String usageAnswerKey = getUsageAnswerKey(filter, counterName);	    
+        String usageAnswerKey = getUsageAnswerKey(filter, counterName);     
         Map<String, long[]> bytesMap = getBytesMap(answer, filter, usageAnswerKey);
         updateBytesMap(bytesMap, filter, usageAnswerKey, byteCount);          
     }
@@ -3185,11 +3185,11 @@ public class PaloAltoResource implements ServerResource {
     }
     
     private String sendRequest(String xmlRequest) throws ExecutionException {
-    	return sendRequestPrim(_toPaloAlto, _fromPaloAlto, xmlRequest);
+        return sendRequestPrim(_toPaloAlto, _fromPaloAlto, xmlRequest);
     }
     
     private String sendUsageRequest(String xmlRequest) throws ExecutionException {
-    	return sendRequestPrim(_UsagetoPaloAlto, _UsagefromPaloAlto, xmlRequest);
+        return sendRequestPrim(_UsagetoPaloAlto, _UsagefromPaloAlto, xmlRequest);
     }
 
     private boolean checkResponse(String xmlResponse, boolean errorKeyAndValue, String key, String value) {
@@ -3363,16 +3363,16 @@ public class PaloAltoResource implements ServerResource {
      */    
     
     private Long getVlanTag(String vlan) throws ExecutionException {
-    	Long publicVlanTag = null;
-    	if (!vlan.equals("untagged")) {
-    		try {
-    			publicVlanTag = Long.parseLong(vlan);
-    		} catch (Exception e) {
-    			throw new ExecutionException("Unable to parse VLAN tag: " + vlan);
-    		}
-    	}
-    	
-    	return publicVlanTag;
+        Long publicVlanTag = null;
+        if (!vlan.equals("untagged")) {
+            try {
+                publicVlanTag = Long.parseLong(vlan);
+            } catch (Exception e) {
+                throw new ExecutionException("Unable to parse VLAN tag: " + vlan);
+            }
+        }
+        
+        return publicVlanTag;
     }
     
     private String genObjectName(String... args) {
@@ -3385,7 +3385,7 @@ public class PaloAltoResource implements ServerResource {
             }
         }
 
-        return objectName;			
+        return objectName;          
     }
 
 
@@ -3400,7 +3400,7 @@ public class PaloAltoResource implements ServerResource {
             return Protocol.valueOf(protocolName);
         } catch (Exception e) {
             throw new ExecutionException("Invalid protocol: " + protocolName);
-        }		
+        }       
     }
 
     private Document getDocument(String xml) throws ExecutionException {
@@ -3420,6 +3420,36 @@ public class PaloAltoResource implements ServerResource {
         } else {
             return doc;
         }
+    }
+
+    @Override
+    public void setName(String name) {
+        // TODO Auto-generated method stub
+        
+    }
+
+    @Override
+    public void setConfigParams(Map<String, Object> params) {
+        // TODO Auto-generated method stub
+        
+    }
+
+    @Override
+    public Map<String, Object> getConfigParams() {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public int getRunLevel() {
+        // TODO Auto-generated method stub
+        return 0;
+    }
+
+    @Override
+    public void setRunLevel(int level) {
+        // TODO Auto-generated method stub
+        
     }    
     
 }

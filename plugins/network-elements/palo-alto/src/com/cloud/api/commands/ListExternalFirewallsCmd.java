@@ -19,6 +19,8 @@ package com.cloud.api.commands;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.inject.Inject;
+
 import org.apache.cloudstack.api.command.user.offering.ListServiceOfferingsCmd;
 import org.apache.cloudstack.api.response.ZoneResponse;
 import org.apache.log4j.Logger;
@@ -27,7 +29,6 @@ import org.apache.cloudstack.api.ApiConstants;
 import org.apache.cloudstack.api.BaseListCmd;
 import org.apache.cloudstack.api.APICommand;
 import org.apache.cloudstack.api.Parameter;
-import org.apache.cloudstack.api.PlugService;
 import org.apache.cloudstack.api.response.ListResponse;
 import com.cloud.host.Host;
 import com.cloud.network.element.PaloAltoFirewallElementService;
@@ -58,7 +59,7 @@ public class ListExternalFirewallsCmd extends BaseListCmd {
     /////////////// API Implementation///////////////////
     /////////////////////////////////////////////////////
 
-    @PlugService PaloAltoFirewallElementService _paElementService;
+    @Inject PaloAltoFirewallElementService _paElementService;
 
     @Override
     public String getCommandName() {

@@ -16,6 +16,8 @@
 // under the License.
 package com.cloud.api.commands;
 
+import javax.inject.Inject;
+
 import org.apache.cloudstack.api.response.PhysicalNetworkResponse;
 import org.apache.log4j.Logger;
 
@@ -25,7 +27,6 @@ import org.apache.cloudstack.api.BaseAsyncCmd;
 import org.apache.cloudstack.api.BaseCmd;
 import org.apache.cloudstack.api.APICommand;
 import org.apache.cloudstack.api.Parameter;
-import org.apache.cloudstack.api.PlugService;
 import org.apache.cloudstack.api.ServerApiException;
 import com.cloud.api.response.PaloAltoFirewallResponse;
 import com.cloud.event.EventTypes;
@@ -34,7 +35,7 @@ import com.cloud.exception.InsufficientCapacityException;
 import com.cloud.exception.InvalidParameterValueException;
 import com.cloud.exception.ResourceAllocationException;
 import com.cloud.exception.ResourceUnavailableException;
-import com.cloud.network.ExternalFirewallDeviceVO;
+import com.cloud.network.dao.ExternalFirewallDeviceVO;
 import com.cloud.network.element.PaloAltoFirewallElementService;
 import com.cloud.user.UserContext;
 import com.cloud.utils.exception.CloudRuntimeException;
@@ -43,7 +44,7 @@ import com.cloud.utils.exception.CloudRuntimeException;
 public class AddPaloAltoFirewallCmd extends BaseAsyncCmd {
     public static final Logger s_logger = Logger.getLogger(AddPaloAltoFirewallCmd.class.getName());
     private static final String s_name = "addpaloaltofirewallresponse";
-    @PlugService PaloAltoFirewallElementService _paFwService;
+    @Inject PaloAltoFirewallElementService _paFwService;
 
     /////////////////////////////////////////////////////
     //////////////// API parameters /////////////////////

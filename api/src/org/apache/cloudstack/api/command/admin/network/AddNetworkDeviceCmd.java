@@ -47,12 +47,9 @@ public class AddNetworkDeviceCmd extends BaseCmd {
     // ////////////// API parameters /////////////////////
     // ///////////////////////////////////////////////////
 
-<<<<<<< HEAD
-    @Parameter(name = ApiConstants.NETWORK_DEVICE_TYPE, type = CommandType.STRING, description = "Network device type, now supports ExternalDhcp, PxeServer, NetscalerMPXLoadBalancer, NetscalerVPXLoadBalancer, NetscalerSDXLoadBalancer, F5BigIpLoadBalancer, JuniperSRXFirewall, PaloAltoFirewall")
-=======
+
     @Inject ExternalNetworkDeviceManager nwDeviceMgr;
-    @Parameter(name = ApiConstants.NETWORK_DEVICE_TYPE, type = CommandType.STRING, description = "Network device type, now supports ExternalDhcp, PxeServer, NetscalerMPXLoadBalancer, NetscalerVPXLoadBalancer, NetscalerSDXLoadBalancer, F5BigIpLoadBalancer, JuniperSRXFirewall")
->>>>>>> 82dc16e58a093a448cfc752d6a35445748e6de3a
+    @Parameter(name = ApiConstants.NETWORK_DEVICE_TYPE, type = CommandType.STRING, description = "Network device type, now supports ExternalDhcp, PxeServer, NetscalerMPXLoadBalancer, NetscalerVPXLoadBalancer, NetscalerSDXLoadBalancer, F5BigIpLoadBalancer, JuniperSRXFirewall, PaloAltoFirewall")
     private String type;
 
     @Parameter(name = ApiConstants.NETWORK_DEVICE_PARAMETER_LIST, type = CommandType.MAP, description = "parameters for network device")

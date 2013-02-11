@@ -28,8 +28,9 @@ import com.cloud.api.commands.ListPaloAltoFirewallNetworksCmd;
 import com.cloud.api.commands.ListPaloAltoFirewallsCmd;
 import com.cloud.api.response.PaloAltoFirewallResponse;
 import com.cloud.host.Host;
-import com.cloud.network.ExternalFirewallDeviceVO;
 import com.cloud.network.Network;
+import com.cloud.network.dao.ExternalFirewallDeviceVO;
+
 import org.apache.cloudstack.api.response.ExternalFirewallResponse;
 import com.cloud.utils.component.PluggableService;
 
