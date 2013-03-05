@@ -61,6 +61,7 @@ under the License.
     
     <adapters key="com.cloud.network.element.NetworkElement">
      <adapter name="JuniperSRX" class="com.cloud.network.element.JuniperSRXExternalFirewallElement"/>
+     <adapter name="PaloAlto" class="com.cloud.network.element.PaloAltoExternalFirewallElement"/>
 	 <adapter name="Netscaler" class="com.cloud.network.element.NetscalerElement"/>
 	 <adapter name="F5BigIP" class="com.cloud.network.element.F5ExternalLoadBalancerElement"/>
 	 <adapter name="CiscoNexus1000vVSM" class="com.cloud.network.element.CiscoNexusVSMElement"/>
@@ -75,6 +76,7 @@ under the License.
 	  <pluggableservice name="NetscalerExternalLoadBalancerElementService" key="com.cloud.network.element.NetscalerLoadBalancerElementService" class="com.cloud.network.element.NetscalerElement"/>
 	  <pluggableservice name="F5ExternalLoadBalancerElementService" key="com.cloud.network.element.F5ExternalLoadBalancerElementService" class="com.cloud.network.element.F5ExternalLoadBalancerElement"/>
 	   <pluggableservice name="JuniperSRXFirewallElementService" key="com.cloud.network.element.JuniperSRXFirewallElementService" class="com.cloud.network.element.JuniperSRXExternalFirewallElement"/>
+     <pluggableservice name="PaloAltoFirewallElementService" key="com.cloud.network.element.PaloAltoFirewallElementService" class="com.cloud.network.element.PaloAltoExternalFirewallElement"/>
 	<pluggableservice name="CiscoNexusVSMElementService" key="com.cloud.network.element.CiscoNexusVSMElementService" class="com.cloud.network.element.CiscoNexusVSMElement"/>
 	  
 	  <dao name="NetScalerPodDao" class="com.cloud.network.dao.NetScalerPodDaoImpl" singleton="false"/>

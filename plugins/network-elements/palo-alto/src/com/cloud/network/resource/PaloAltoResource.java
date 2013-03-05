@@ -170,7 +170,7 @@ public class PaloAltoResource implements ServerResource {
         ROLLBACK("rollback.xml"), 
         TEST("test.xml");
 
-        private String scriptsDir = "scripts/network/juniper";
+        private String scriptsDir = "scripts/network/palo_alto";
         private String xml;
         private final Logger s_logger = Logger.getLogger(PaloAltoResource.class);
 

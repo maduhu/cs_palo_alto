@@ -277,7 +277,7 @@ PortForwardingServiceProvider, RemoteAccessVPNServiceProvider, IpDeployer, PaloA
         firewallCapabilities.put(Capability.SupportedTrafficDirection, "ingress");
         capabilities.put(Service.Firewall, firewallCapabilities);
 
-        // Disabling VPN for Juniper in Acton as it 1) Was never tested 2) probably just doesn't work
+        // Disabling VPN for Palo Alto in Acton as it 1) Was never tested 2) probably just doesn't work
 // // Set VPN capabilities
 // Map<Capability, String> vpnCapabilities = new HashMap<Capability, String>();
 // vpnCapabilities.put(Capability.SupportedVpnTypes, "ipsec");
@@ -424,7 +424,7 @@ PortForwardingServiceProvider, RemoteAccessVPNServiceProvider, IpDeployer, PaloA
             throw new InvalidParameterValueException("Invalid Palo Alto firewall device type");
         }
         return addExternalFirewall(cmd.getPhysicalNetworkId(), cmd.getUrl(), cmd.getUsername(), cmd.getPassword(), deviceName,
-                new PaloAltoResource());
+            new PaloAltoResource());
     }
 
     @Override

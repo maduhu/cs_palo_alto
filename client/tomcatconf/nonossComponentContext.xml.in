@@ -87,6 +87,9 @@
   <bean id="JuniperSRX" class="com.cloud.network.element.JuniperSRXExternalFirewallElement">
     <property name="name" value="JuniperSRX"/>
   </bean>
+  <bean id="PaloAlto" class="com.cloud.network.element.PaloAltoExternalFirewallElement">
+    <property name="name" value="PaloAlto"/>
+  </bean>
   <bean id="Netscaler" class="com.cloud.network.element.NetscalerElement">
     <property name="name" value="Netscaler"/>
   </bean>
