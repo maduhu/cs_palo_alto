@@ -30,6 +30,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.codec.binary.Base64;
+import java.nio.ByteBuffer;
+import java.util.UUID;
+
 import javax.naming.ConfigurationException;
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -73,6 +77,25 @@ import com.cloud.utils.exception.ExecutionException;
 import com.cloud.utils.net.NetUtils;
 import com.cloud.utils.script.Script;
 
+import org.apache.http.client.ResponseHandler;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.impl.client.BasicResponseHandler;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.NameValuePair;
+import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.protocol.HTTP;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import javax.xml.xpath.XPathFactory;
+import javax.xml.xpath.XPath;
+import javax.xml.xpath.XPathExpression;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathExpressionException;
+import com.cloud.network.utils.HttpClientWrapper;
+
 public class PaloAltoResource implements ServerResource {
 
     private String _name;
@@ -81,6 +104,7 @@ public class PaloAltoResource implements ServerResource {
     private String _username;
     private String _password;
     private String _guid;
+    private String _key;
     private String _objectNameWordSep;
     private PrintWriter _toPaloAlto;
     private BufferedReader _fromPaloAlto;
@@ -104,6 +128,14 @@ public class PaloAltoResource implements ServerResource {
     private UsageFilter _usageFilterIPInput;
     private UsageFilter _usageFilterIPOutput;
     private final Logger s_logger = Logger.getLogger(PaloAltoResource.class);
+
+    private static String _apiUri = "/api";
+    private static HttpClient _httpclient;
+
+    private enum PaloAltoMethod {
+        GET,
+        POST;
+    }
 
     private enum PaloAltoXml {
         LOGIN("login.xml"), 
@@ -478,7 +510,7 @@ public class PaloAltoResource implements ServerResource {
 
     @Override
     public void disconnected() {
-        closeSocket();
+        // nothing for now...
     }
 
     public IAgentControl getAgentControl() {
@@ -510,54 +542,148 @@ public class PaloAltoResource implements ServerResource {
      */
 
     private boolean refreshPaloAltoConnection() {
-        if (!(closeSocket() && openSocket())) {
-            return false;           
+        //if (!(closeSocket() && openSocket())) {
+        //    return false;           
+        //}
+        if (_httpclient == null) {
+            openHttpConnection();
         }
 
         try {
-            return login();
+            //return login();
+            return login(_username, _password);
         } catch (ExecutionException e) {
             s_logger.error("Failed to login due to " + e.getMessage());
             return false;
         }
     }
 
-    private boolean login() throws ExecutionException {
-        String xml = PaloAltoXml.LOGIN.getXml();
-        xml = replaceXmlValue(xml, "username", _username);
-        xml = replaceXmlValue(xml, "password", _password);
-        return sendRequestAndCheckResponse(PaloAltoCommand.LOGIN, xml);
+    //private boolean login() throws ExecutionException {
+    //    String xml = PaloAltoXml.LOGIN.getXml();
+    //    xml = replaceXmlValue(xml, "username", _username);
+    //    xml = replaceXmlValue(xml, "password", _password);
+    //    return sendRequestAndCheckResponse(PaloAltoCommand.LOGIN, xml);
+    //}
+
+    //private boolean openSocket() {
+    //    try {
+    //        Socket s = new Socket(_ip, 3221);
+    //        s.setKeepAlive(true);
+    //        s.setSoTimeout(_timeoutInSeconds * 1000);
+    //        _toPaloAlto = new PrintWriter(s.getOutputStream(), true);
+    //        _fromPaloAlto = new BufferedReader(new InputStreamReader(s.getInputStream()));
+    //        return true;
+    //    } catch (IOException e) {
+    //        s_logger.error(e);
+    //        return false;
+    //    }
+    //}
+//
+    //private boolean closeSocket() {
+    //    try {
+    //        if (_toPaloAlto != null) {
+    //            _toPaloAlto.close();
+    //        } 
+//
+    //        if (_fromPaloAlto != null) {
+    //            _fromPaloAlto.close();
+    //        }
+//
+    //        return true;
+    //    } catch (IOException e) {
+    //        s_logger.error(e);
+    //        return false;
+    //    }
+    //}
+
+    private void openHttpConnection(){
+        _httpclient = new DefaultHttpClient();
+
+        // Allows you to connect via SSL using unverified certs
+        _httpclient = HttpClientWrapper.wrapClient(_httpclient);
     }
 
-    private boolean openSocket() {
+    private boolean login(String username, String password) throws ExecutionException {
+        Map<String, String> params = new HashMap<String, String>();
+        params.put("type", "keygen");
+        params.put("user", username);
+        params.put("password", password);
+
+        String keygenBody = request(PaloAltoMethod.GET, params);
+        Document keygen_doc = getDocument(keygenBody);
+        XPathFactory xpath_factory = XPathFactory.newInstance();
+        XPath xpath = xpath_factory.newXPath();
         try {
-            Socket s = new Socket(_ip, 3221);
-            s.setKeepAlive(true);
-            s.setSoTimeout(_timeoutInSeconds * 1000);
-            _toPaloAlto = new PrintWriter(s.getOutputStream(), true);
-            _fromPaloAlto = new BufferedReader(new InputStreamReader(s.getInputStream()));
-            return true;
-        } catch (IOException e) {
-            s_logger.error(e);
-            return false;
+            XPathExpression expr = xpath.compile("/response[@status='success']/result/key/text()");
+            _key = (String) expr.evaluate(keygen_doc, XPathConstants.STRING);
+        } catch (XPathExpressionException e) {
+            throw new ExecutionException(e.getMessage());
         }
+        if (_key != null) {
+            return true;
+        }
+        return false;
     }
 
-    private boolean closeSocket() {
-        try {
-            if (_toPaloAlto != null) {
-                _toPaloAlto.close();
-            } 
+    private String request(PaloAltoMethod method, Map<String, String> params) throws ExecutionException {
+        if (method != PaloAltoMethod.GET && method != PaloAltoMethod.POST) {
+            throw new ExecutionException("Invalid http method used to access the Palo Alto API.");
+        }
 
-            if (_fromPaloAlto != null) {
-                _fromPaloAlto.close();
+        // a GET method...
+        if (method == PaloAltoMethod.GET) {
+            String queryString = "?";
+            for (String key : params.keySet()) {
+                if (!queryString.equals("?")) {
+                    queryString = queryString + "&";
+                }
+                try {
+                    queryString = queryString + key+"="+URLEncoder.encode(params.get(key), "UTF-8");
+                } catch (UnsupportedEncodingException e) {
+                    throw new ExecutionException(e.getMessage());
+                }
+            }
+            if (_key != null) {
+                queryString = queryString + "&key="+_key;
             }
 
-            return true;
-        } catch (IOException e) {
-            s_logger.error(e);
-            return false;
+            HttpGet get_request = new HttpGet("https://" + _ip + _apiUri + queryString);
+            ResponseHandler<String> responseHandler = new BasicResponseHandler();
+            String responseBody;
+            try {
+                responseBody = _httpclient.execute(get_request, responseHandler);
+            } catch (IOException e) {
+                throw new ExecutionException(e.getMessage());
+            }
+            return responseBody;
         }
+
+        // a POST method...
+        if (method == PaloAltoMethod.POST) {
+            List <NameValuePair> nvps = new ArrayList <NameValuePair>();
+            for (String key : params.keySet()) {
+                nvps.add(new BasicNameValuePair(key, params.get(key)));
+            }
+            if (_key != null) {
+                nvps.add(new BasicNameValuePair("key", _key));
+            }
+            HttpPost post_request = new HttpPost("https://" + _ip + _apiUri);
+            try {
+                post_request.setEntity(new UrlEncodedFormEntity(nvps, HTTP.UTF_8));
+            } catch (UnsupportedEncodingException e) {
+                throw new ExecutionException(e.getMessage());
+            }
+            ResponseHandler<String> responseHandler = new BasicResponseHandler();
+            String responseBody;
+            try {
+                responseBody = _httpclient.execute(post_request, responseHandler);
+            } catch (IOException e) {
+                throw new ExecutionException(e.getMessage());
+            }
+            return responseBody;
+        }
+        
+        return null;
     }
 
     /*
@@ -3404,12 +3530,12 @@ public class PaloAltoResource implements ServerResource {
     }
 
     private Document getDocument(String xml) throws ExecutionException {
-        StringReader srcNatRuleReader = new StringReader(xml);
-        InputSource srcNatRuleSource = new InputSource(srcNatRuleReader);
+        StringReader xmlReader = new StringReader(xml);
+        InputSource xmlSource = new InputSource(xmlReader);
         Document doc = null; 
 
         try {
-            doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(srcNatRuleSource);
+            doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(xmlSource);
         } catch (Exception e) {
             s_logger.error(e);
             throw new ExecutionException(e.getMessage());
@@ -3422,31 +3548,48 @@ public class PaloAltoResource implements ServerResource {
         }
     }
 
-    @Override
+    private String uuidToBase64(String str) {
+        Base64 base64 = new Base64();
+        UUID uuid = UUID.fromString(str);
+        ByteBuffer bb = ByteBuffer.wrap(new byte[16]);
+        bb.putLong(uuid.getMostSignificantBits());
+        bb.putLong(uuid.getLeastSignificantBits());
+        return base64.encodeBase64URLSafeString(bb.array());
+    }
+
+    private String uuidFromBase64(String str) {
+        Base64 base64 = new Base64(); 
+        byte[] bytes = base64.decodeBase64(str);
+        ByteBuffer bb = ByteBuffer.wrap(bytes);
+        UUID uuid = new UUID(bb.getLong(), bb.getLong());
+        return uuid.toString();
+    }
+
+    //@Override
     public void setName(String name) {
         // TODO Auto-generated method stub
         
     }
 
-    @Override
+    //@Override
     public void setConfigParams(Map<String, Object> params) {
         // TODO Auto-generated method stub
         
     }
 
-    @Override
+    //@Override
     public Map<String, Object> getConfigParams() {
         // TODO Auto-generated method stub
         return null;
     }
 
-    @Override
+    //@Override
     public int getRunLevel() {
         // TODO Auto-generated method stub
         return 0;
     }
 
-    @Override
+    //@Override
     public void setRunLevel(int level) {
         // TODO Auto-generated method stub
         

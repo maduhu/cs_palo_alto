@@ -3850,10 +3850,10 @@
                       label: 'label.private.interface',
                       docID: 'helpPaloAltoPrivateInterface'
                     },
-                    usageinterface: {
-                      label: 'Usage interface',
-                      docID: 'helpPaloAltoUsageInterface'
-                    },
+                    //usageinterface: {
+                    //  label: 'Usage interface',
+                    //  docID: 'helpPaloAltoUsageInterface'
+                    //},
                     numretries: {
                       label: 'label.numretries',
                       defaultValue: '2',
@@ -7043,9 +7043,9 @@
                   privateinterface: {
                     label: 'label.private.interface'
                   },
-                  usageinterface: {
-                    label: 'label.usage.interface'
-                  },
+                  //usageinterface: {
+                  //  label: 'label.usage.interface'
+                  //},
                   numretries: {
                     label: 'label.numretries',
                     defaultValue: '2'
@@ -7142,7 +7142,7 @@
               dataType: "json",
               async: false,
               success: function(json) {
-                var items = json.listpaloaltofirewallresponse.pafirewall;
+                var items = json.listpaloaltofirewallresponse.paloaltofirewall;
                 args.response.success({data: items});
               }
             });
@@ -7199,7 +7199,7 @@
                     dataType: "json",
                     async: true,
                     success: function(json) {                     
-                      var item = json.listpaloaltofirewallresponse.pafirewall[0];
+                      var item = json.listpaloaltofirewallresponse.paloaltofirewall[0];
                       args.response.success({data: item});
                     }
                   });                     

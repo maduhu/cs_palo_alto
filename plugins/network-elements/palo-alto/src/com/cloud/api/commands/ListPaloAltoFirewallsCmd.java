@@ -81,8 +81,8 @@ public class ListPaloAltoFirewallsCmd extends BaseListCmd {
 
             if (fwDevices != null && !fwDevices.isEmpty()) {
                 for (ExternalFirewallDeviceVO fwDeviceVO : fwDevices) {
-                    PaloAltoFirewallResponse lbdeviceResponse = _paFwService.createPaloAltoFirewallResponse(fwDeviceVO);
-                    fwDevicesResponse.add(lbdeviceResponse);
+                    PaloAltoFirewallResponse deviceResponse = _paFwService.createPaloAltoFirewallResponse(fwDeviceVO);
+                    fwDevicesResponse.add(deviceResponse);
                 }
             }
 
