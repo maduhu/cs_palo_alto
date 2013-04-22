@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 (function($, cloudStack) {
+  var requiresStorageMotion = false;
   cloudStack.sections.instances = {
     title: 'label.instances',
     id: 'instances',
@@ -338,11 +339,12 @@
               notification: function(args) {
                 return 'label.action.start.instance';
               },							
-							complete: function(args) {						  
+							complete: function(args) {
 								if(args.password != null) {
-									alert('Password of the VM is ' + args.password);
+									return 'Password of the VM is ' + args.password;
 								}
-								return 'label.action.start.instance';
+
+								return false;
 							}			
             },
             notification: {
@@ -957,17 +959,31 @@
                   validation: { required: true },
                   select: function(args) {
                     $.ajax({
-                      url: createURL("listHosts&VirtualMachineId=" + args.context.instances[0].id),
+                      url: createURL("findHostsForMigration&VirtualMachineId=" + args.context.instances[0].id),
                       //url: createURL("listHosts"),	//for testing only, comment it out before checking in.
                       dataType: "json",
                       async: true,
                       success: function(json) {
-                        var hosts = json.listhostsresponse.host;
+                        if(json.findhostsformigrationresponse.host != undefined){
+                        var hosts = json.findhostsformigrationresponse.host;
+                        requiresStorageMotion =  json.findhostsformigrationresponse.host[0].requiresStorageMotion;
                         var items = [];
                         $(hosts).each(function() {
-                          items.push({id: this.id, description: (this.name + " (" + (this.suitableformigration? "Suitable": "Not Suitable") + ")")});
-                        });
+                        if(this.requiresStorageMotion == true){
+                          items.push({id: this.id, description: (this.name + " (" + (this.suitableformigration? "Suitable, ": "Not Suitable, ")  +  "Storage migration required)"  )});
+
+                        }
+                        else {
+                     
+                          items.push({id: this.id, description: (this.name + " (" + (this.suitableformigration? "Suitable": "Not Suitable")  + ")"  )});
+
+                          }
+                         });
                         args.response.success({data: items});
+                        }
+                       else
+                          cloudStack.dialog.notice({ message: _l('No Hosts are avaialble for Migration') }); //Only a single host in the set up 
+                        
                       }
                     });
                   }
@@ -975,7 +991,31 @@
               }
             },
             action: function(args) {
+              
+            if(requiresStorageMotion == true){   
               $.ajax({
+                url: createURL("migrateVirtualMachineWithVolume&hostid=" + args.data.hostId + "&virtualmachineid=" + args.context.instances[0].id),
+                dataType: "json",
+                async: true,
+                success: function(json) {
+                  var jid = json.migratevirtualmachinewithvolumeresponse.jobid;
+                  args.response.success(
+                    {_custom:
+                     {jobId: jid,
+                      getUpdatedItem: function(json) {
+                        return json.queryasyncjobresultresponse.jobresult.virtualmachine;
+                      },
+                      getActionFilter: function() {
+                        return vmActionfilter;
+                      }
+                     }
+                    }
+                  );
+                }
+              });
+             }
+             else{
+                  $.ajax({
                 url: createURL("migrateVirtualMachine&hostid=" + args.data.hostId + "&virtualmachineid=" + args.context.instances[0].id),
                 dataType: "json",
                 async: true,
@@ -986,21 +1026,6 @@
                      {jobId: jid,
                       getUpdatedItem: function(json) {
                         return json.queryasyncjobresultresponse.jobresult.virtualmachine;
-                        /*
-                         var vmObj;
-                         $.ajax({
-                         url: createURL("listVirtualMachines&id=" + args.context.instances[0].id),
-                         dataType: "json",
-                         async: false,
-                         success: function(json) {
-                         var items =  json.listvirtualmachinesresponse.virtualmachine;
-                         if(items != null && items.length > 0) {
-                         vmObj = items[0];
-                         }
-                         }
-                         });
-                         return vmObj;
-                         */
                       },
                       getActionFilter: function() {
                         return vmActionfilter;
@@ -1010,6 +1035,8 @@
                   );
                 }
               });
+
+              } 
             },
             notification: {
               poll: pollAsyncJobResult
@@ -1077,6 +1104,75 @@
             notification: {
               poll: pollAsyncJobResult
             }
+          },
+
+          scaleUp:{
+            label:'scaleUp VM',
+            createForm:{
+              title:'Scale UP Virtual Machine',
+              label:'Scale UP Virtual Machine',
+              fields:{
+                  serviceOffering: {
+                  label: 'label.compute.offering',
+                  select: function(args) {
+                    $.ajax({
+                      url: createURL("listServiceOfferings&VirtualMachineId=" + args.context.instances[0].id),
+                      dataType: "json",
+                      async: true,
+                      success: function(json) {
+                        var serviceofferings = json.listserviceofferingsresponse.serviceoffering;
+                        var items = [];
+                        $(serviceofferings).each(function() {
+                          items.push({id: this.id, description: this.displaytext});
+                        });
+                        args.response.success({data: items});
+                      }
+                    });
+                  }
+                }
+
+
+               }
+            },
+
+            action: function(args) {
+              $.ajax({
+                url: createURL("scaleVirtualMachine&id=" + args.context.instances[0].id + "&serviceofferingid=" + args.data.serviceOffering),
+                dataType: "json",
+                async: true,
+                success: function(json) {
+                  var jid = json.scalevirtualmachineresponse.jobid;
+                  args.response.success(
+                    {_custom:
+                     {jobId: jid,
+                      getUpdatedItem: function(json) {
+                        return json.queryasyncjobresultresponse.jobresult.virtualmachine;
+                      },
+                      getActionFilter: function() {
+                        return vmActionfilter;
+                      }
+                     }
+                    }
+                  );
+                },
+                 error:function(json){
+                     args.response.error(parseXMLHttpResponse(json));
+                }
+
+              });
+            },
+            messages: {
+              confirm: function(args) {
+                return 'Do you really want to scale Up your instance ?';
+              },
+              notification: function(args) {
+                return 'Instance Scaled Up';
+              }
+            },
+            notification: {
+              poll: pollAsyncJobResult
+            }
+
           },
 
           viewConsole: {
@@ -1336,6 +1432,7 @@
       allowedActions.push("destroy");
       allowedActions.push("changeService");
       allowedActions.push("reset");
+      allowedActions.push("scaleUp");
 
       if (isAdmin())
         allowedActions.push("migrate");
@@ -1359,6 +1456,8 @@
       allowedActions.push("destroy");
       allowedActions.push("reset");
       allowedActions.push("snapshot");
+      allowedActions.push("scaleUp");
+
       if(isAdmin())
         allowedActions.push("migrateToAnotherStorage");
 

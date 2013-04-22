@@ -204,7 +204,7 @@ public class CloudStackPrimaryDataStoreLifeCycleImpl implements
         String hostPath = uri.getPath();
         Object localStorage = dsInfos.get("localStorage");
         if (localStorage != null) {
-            hostPath = hostPath.replace("/", "");
+            hostPath = hostPath.replaceFirst("/", "");
         }
         String userInfo = uri.getUserInfo();
         int port = uri.getPort();
@@ -348,6 +348,7 @@ public class CloudStackPrimaryDataStoreLifeCycleImpl implements
                     new String(storageHost + hostPath).getBytes()).toString();
         }
 
+
         List<StoragePoolVO> spHandles = primaryDataStoreDao
                 .findIfDuplicatePoolsExistByUUID(uuid);
         if ((spHandles != null) && (spHandles.size() > 0)) {
@@ -357,6 +358,7 @@ public class CloudStackPrimaryDataStoreLifeCycleImpl implements
             throw new CloudRuntimeException(
                     "Another active pool with the same uuid already exists");
         }
+
 
         String poolName = (String) dsInfos.get("name");
 
@@ -530,8 +532,7 @@ public class CloudStackPrimaryDataStoreLifeCycleImpl implements
             throw new CloudRuntimeException("Failed to delete storage pool on host");
         }
         
-        this.dataStoreHelper.deletePrimaryDataStore(store);
-        return false;
+        return this.dataStoreHelper.deletePrimaryDataStore(store);
     }
 
     @Override

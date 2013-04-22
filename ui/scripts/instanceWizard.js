@@ -70,14 +70,19 @@
     steps: [
     
 		// Step 1: Setup
-    function(args) {
-		  if(args.initArgs.pluginForm != null && args.initArgs.pluginForm.name == "vpcTierInstanceWizard") { //from VPC Tier chart			  
-			  //populate only one zone to the dropdown, the zone which the VPC is under.
-				zoneObjs = [{
-				  id: args.context.vpc[0].zoneid, 
-					name: args.context.vpc[0].zonename, 
-					networktype: 'Advanced'
-				}];	        		
+    function(args) {		  
+		  if(args.initArgs.pluginForm != null && args.initArgs.pluginForm.name == "vpcTierInstanceWizard") { //from VPC Tier chart	(VPC is only available in Advanced zone)	 
+				if(args.context.zoneType ==	'Basic'){  //Basic type
+				  zoneObjs = [];				
+        }
+        else { //Advanced type or all types          
+					//populate only one zone to the dropdown, the zone which the VPC is under. (networktype should be 'Advanced' since VPC is only available in Advanced zone)
+					zoneObjs = [{
+						id: args.context.vpc[0].zoneid, 
+						name: args.context.vpc[0].zonename, 
+						networktype: 'Advanced'
+					}];	   
+        }				
 				args.response.success({ data: {zones: zoneObjs}});
 			}
 			else { //from Instance page 			 
@@ -85,8 +90,20 @@
 					url: createURL("listZones&available=true"),
 					dataType: "json",
 					async: false,
-					success: function(json) {
-						zoneObjs = json.listzonesresponse.zone;						
+					success: function(json) {					  
+						if(args.context.zoneType == null || args.context.zoneType == '') { //all types
+						  zoneObjs = json.listzonesresponse.zone;			
+            }
+            else { //Basic type or Advanced type
+              zoneObjs = [];
+							var items = json.listzonesresponse.zone;
+							if(items != null) {
+							  for(var i = 0; i < items.length; i++) {
+								  if(items[i].networktype == args.context.zoneType) 
+								    zoneObjs.push(items[i]);
+								}
+							}
+            }						
 						args.response.success({ data: {zones: zoneObjs}});
 					}
 				});				
@@ -128,10 +145,15 @@
           dataType: "json",
           async: false,
           success: function(json) {										  
-            featuredTemplateObjs = $.grep(json.listtemplatesresponse.template, function(item, index) {											  
-              if($.inArray(item.hypervisor, hypervisorArray) > -1)
-                return true;
-            });	
+            if(json.listtemplatesresponse.template == null) {
+						  featuredTemplateObjs = null;
+						}
+						else {
+							featuredTemplateObjs = $.grep(json.listtemplatesresponse.template, function(item, index) {											  
+								if($.inArray(item.hypervisor, hypervisorArray) > -1)
+									return true;
+							});	
+						}
           }
         });
         $.ajax({
@@ -139,10 +161,15 @@
           dataType: "json",
           async: false,
           success: function(json) {
-            communityTemplateObjs = $.grep(json.listtemplatesresponse.template, function(item, index) {											  
-              if($.inArray(item.hypervisor, hypervisorArray) > -1)
-                return true;
-            });	
+					  if(json.listtemplatesresponse.template == null) {
+						  communityTemplateObjs = null;
+						}
+						else {
+							communityTemplateObjs = $.grep(json.listtemplatesresponse.template, function(item, index) {											  
+								if($.inArray(item.hypervisor, hypervisorArray) > -1)
+									return true;
+							});	
+						}
           }
         });
         $.ajax({
@@ -150,10 +177,15 @@
           dataType: "json",
           async: false,
           success: function(json) {
-            myTemplateObjs = $.grep(json.listtemplatesresponse.template, function(item, index) {											  
-              if($.inArray(item.hypervisor, hypervisorArray) > -1)
-                return true;
-            });	
+					  if(json.listtemplatesresponse.template == null) {
+						  myTemplateObjs = null;
+						}
+						else {
+							myTemplateObjs = $.grep(json.listtemplatesresponse.template, function(item, index) {											  
+								if($.inArray(item.hypervisor, hypervisorArray) > -1)
+									return true;
+							});	
+						}
           }
         });
       } else if (selectedTemplate == 'select-iso') {
@@ -162,7 +194,12 @@
           dataType: "json",
           async: false,
           success: function(json) {
-            featuredIsoObjs = json.listisosresponse.iso;
+					  if(json.listisosresponse.iso == null) {
+						  featuredIsoObjs = null;
+						}
+						else {					
+              featuredIsoObjs = json.listisosresponse.iso;
+						}
           }
         });
         $.ajax({
@@ -170,7 +207,12 @@
           dataType: "json",
           async: false,
           success: function(json) {
-            communityIsoObjs = json.listisosresponse.iso;
+					  if(json.listisosresponse.iso == null) {
+						  communityIsoObjs = null;
+						}
+						else {					 
+              communityIsoObjs = json.listisosresponse.iso;
+						}
           }
         });
         $.ajax({
@@ -178,7 +220,12 @@
           dataType: "json",
           async: false,
           success: function(json) {
-            myIsoObjs = json.listisosresponse.iso;
+					  if(json.listisosresponse.iso == null) {
+						  myIsoObjs = null;
+						}
+						else {					
+              myIsoObjs = json.listisosresponse.iso;
+						}
           }
         });
       }
