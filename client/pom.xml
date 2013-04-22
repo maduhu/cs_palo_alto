@@ -67,11 +67,12 @@
     </dependency>
     <dependency>
       <groupId>org.apache.cloudstack</groupId>
-<<<<<<< HEAD
-      <artifactId>cloud-plugin-network-palo-alto</artifactId>
-=======
       <artifactId>cloud-plugin-snmp-alerts</artifactId>
->>>>>>> 3ed6200ef8cce4c00600bf9567e52f9787a2c296
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-network-palo-alto</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
