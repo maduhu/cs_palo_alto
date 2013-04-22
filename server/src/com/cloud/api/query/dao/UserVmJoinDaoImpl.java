@@ -185,7 +185,11 @@ public class UserVmJoinDaoImpl extends GenericDaoBase<UserVmJoinVO, Long> implem
                 nicResponse.setGateway(userVm.getGateway());
                 nicResponse.setNetmask(userVm.getNetmask());
                 nicResponse.setNetworkid(userVm.getNetworkUuid());
+                nicResponse.setNetworkName(userVm.getNetworkName());
                 nicResponse.setMacAddress(userVm.getMacAddress());
+                nicResponse.setIp6Address(userVm.getIp6Address());
+                nicResponse.setIp6Gateway(userVm.getIp6Gateway());
+                nicResponse.setIp6Cidr(userVm.getIp6Cidr());
                 if (userVm.getBroadcastUri() != null) {
                     nicResponse.setBroadcastUri(userVm.getBroadcastUri().toString());
                 }
@@ -243,7 +247,11 @@ public class UserVmJoinDaoImpl extends GenericDaoBase<UserVmJoinVO, Long> implem
             nicResponse.setGateway(uvo.getGateway());
             nicResponse.setNetmask(uvo.getNetmask());
             nicResponse.setNetworkid(uvo.getNetworkUuid());
+            nicResponse.setNetworkName(uvo.getNetworkName());
             nicResponse.setMacAddress(uvo.getMacAddress());
+            nicResponse.setIp6Address(uvo.getIp6Address());
+            nicResponse.setIp6Gateway(uvo.getIp6Gateway());
+            nicResponse.setIp6Cidr(uvo.getIp6Cidr());
             if (uvo.getBroadcastUri() != null) {
                 nicResponse.setBroadcastUri(uvo.getBroadcastUri().toString());
             }
@@ -327,7 +335,15 @@ public class UserVmJoinDaoImpl extends GenericDaoBase<UserVmJoinVO, Long> implem
         }
 
         Set<Long> vmIdSet = userVmDataHash.keySet();
-        return searchByIds(vmIdSet.toArray(new Long[vmIdSet.size()]));
+        List<UserVmJoinVO> uvms = searchByIds(vmIdSet.toArray(new Long[vmIdSet.size()]));
+        // populate transit password field from UserVm
+        if ( uvms != null ){
+            for (UserVmJoinVO uvm : uvms){
+                UserVm v = userVmDataHash.get(uvm.getId());
+                uvm.setPassword(v.getPassword());
+            }
+        }
+        return uvms;
     }
 
 }

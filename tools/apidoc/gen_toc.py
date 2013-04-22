@@ -95,6 +95,7 @@ known_categories = {
     'InstanceGroup': 'VM Group',
     'StorageMaintenance': 'Storage Pool',
     'StoragePool': 'Storage Pool',
+    'StorageProvider': 'Storage Pool',
     'SecurityGroup': 'Security Group',
     'SSH': 'SSH',
     'register': 'Registration',
@@ -123,6 +124,7 @@ known_categories = {
     'Pool': 'Pool',
     'VPC': 'VPC', 
     'PrivateGateway': 'VPC',
+    'Simulator': 'simulator',
     'StaticRoute': 'VPC',
     'Tags': 'Resource tags',
     'NiciraNvpDevice': 'Nicira NVP',
@@ -132,6 +134,9 @@ known_categories = {
     'Condition': 'AutoScale',
     'Api': 'API Discovery',
     'Region': 'Region',
+    'addIpToNic': 'Nic',
+    'removeIpFromNic': 'Nic',
+    'listNics':'Nic',
     }
 
 

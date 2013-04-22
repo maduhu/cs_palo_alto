@@ -632,7 +632,7 @@ public class NetUtils {
         Set<Long> result = new TreeSet<Long>();
         long ip = ip2Long(cidr);
         long startNetMask = ip2Long(getCidrNetmask(size));
-        long start = (ip & startNetMask) + 2;
+        long start = (ip & startNetMask) + 1;
         long end = start;
 
         end = end >> (32 - size);
@@ -1192,6 +1192,9 @@ public class NetUtils {
 	
 	// Can cover 127 bits
 	public static BigInteger countIp6InRange(String ip6Range) {
+		if (ip6Range == null) {
+			return null;
+		}
     	String[] ips = ip6Range.split("-");
     	String startIp = ips[0];
     	String endIp = ips[0];
@@ -1214,6 +1217,9 @@ public class NetUtils {
 	}
 
 	public static boolean isIp6InRange(String ip6, String ip6Range) {
+		if (ip6Range == null) {
+			return false;
+		}
     	String[] ips = ip6Range.split("-");
     	String startIp = ips[0];
     	String endIp = null;

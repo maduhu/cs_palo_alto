@@ -27,8 +27,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import javax.annotation.PostConstruct;
 import javax.inject.Inject;
 
+import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreDao;
+import org.apache.cloudstack.storage.datastore.db.StoragePoolVO;
+
+import com.cloud.configuration.dao.ConfigurationDao;
 import com.cloud.resource.ResourceManager;
 
 import org.apache.log4j.Logger;
@@ -49,14 +54,13 @@ import com.cloud.host.HostStats;
 import com.cloud.host.HostVO;
 import com.cloud.host.Status;
 import com.cloud.host.dao.HostDao;
+import com.cloud.resource.ResourceManager;
 import com.cloud.resource.ResourceState;
 import com.cloud.storage.StorageManager;
 import com.cloud.storage.StoragePoolHostVO;
-import com.cloud.storage.StoragePoolVO;
 import com.cloud.storage.StorageStats;
 import com.cloud.storage.VolumeStats;
 import com.cloud.storage.VolumeVO;
-import com.cloud.storage.dao.StoragePoolDao;
 import com.cloud.storage.dao.StoragePoolHostDao;
 import com.cloud.storage.dao.VolumeDao;
 import com.cloud.storage.secondary.SecondaryStorageVmManager;
@@ -84,11 +88,12 @@ public class StatsCollector {
 	@Inject private HostDao _hostDao;
 	@Inject private UserVmDao _userVmDao;
 	@Inject private VolumeDao _volsDao;
-	@Inject private StoragePoolDao _storagePoolDao;
+	@Inject private PrimaryDataStoreDao _storagePoolDao;
 	@Inject private StorageManager _storageManager;
 	@Inject private StoragePoolHostDao _storagePoolHostDao;
 	@Inject private SecondaryStorageVmManager _ssvmMgr;
 	@Inject private ResourceManager _resourceMgr;
+    @Inject private ConfigurationDao _configDao;
 
 	private ConcurrentHashMap<Long, HostStats> _hostStats = new ConcurrentHashMap<Long, HostStats>();
 	private final ConcurrentHashMap<Long, VmStats> _VmStats = new ConcurrentHashMap<Long, VmStats>();
@@ -108,12 +113,18 @@ public class StatsCollector {
     }
     
 	public static StatsCollector getInstance(Map<String, String> configs) {
+        s_instance.init(configs);
         return s_instance;
     }
 	
 	public StatsCollector() {
 		s_instance = this;
 	}
+
+    @PostConstruct
+    private void init(){
+        init(_configDao.getConfiguration());
+    }
 
 	private void init(Map<String, String> configs) {
 		_executor = Executors.newScheduledThreadPool(3, new NamedThreadFactory("StatsCollector"));
@@ -301,7 +312,7 @@ public class StatsCollector {
 					GetStorageStatsCommand command = new GetStorageStatsCommand(pool.getUuid(), pool.getPoolType(), pool.getPath());
 					long poolId = pool.getId();
 					try {
-    					Answer answer = _storageManager.sendToPool(pool, command);
+    					Answer answer = _storageManager.sendToPool(pool.getId(), command);
     					if (answer != null && answer.getResult()) {
     						storagePoolStats.put(pool.getId(), (StorageStats)answer);
     

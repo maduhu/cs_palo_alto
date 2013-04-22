@@ -17,6 +17,7 @@
 
 package com.cloud.upgrade.dao;
 
+import com.cloud.utils.db.Transaction;
 import com.cloud.utils.exception.CloudRuntimeException;
 import com.cloud.utils.script.Script;
 
@@ -32,73 +33,72 @@ import java.util.UUID;
 
 import org.apache.log4j.Logger;
 
-/**
- * @author htrippaers
- *
- */
 public class Upgrade40to41 implements DbUpgrade {
-	final static Logger s_logger = Logger.getLogger(Upgrade40to41.class);
+    final static Logger s_logger = Logger.getLogger(Upgrade40to41.class);
 
-	/**
-	 *
-	 */
-	public Upgrade40to41() {
-		// TODO Auto-generated constructor stub
-	}
+    @Override
+    public String[] getUpgradableVersionRange() {
+        return new String[] { "4.0.0", "4.1.0" };
+    }
 
-	/* (non-Javadoc)
-	 * @see com.cloud.upgrade.dao.DbUpgrade#getUpgradableVersionRange()
-	 */
-	@Override
-	public String[] getUpgradableVersionRange() {
-		return new String[] { "4.0.0", "4.1.0" };
-	}
+    @Override
+    public String getUpgradedVersion() {
+        return "4.1.0";
+    }
 
-	/* (non-Javadoc)
-	 * @see com.cloud.upgrade.dao.DbUpgrade#getUpgradedVersion()
-	 */
-	@Override
-	public String getUpgradedVersion() {
-		return "4.1.0";
-	}
+    @Override
+    public boolean supportsRollingUpgrade() {
+        return false;
+    }
 
-	/* (non-Javadoc)
-	 * @see com.cloud.upgrade.dao.DbUpgrade#supportsRollingUpgrade()
-	 */
-	@Override
-	public boolean supportsRollingUpgrade() {
-		return false;
-	}
-
-	/* (non-Javadoc)
-	 * @see com.cloud.upgrade.dao.DbUpgrade#getPrepareScripts()
-	 */
-	@Override
-	public File[] getPrepareScripts() {
-		String script = Script.findScript("", "db/schema-40to410.sql");
+    @Override
+    public File[] getPrepareScripts() {
+        String script = Script.findScript("", "db/schema-40to410.sql");
         if (script == null) {
             throw new CloudRuntimeException("Unable to find db/schema-40to410.sql");
         }
 
         return new File[] { new File(script) };
-	}
+    }
 
-	/* (non-Javadoc)
-	 * @see com.cloud.upgrade.dao.DbUpgrade#performDataMigration(java.sql.Connection)
-	 */
-	@Override
-	public void performDataMigration(Connection conn) {
+    @Override
+    public void performDataMigration(Connection conn) {
+        updateRegionEntries(conn);
         upgradeEIPNetworkOfferings(conn);
         upgradeEgressFirewallRules(conn);
-	}
+    }
 
-	/* (non-Javadoc)
-	 * @see com.cloud.upgrade.dao.DbUpgrade#getCleanupScripts()
-	 */
-	@Override
-	public File[] getCleanupScripts() {
-		return new File[0];
-	}
+    @Override
+    public File[] getCleanupScripts() {
+        String script = Script.findScript("", "db/schema-40to410-cleanup.sql");
+        if (script == null) {
+            throw new CloudRuntimeException("Unable to find db/schema-40to410-cleanup.sql");
+        }
+
+        return new File[] { new File(script) };
+    }
+
+    private void updateRegionEntries(Connection conn) {
+        int region_id = Transaction.s_region_id;
+        PreparedStatement pstmt = null;
+        try {
+            //Update regionId in region table
+            s_logger.debug("Updating region table with Id: "+region_id);
+            pstmt = conn.prepareStatement("update `cloud`.`region` set id = ?");
+            pstmt.setInt(1, region_id);
+            pstmt.executeUpdate();
+
+        } catch (SQLException e) {
+            throw new CloudRuntimeException("Error while updating region entries", e);
+        } finally {
+            try {
+                if (pstmt != null) {
+                    pstmt.close();
+                }
+            } catch (SQLException e) {
+            }
+        }
+    }
 
     private void upgradeEIPNetworkOfferings(Connection conn) {
         PreparedStatement pstmt = null;
@@ -132,7 +132,6 @@ public class Upgrade40to41 implements DbUpgrade {
             }
         }
     }
-
 
     private void upgradeEgressFirewallRules(Connection conn) {
         PreparedStatement pstmt = null;

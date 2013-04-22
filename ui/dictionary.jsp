@@ -25,6 +25,19 @@ under the License.
 <% long now = System.currentTimeMillis(); %>
 <script language="javascript">
 dictionary = {
+'label.use.vm.ip': '<fmt:message key="label.use.vm.ip"/>',
+'label.add.region': '<fmt:message key="label.add.region"/>',
+'label.remove.region': '<fmt:message key="label.remove.region"/>',
+'message.remove.region': '<fmt:message key="message.remove.region"/>',
+'message.add.region': '<fmt:message key="message.add.region"/>',
+'label.region': '<fmt:message key="label.region"/>',
+'label.endpoint': '<fmt:message key="label.endpoint"/>',
+'label.menu.regions': '<fmt:message key="label.menu.regions"/>',
+'label.plugins': '<fmt:message key="label.plugins"/>',
+'label.plugin.details': '<fmt:message key="label.plugin.details"/>',
+'label.author.name': '<fmt:message key="label.author.name"/>',
+'label.author.email': '<fmt:message key="label.author.email"/>',
+'label.external.link': '<fmt:message key="label.external.link"/>',
 'label.enable.s3': '<fmt:message key="label.enable.s3"/>',
 'confirm.enable.s3': '<fmt:message key="confirm.enable.s3"/>',
 'message.after.enable.s3': '<fmt:message key="message.after.enable.s3"/>',
@@ -1442,6 +1455,16 @@ dictionary = {
 'label.resize.new.size': '<fmt:message key="label.resize.new.size" />',
 'label.action.resize.volume': '<fmt:message key="label.action.resize.volume" />',
 'label.resize.new.offering.id': '<fmt:message key="label.resize.new.offering.id" />',
-'label.resize.shrink.ok': '<fmt:message key="label.resize.shrink.ok" />'
+'label.resize.shrink.ok': '<fmt:message key="label.resize.shrink.ok" />',
+'label.vmsnapshot.current': '<fmt:message key="label.vmsnapshot.current" />',
+'label.vmsnapshot.parentname': '<fmt:message key="label.vmsnapshot.parentname" />',
+'label.vmsnapshot.type': '<fmt:message key="label.vmsnapshot.type" />',
+'label.vmsnapshot.memory': '<fmt:message key="label.vmsnapshot.memory" />',
+'label.vmsnapshot': '<fmt:message key="label.vmsnapshot" />',
+'label.action.vmsnapshot.create': '<fmt:message key="label.action.vmsnapshot.create" />',
+'label.action.vmsnapshot.delete': '<fmt:message key="label.action.vmsnapshot.delete" />',
+'label.action.vmsnapshot.revert': '<fmt:message key="label.action.vmsnapshot.revert" />',
+'message.action.vmsnapshot.delete': '<fmt:message key="message.action.vmsnapshot.delete" />',
+'message.action.vmsnapshot.revert': '<fmt:message key="message.action.vmsnapshot.revert" />'
 };
 </script>

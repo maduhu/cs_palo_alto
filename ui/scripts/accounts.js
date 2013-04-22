@@ -112,7 +112,7 @@
                     label: 'label.last.name',
                     validation: { required: true },
                     docID: 'helpAccountLastName'
-                  },
+                  },                  
                   domainid: {
                     label: 'label.domain',
                     docID: 'helpAccountDomain',
@@ -181,7 +181,7 @@
 
               action: function(args) {
                 var data = {
-								  username: args.data.username									
+								  username: args.data.username,
 								};															               
                
                 var password = args.data.password;
@@ -195,7 +195,7 @@
                 $.extend(data, {
 								  email: args.data.email,
                   firstname: args.data.firstname,
-                  lastname: args.data.lastname,
+                  lastname: args.data.lastname,                 
                   domainid: args.data.domainid									
 								});								              
 
@@ -290,7 +290,7 @@
 									  domainid: accountObj.domainid,
 										account: accountObj.name,
 										newname: args.data.name,
-										networkdomain: args.data.networkdomain
+										networkdomain: args.data.networkdomain                    
 									};
                 
                   $.ajax({
@@ -633,7 +633,7 @@
                       converter: function(args){
                         return cloudStack.converters.toRole(args);
                       }
-                    },
+                    },                    
                     domain: { label: 'label.domain' },
                     state: { label: 'label.state' },
                     networkdomain: {

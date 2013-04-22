@@ -21,20 +21,22 @@ package org.apache.cloudstack.storage.datastore.manager;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.annotation.PostConstruct;
 import javax.inject.Inject;
 
+import org.apache.cloudstack.engine.subsystem.api.storage.DataStoreProvider;
+import org.apache.cloudstack.engine.subsystem.api.storage.DataStoreProviderManager;
+import org.apache.cloudstack.engine.subsystem.api.storage.HypervisorHostListener;
+import org.apache.cloudstack.engine.subsystem.api.storage.PrimaryDataStoreDriver;
 import org.apache.cloudstack.storage.datastore.DefaultPrimaryDataStore;
 import org.apache.cloudstack.storage.datastore.PrimaryDataStore;
 import org.apache.cloudstack.storage.datastore.PrimaryDataStoreProviderManager;
 import org.apache.cloudstack.storage.datastore.db.DataStoreProviderDao;
 import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreDao;
-import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreVO;
-import org.apache.cloudstack.storage.datastore.provider.DataStoreProvider;
-import org.apache.cloudstack.storage.datastore.provider.DataStoreProviderManager;
-import org.apache.cloudstack.storage.volume.PrimaryDataStoreDriver;
+import org.apache.cloudstack.storage.datastore.db.StoragePoolVO;
 import org.springframework.stereotype.Component;
 
-import com.cloud.utils.component.ComponentContext;
+import com.cloud.storage.StorageManager;
 
 @Component
 public class DefaultPrimaryDataStoreProviderManagerImpl implements PrimaryDataStoreProviderManager {
@@ -44,26 +46,40 @@ public class DefaultPrimaryDataStoreProviderManagerImpl implements PrimaryDataSt
     DataStoreProviderManager providerManager;
     @Inject
     PrimaryDataStoreDao dataStoreDao;
-    Map<String, PrimaryDataStoreDriver> driverMaps = new HashMap<String, PrimaryDataStoreDriver>();
+    Map<String, PrimaryDataStoreDriver> driverMaps;
+    @Inject StorageManager storageMgr;
 
+    @PostConstruct
+    public void config() {
+        driverMaps = new HashMap<String, PrimaryDataStoreDriver>();
+    }
+    
     @Override
     public PrimaryDataStore getPrimaryDataStore(long dataStoreId) {
-        PrimaryDataStoreVO dataStoreVO = dataStoreDao.findById(dataStoreId);
-        long providerId = dataStoreVO.getStorageProviderId();
-        DataStoreProvider provider = providerManager.getDataStoreProviderById(providerId);
-        /*DefaultPrimaryDataStore dataStore = DefaultPrimaryDataStore.createDataStore(dataStoreVO, 
-                driverMaps.get(provider.getUuid()),
-                provider);*/
-        DefaultPrimaryDataStore dataStore = DefaultPrimaryDataStore.createDataStore(dataStoreVO, driverMaps.get(provider.getUuid()), provider);
+        StoragePoolVO dataStoreVO = dataStoreDao.findById(dataStoreId);
+        String providerName = dataStoreVO.getStorageProviderName();
+        DataStoreProvider provider = providerManager.getDataStoreProvider(providerName);
+        DefaultPrimaryDataStore dataStore = DefaultPrimaryDataStore.createDataStore(dataStoreVO, driverMaps.get(provider.getName()), provider);
         return dataStore;
     }
     
     @Override
-    public boolean registerDriver(String uuid, PrimaryDataStoreDriver driver) {
-        if (driverMaps.get(uuid) != null) {
+    public boolean registerDriver(String providerName, PrimaryDataStoreDriver driver) {
+        if (driverMaps.get(providerName) != null) {
             return false;
         }
-        driverMaps.put(uuid, driver);
+        driverMaps.put(providerName, driver);
         return true;
+    }
+
+    @Override
+    public PrimaryDataStore getPrimaryDataStore(String uuid) {
+        StoragePoolVO dataStoreVO = dataStoreDao.findByUuid(uuid);
+        return getPrimaryDataStore(dataStoreVO.getId());
+    }
+
+    @Override
+    public boolean registerHostListener(String providerName, HypervisorHostListener listener) {
+        return storageMgr.registerHostListener(providerName, listener);
     }
 }

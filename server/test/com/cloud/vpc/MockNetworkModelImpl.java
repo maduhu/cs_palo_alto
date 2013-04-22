@@ -842,4 +842,16 @@ public class MockNetworkModelImpl extends ManagerBase implements NetworkModel {
             // TODO Auto-generated method stub
         }
 
+	@Override
+	public void checkRequestedIpAddresses(long networkId, String ip4, String ip6)
+			throws InvalidParameterValueException {
+		// TODO Auto-generated method stub
+	}
+
+	@Override
+	public String getStartIpv6Address(long id) {
+		// TODO Auto-generated method stub
+		return null;
+	}
+
 }

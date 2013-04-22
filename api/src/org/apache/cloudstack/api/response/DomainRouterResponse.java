@@ -18,6 +18,7 @@ package org.apache.cloudstack.api.response;
 
 import java.util.Date;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 import org.apache.cloudstack.api.ApiConstants;
@@ -46,6 +47,12 @@ public class DomainRouterResponse extends BaseResponse implements ControlledView
 
     @SerializedName(ApiConstants.DNS2) @Param(description="the second DNS for the router")
     private String dns2;
+
+    @SerializedName(ApiConstants.IP6_DNS1) @Param(description="the first IPv6 DNS for the router")
+    private String ip6Dns1;
+
+    @SerializedName(ApiConstants.IP6_DNS2) @Param(description="the second IPv6 DNS for the router")
+    private String ip6Dns2;
 
     @SerializedName("networkdomain") @Param(description="the network domain for the router")
     private String networkDomain;
@@ -151,7 +158,7 @@ public class DomainRouterResponse extends BaseResponse implements ControlledView
     private Set<NicResponse> nics;
 
     public DomainRouterResponse(){
-        nics = new HashSet<NicResponse>();
+        nics = new LinkedHashSet<NicResponse>();
     }
 
 
@@ -338,4 +345,20 @@ public class DomainRouterResponse extends BaseResponse implements ControlledView
     public void addNic(NicResponse nic) {
         this.nics.add(nic);
     }
+
+	public String getIp6Dns1() {
+		return ip6Dns1;
+	}
+
+	public void setIp6Dns1(String ip6Dns1) {
+		this.ip6Dns1 = ip6Dns1;
+	}
+
+	public String getIp6Dns2() {
+		return ip6Dns2;
+	}
+
+	public void setIp6Dns2(String ip6Dns2) {
+		this.ip6Dns2 = ip6Dns2;
+	}
 }

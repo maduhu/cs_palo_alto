@@ -110,6 +110,8 @@ public class EventTypes {
     public static final String EVENT_LOAD_BALANCER_DELETE = "LB.DELETE";
     public static final String EVENT_LB_STICKINESSPOLICY_CREATE = "LB.STICKINESSPOLICY.CREATE";
     public static final String EVENT_LB_STICKINESSPOLICY_DELETE = "LB.STICKINESSPOLICY.DELETE";
+    public static final String EVENT_LB_HEALTHCHECKPOLICY_CREATE = "LB.HEALTHCHECKPOLICY.CREATE";
+    public static final String EVENT_LB_HEALTHCHECKPOLICY_DELETE = "LB.HEALTHCHECKPOLICY.DELETE";
     public static final String EVENT_LOAD_BALANCER_UPDATE = "LB.UPDATE";
 
     // Account events
@@ -331,6 +333,11 @@ public class EventTypes {
     // tag related events
     public static final String EVENT_TAGS_CREATE = "CREATE_TAGS";
     public static final String EVENT_TAGS_DELETE = "DELETE_TAGS";
+    
+	// vm snapshot events
+    public static final String EVENT_VM_SNAPSHOT_CREATE = "VMSNAPSHOT.CREATE";
+    public static final String EVENT_VM_SNAPSHOT_DELETE = "VMSNAPSHOT.DELETE";
+    public static final String EVENT_VM_SNAPSHOT_REVERT = "VMSNAPSHOT.REVERTTO";
 
     // external network device events
     public static final String EVENT_EXTERNAL_NVP_CONTROLLER_ADD = "PHYSICAL.NVPCONTROLLER.ADD";

@@ -19,18 +19,26 @@
     home: 'dashboard',
 
     sectionPreFilter: function(args) {
+      var sections = [];
+
       if(isAdmin()) {
-        return ["dashboard", "instances", "storage", "network", "templates", "accounts", "domains", "events", "system", "global-settings", "configuration", "projects"];
+        sections = ["dashboard", "instances", "storage", "network", "templates", "accounts", "domains", "events", "system", "global-settings", "configuration", "projects", "regions"];
       }
       else if(isDomainAdmin()) {
-        return ["dashboard", "instances", "storage", "network", "templates", "accounts", "domains", "events", "projects"];
+        sections = ["dashboard", "instances", "storage", "network", "templates", "accounts", "domains", "events", "projects"];
       }
       else if (g_userProjectsEnabled) {
-        return ["dashboard", "instances", "storage", "network", "templates", "accounts", "events", "projects"];
+        sections = ["dashboard", "instances", "storage", "network", "templates", "accounts", "events", "projects"];
       }
       else { //normal user
-        return ["dashboard", "instances", "storage", "network", "templates", "accounts", "events"];
+        sections = ["dashboard", "instances", "storage", "network", "templates", "accounts", "events"];
       }
+
+      if (cloudStack.plugins.length) {
+        sections.push('plugins');
+      }
+
+      return sections;
     },
     sections: {
       /**
@@ -46,10 +54,12 @@
       accounts: {},
 			
       domains: {}, //domain-admin and root-admin only
-			
+
+      regions: {}, //root-admin only
       system: {},  //root-admin only     
       'global-settings': {}, //root-admin only     
-      configuration: {} //root-admin only    
+      configuration: {}, //root-admin only
+      plugins: {}
     }
   });
 
@@ -157,6 +167,13 @@
 			
             g_cloudstackversion = json.listcapabilitiesresponse.capability.cloudstackversion;
 						
+            if(json.listcapabilitiesresponse.capability.apilimitinterval != null && json.listcapabilitiesresponse.capability.apilimitmax != null) {						
+							var intervalLimit = ((json.listcapabilitiesresponse.capability.apilimitinterval * 1000) / json.listcapabilitiesresponse.capability.apilimitmax ) * 3; //multiply 3 to be on safe side
+							//intervalLimit = 9999; //this line is for testing only, comment it before check in
+							if(intervalLimit > g_queryAsyncJobResultInterval)
+								g_queryAsyncJobResultInterval = intervalLimit;						
+						}
+						
             userValid = true;
           },
           error: function(xmlHTTP) {
@@ -234,6 +251,9 @@
           array1.push("&domain=" + encodeURIComponent("/"));
         }
 
+				g_regionUrlParam = '?loginUrl=' + escape("command=login" + array1.join("") + "&response=json");
+				$.cookie('loginUrl', escape("command=login" + array1.join("") + "&response=json"), { expires: 1});
+				
         $.ajax({
           type: "POST",
           data: "command=login" + array1.join("") + "&response=json",					
@@ -283,7 +303,14 @@
                 $.cookie('userProjectsEnabled', g_userProjectsEnabled, { expires: 1 });
 				
                 g_cloudstackversion = json.listcapabilitiesresponse.capability.cloudstackversion;
-
+								
+								if(json.listcapabilitiesresponse.capability.apilimitinterval != null && json.listcapabilitiesresponse.capability.apilimitmax != null) {
+									var intervalLimit = ((json.listcapabilitiesresponse.capability.apilimitinterval * 1000) / json.listcapabilitiesresponse.capability.apilimitmax ) * 3; //multiply 3 to be on safe side
+									//intervalLimit = 8888; //this line is for testing only, comment it before check in
+									if(intervalLimit > g_queryAsyncJobResultInterval)
+										g_queryAsyncJobResultInterval = intervalLimit;		
+								}
+								
                 args.response.success({
                   data: {
                     user: $.extend(true, {}, loginresponse, {
@@ -358,8 +385,9 @@
 						g_domainid = null;	
 						g_timezoneoffset = null;
 						g_timezone = null;
-						g_supportELB = null;
-								
+						g_supportELB = null;						
+						g_regionUrlParam = null;
+						
 						$.cookie('JSESSIONID', null);
 						$.cookie('sessionKey', null);
 						$.cookie('username', null);
@@ -370,6 +398,7 @@
 						$.cookie('timezoneoffset', null);
 						$.cookie('timezone', null);
 						$.cookie('supportELB', null);
+						$.cookie('loginUrl', null);
 												
 						if(onLogoutCallback()) {	 //onLogoutCallback() will set g_loginResponse(single-sign-on variable) to null, then bypassLoginCheck() will show login screen.
               document.location.reload(); //when onLogoutCallback() returns true, reload the current document.

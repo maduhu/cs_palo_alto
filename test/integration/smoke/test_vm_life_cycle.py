@@ -107,7 +107,7 @@ class Services:
                 {
                     "displaytext": "Test ISO",
                     "name": "testISO",
-                    "url": "http://iso.linuxquestions.org/download/504/1819/http/gd4.tuwien.ac.at/dsl-4.4.10.iso",
+                    "url": "http://people.apache.org/~tsp/dummy.iso",
                      # Source URL where ISO is located
                     "ostype": 'CentOS 5.3 (64-bit)',
                     "mode": 'HTTP_DOWNLOAD', # Downloading existing ISO 
@@ -854,9 +854,6 @@ class TestVMLifeCycle(cloudstackTestCase):
                                      )
 
         expunge_delay = int(config[0].value)
-        if expunge_delay < 600:
-            expunge_delay = 600
-        # Wait for some time more than expunge.delay
         time.sleep(expunge_delay * 2)
 
         #VM should be destroyed unless expunge thread hasn't run
@@ -866,9 +863,6 @@ class TestVMLifeCycle(cloudstackTestCase):
                                      name='expunge.interval'
                                      )
         expunge_cycle = int(config[0].value)
-        if expunge_cycle < 600:
-            expunge_cycle = 600
-
         wait_time = expunge_cycle * 2
         while wait_time >= 0:
             list_vm_response = list_virtual_machines(

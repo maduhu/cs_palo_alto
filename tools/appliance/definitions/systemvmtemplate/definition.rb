@@ -1,28 +1,11 @@
-# Licensed to the Apache Software Foundation (ASF) under one
-# or more contributor license agreements.  See the NOTICE file
-# distributed with this work for additional information
-# regarding copyright ownership.  The ASF licenses this file
-# to you under the Apache License, Version 2.0 (the
-# "License"); you may not use this file except in compliance
-# with the License.  You may obtain a copy of the License at
-#
-#   http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing,
-# software distributed under the License is distributed on an
-# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-# KIND, either express or implied.  See the License for the
-# specific language governing permissions and limitations
-# under the License.
-
 Veewee::Definition.declare({
   :cpu_count => '1',
   :memory_size=> '256',
-  :disk_size => '2048', :disk_format => 'VMDK', :hostiocache => 'off',
+  :disk_size => '2000', :disk_format => 'VDI', :hostiocache => 'off',
   :os_type_id => 'Debian',
-  :iso_file => "debian-wheezy-DI-b4-i386-netinst.iso",
-  :iso_src => "http://cdimage.debian.org/cdimage/wheezy_di_beta4/i386/iso-cd/debian-wheezy-DI-b4-i386-netinst.iso",
-  :iso_md5 => "34d0ae973715c7a31646281c70839809",
+  :iso_file => "debian-wheezy-DI-rc1-i386-netinst.iso",
+  :iso_src => "http://cdimage.debian.org/cdimage/wheezy_di_rc1/i386/iso-cd/debian-wheezy-DI-rc1-i386-netinst.iso",
+  :iso_md5 => "db12ca9554bb8f121c98e268682a55d0",
   :iso_download_timeout => "1000",
   :boot_wait => "10", :boot_cmd_sequence => [
      '<Esc>',
@@ -54,7 +37,7 @@ Veewee::Definition.declare({
   :shutdown_cmd => "halt -p",
   :postinstall_files => [
     "base.sh",
-    "cloudstack-packages.sh",
+    "postinstall.sh",
     "cleanup.sh",
     "zerodisk.sh"
   ],
