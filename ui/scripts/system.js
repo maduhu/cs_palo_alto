@@ -3876,15 +3876,17 @@
                     // },
                     publicnetwork: {
                       label: 'label.public.network',
-                      defaultValue: 'untrusted',
-                      docID: 'helpPaloAltoPublicNetwork',
-                      isDisabled:true
+                      defaultValue: 'untrust',
+                      docID: 'helpPaloAltoPublicNetwork'
                     },
                     privatenetwork: {
                       label: 'label.private.network',
-                      defaultValue: 'trusted',
-                      docID: 'helpPaloAltoPrivateNetwork',
-                      isDisabled:true
+                      defaultValue: 'trust',
+                      docID: 'helpPaloAltoPrivateNetwork'
+                    },
+                    externalvirtualrouter: {
+                      label: 'label.virtual.router',
+                      docID: 'helpPaloAltoVirtualRouter'
                     },
                     capacity: {
                       label: 'label.capacity',
@@ -7065,13 +7067,14 @@
                   // },
                   publicnetwork: {
                     label: 'label.public.network',
-                    defaultValue: 'untrusted',
-                    isDisabled:true
+                    defaultValue: 'untrust'
                   },
                   privatenetwork: {
                     label: 'label.private.network',
-                    defaultValue: 'trusted',
-                    isDisabled:true
+                    defaultValue: 'trust'
+                  },
+                  externalvirtualrouter: {
+                    label: 'label.virtual.router'
                   },
                   capacity: {
                     label: 'label.capacity',
@@ -10430,6 +10433,18 @@
             url.push("&");
         }
         url.push("privatenetwork=" + privateNetwork);
+    }
+
+    var externalVirtualRouter = args.data.externalvirtualrouter;
+    if(externalVirtualRouter != null && externalVirtualRouter.length > 0) {
+        if(isQuestionMarkAdded == false) {
+            url.push("?");
+            isQuestionMarkAdded = true;
+        }
+        else {
+            url.push("&");
+        }
+        url.push("externalvirtualrouter=" + externalVirtualRouter);
     }
 
     var capacity = args.data.capacity;

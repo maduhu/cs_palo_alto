@@ -606,6 +606,10 @@ cloudStack.docs = {
   desc: 'The name of the private network on the Palo Alto. For example, untrust.',
   externalLink: ''
   },
+  helpPaloAltoVirtualRouter: {
+  desc: 'The name of the virtual router on the Palo Alto.',
+  externalLink: ''
+  },
   helpPaloAltoDedicated: {
   desc: 'Check this box to dedicate the device to a single account. The value in the Capacity field will be ignored.',
   externalLink: ''

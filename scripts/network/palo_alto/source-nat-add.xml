@@ -1,0 +1,18 @@
+<to>
+	<member>%to%</member>
+</to>
+<from>
+	<member>%from%</member>
+</from>
+<source>
+	<member>%source%</member>
+</source>
+<destination>
+	<member>%destination%</member>
+</destination>
+<service>any</service>
+<nat-type>ipv4</nat-type>
+<to-interface>%to_interface%</to-interface>
+<tag>
+	<member>%vlan%</member>
+</tag>
