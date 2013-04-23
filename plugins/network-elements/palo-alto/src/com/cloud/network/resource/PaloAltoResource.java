@@ -301,32 +301,32 @@ public class PaloAltoResource implements ServerResource {
         tcp, udp, icmp, any;
     }
 
-    private enum RuleMatchCondition {
-        ALL,
-        PUBLIC_PRIVATE_IPS,
-        PRIVATE_SUBNET;
-    }
+//    private enum RuleMatchCondition {
+//        ALL,
+//        PUBLIC_PRIVATE_IPS,
+//        PRIVATE_SUBNET;
+//    }
 
     private enum GuestNetworkType {
         SOURCE_NAT,
         INTERFACE_NAT;
     }
 
-    private enum SecurityPolicyType {
-        STATIC_NAT("staticnat"),
-        DESTINATION_NAT("destnat"),
-        VPN("vpn");
-
-        private String identifier;
-
-        private SecurityPolicyType(String identifier) {
-            this.identifier = identifier;
-        }
-
-        private String getIdentifier() {
-            return identifier;
-        }
-    }
+//    private enum SecurityPolicyType {
+//        STATIC_NAT("staticnat"),
+//        DESTINATION_NAT("destnat"),
+//        VPN("vpn");
+//
+//        private String identifier;
+//
+//        private SecurityPolicyType(String identifier) {
+//            this.identifier = identifier;
+//        }
+//
+//        private String getIdentifier() {
+//            return identifier;
+//        }
+//    }
 
     public Answer executeRequest(Command cmd) {
         if (cmd instanceof ReadyCommand) {
