@@ -112,6 +112,10 @@
   <bean id="JuniperSRX" class="com.cloud.network.element.JuniperSRXExternalFirewallElement">
     <property name="name" value="JuniperSRX"/>
   </bean>
+
+  <!--
+    Palo Alto support components
+  -->
   <bean id="PaloAlto" class="com.cloud.network.element.PaloAltoExternalFirewallElement">
     <property name="name" value="PaloAlto"/>
   </bean>
@@ -346,6 +350,7 @@
           <ref bean="Ovs"/>
           <ref bean="SecurityGroupProvider"/>
           <ref bean="VpcVirtualRouter"/>
+          <ref bean="PaloAlto"/>
 <!--
           <ref bean="BareMetalDhcp"/>
           <ref bean="BareMetalPxe"/>
