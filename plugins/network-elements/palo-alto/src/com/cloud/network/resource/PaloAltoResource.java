@@ -128,6 +128,7 @@ public class PaloAltoResource implements ServerResource {
     private String _privateInterfaceType;
     private String _virtualRouter;
     private String _usageInterface;
+    private String _pingManagementProfile;
 //    private String _ikeProposalName;
 //    private String _ipsecPolicyName;
 //    private String _primaryDnsAddress;
@@ -440,6 +441,16 @@ public class PaloAltoResource implements ServerResource {
                 throw new ConfigurationException(e.getMessage());
             }
 
+            _pingManagementProfile = "Ping";
+            try {
+                ArrayList<IPaloAltoCommand> cmdList = new ArrayList<IPaloAltoCommand>();
+                managePingProfile(cmdList, PaloAltoPrimative.ADD);
+                boolean status = requestWithCommit(cmdList);
+            } catch (ExecutionException e) {
+                throw new ConfigurationException(e.getMessage());
+            }
+            
+
 //            _publicZoneInputFilterName = _publicZone;
             
 //            _usageFilterVlanInput = new UsageFilter("vlan-input", null, "vlan-input");
@@ -750,7 +761,7 @@ public class PaloAltoResource implements ServerResource {
 
         if (type.equals(GuestNetworkType.SOURCE_NAT)) {
             managePublicInterface(cmdList, PaloAltoPrimative.ADD, publicVlanTag, publicIp, privateVlanTag);
-            manageNatRule(cmdList, PaloAltoPrimative.ADD, type, publicVlanTag, publicIp, privateVlanTag, privateGateway);         
+            manageSrcNatRule(cmdList, PaloAltoPrimative.ADD, type, publicVlanTag, publicIp, privateVlanTag, privateGateway);         
             //--manageUsageFilter(PaloAltoPrimative.ADD, _usageFilterIPOutput, privateSubnet, null, genIpFilterTermName(publicIp));
             //--manageUsageFilter(PaloAltoPrimative.ADD, _usageFilterIPInput, publicIp, null, genIpFilterTermName(publicIp));
         } else if (type.equals(GuestNetworkType.INTERFACE_NAT)){            
@@ -775,7 +786,7 @@ public class PaloAltoResource implements ServerResource {
         }
 
         if (type.equals(GuestNetworkType.SOURCE_NAT)) {
-            manageNatRule(cmdList, PaloAltoPrimative.DELETE, type, publicVlanTag, sourceNatIpAddress, privateVlanTag, privateGateway);
+            manageSrcNatRule(cmdList, PaloAltoPrimative.DELETE, type, publicVlanTag, sourceNatIpAddress, privateVlanTag, privateGateway);
             managePublicInterface(cmdList, PaloAltoPrimative.DELETE, publicVlanTag, sourceNatIpAddress, privateVlanTag);  
             //--manageUsageFilter(PaloAltoPrimative.DELETE, _usageFilterIPOutput, privateSubnet, null, genIpFilterTermName(sourceNatIpAddress));
             //--manageUsageFilter(PaloAltoPrimative.DELETE, _usageFilterIPInput, sourceNatIpAddress, null, genIpFilterTermName(sourceNatIpAddress));                                                                  
@@ -1160,7 +1171,7 @@ public class PaloAltoResource implements ServerResource {
             a_sub_params.put("type", "config");
             a_sub_params.put("action", "set");
             a_sub_params.put("xpath", "/config/devices/entry/network/interface/"+_privateInterfaceType+"/entry[@name='"+_privateInterface+"']/layer3/units/entry[@name='"+_private_entry_name+"']");
-            a_sub_params.put("element", "<tag>"+privateVlanTag+"</tag><ip><entry name='"+privateGateway+"'/></ip>");
+            a_sub_params.put("element", "<tag>"+privateVlanTag+"</tag><ip><entry name='"+privateGateway+"'/></ip><interface-management-profile>"+_pingManagementProfile+"</interface-management-profile>");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_sub_params));
 
             // add sub-interface to VR...
@@ -1254,12 +1265,12 @@ public class PaloAltoResource implements ServerResource {
      * Public Interfaces
      */
 
-    private String genPublicInterfaceName(String publicIp) {
-        return _publicInterface+"."+genIpIdentifier(publicIp);
+    private String genPublicInterfaceName(Long id) {
+        return _publicInterface+"."+Long.toString(id);
     }
 
     public boolean managePublicInterface(ArrayList<IPaloAltoCommand> cmdList, PaloAltoPrimative prim, Long publicVlanTag, String publicIp, long privateVlanTag) throws ExecutionException {
-        String _public_entry_name = genPublicInterfaceName(publicIp);
+        String _public_entry_name = genPublicInterfaceName(privateVlanTag);
 
         switch (prim) {
 
@@ -1285,7 +1296,7 @@ public class PaloAltoResource implements ServerResource {
             a_sub_params.put("type", "config");
             a_sub_params.put("action", "set");
             a_sub_params.put("xpath", "/config/devices/entry/network/interface/"+_publicInterfaceType+"/entry[@name='"+_publicInterface+"']/layer3/units/entry[@name='"+_public_entry_name+"']");
-            a_sub_params.put("element", "<ip><entry name='"+publicIp+"'/></ip>");
+            a_sub_params.put("element", "<ip><entry name='"+publicIp+"'/></ip><interface-management-profile>"+_pingManagementProfile+"</interface-management-profile>");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_sub_params));
 
             // add sub-interface to VR...
@@ -1857,8 +1868,8 @@ public class PaloAltoResource implements ServerResource {
         return "src_nat."+Long.toString(privateVlanTag);
     }
 
-    public boolean manageNatRule(ArrayList<IPaloAltoCommand> cmdList, PaloAltoPrimative prim, GuestNetworkType type, Long publicVlanTag, String publicIp, long privateVlanTag, String privateGateway) throws ExecutionException {
-        String _public_entry_name = genPublicInterfaceName(publicIp);
+    public boolean manageSrcNatRule(ArrayList<IPaloAltoCommand> cmdList, PaloAltoPrimative prim, GuestNetworkType type, Long publicVlanTag, String publicIp, long privateVlanTag, String privateGateway) throws ExecutionException {
+        String _public_entry_name = genPublicInterfaceName(privateVlanTag);
         String _private_entry_name = genPrivateInterfaceName(privateVlanTag);
         String _src_nat_entry_name = genSourceNatRuleName(privateVlanTag);
 
@@ -1876,7 +1887,7 @@ public class PaloAltoResource implements ServerResource {
             return result;
 
         case ADD:
-            if (manageNatRule(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS, type, publicVlanTag, publicIp, privateVlanTag, privateGateway)) {
+            if (manageSrcNatRule(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS, type, publicVlanTag, publicIp, privateVlanTag, privateGateway)) {
                 return true;
             }
 
@@ -1900,7 +1911,7 @@ public class PaloAltoResource implements ServerResource {
             return true;
 
         case DELETE:
-            if (!manageNatRule(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS, type, publicVlanTag, publicIp, privateVlanTag, privateGateway)) {
+            if (!manageSrcNatRule(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS, type, publicVlanTag, publicIp, privateVlanTag, privateGateway)) {
                 return true;
             }
 
@@ -2683,6 +2694,63 @@ public class PaloAltoResource implements ServerResource {
 //        //Map<String, long[]> bytesMap = getBytesMap(answer, filter, usageAnswerKey);
 //        //updateBytesMap(bytesMap, filter, usageAnswerKey, byteCount);          
 //    }
+
+
+    /*
+     * Helper config functions
+     */
+    public boolean managePingProfile(ArrayList<IPaloAltoCommand> cmdList, PaloAltoPrimative prim) throws ExecutionException {
+        switch (prim) {
+
+        case CHECK_IF_EXISTS:
+            // check if one exists already
+            Map<String, String> params = new HashMap<String, String>();
+            params.put("type", "config");
+            params.put("action", "get");
+            params.put("xpath", "/config/devices/entry/network/profiles/interface-management-profile/entry[@name='"+_pingManagementProfile+"']");
+            String response = request(PaloAltoMethod.GET, params);
+            boolean result = (validResponse(response) && responseNotEmpty(response));
+            s_logger.debug("Management profile exists: "+_pingManagementProfile+", "+result);
+            return result;
+
+        case ADD:
+            if (managePingProfile(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS)) {
+                return true;
+            }
+
+            // add ping profile...
+            Map<String, String> a_params = new HashMap<String, String>();
+            a_params.put("type", "config");
+            a_params.put("action", "set");
+            a_params.put("xpath", "/config/devices/entry/network/profiles/interface-management-profile/entry[@name='"+_pingManagementProfile+"']");
+            a_params.put("element", "<ping>yes</ping>");
+            cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_params));
+
+            return true;
+
+        case DELETE:
+            if (!managePingProfile(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS)) {
+                return true;
+            }
+
+            // delete ping profile...
+            Map<String, String> d_params = new HashMap<String, String>();
+            d_params.put("type", "config");
+            d_params.put("action", "delete");
+            d_params.put("xpath", "/config/devices/entry/network/profiles/interface-management-profile/entry[@name='"+_pingManagementProfile+"']");
+            cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, d_params));
+
+            return true;
+
+        default:
+            s_logger.debug("Unrecognized command.");
+            return false;
+        }
+    }
+
+
+
+
 
     /*
      * XML API commands
