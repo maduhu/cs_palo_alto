@@ -721,7 +721,7 @@ public class PaloAltoResource implements ServerResource {
             // Remove the guest network:
             // Remove source, static, and destination NAT rules
             // Remove VPN 
-            shutdownGuestNetwork(commandList, type, ip.getAccountId(), publicVlanTag, sourceNatIpAddress, guestVlanTag, guestVlanGateway, guestVlanSubnet, cidrSize);
+            shutdownGuestNetwork(commandList, type, publicVlanTag, sourceNatIpAddress, guestVlanTag, guestVlanGateway, guestVlanSubnet, cidrSize);
             s_logger.debug("Shutdown Command List: "+commandList.size());
 
             if (ip.isAdd()) {                                 
@@ -774,7 +774,7 @@ public class PaloAltoResource implements ServerResource {
         s_logger.debug(msg);
     }
 
-    private void shutdownGuestNetwork(ArrayList<IPaloAltoCommand> cmdList, GuestNetworkType type, long accountId, Long publicVlanTag, String sourceNatIpAddress, long privateVlanTag, String privateGateway, String privateSubnet, long privateCidrSize) throws ExecutionException {     
+    private void shutdownGuestNetwork(ArrayList<IPaloAltoCommand> cmdList, GuestNetworkType type, Long publicVlanTag, String sourceNatIpAddress, long privateVlanTag, String privateGateway, String privateSubnet, long privateCidrSize) throws ExecutionException {     
         // Remove static and destination NAT rules for the guest network
         //removeStaticAndDestNatRulesInPrivateVlan(privateVlanTag, privateGateway, privateCidrSize);
 
@@ -1145,7 +1145,7 @@ public class PaloAltoResource implements ServerResource {
     }
 
     public boolean managePrivateInterface(ArrayList<IPaloAltoCommand> cmdList, PaloAltoPrimative prim, long privateVlanTag, String privateGateway) throws ExecutionException {
-        String _private_entry_name =  genPrivateInterfaceName(privateVlanTag);
+        String _interfaceName =  genPrivateInterfaceName(privateVlanTag);
 
         switch (prim) {
 
@@ -1154,10 +1154,10 @@ public class PaloAltoResource implements ServerResource {
             Map<String, String> params = new HashMap<String, String>();
             params.put("type", "config");
             params.put("action", "get");
-            params.put("xpath", "/config/devices/entry/network/interface/"+_privateInterfaceType+"/entry[@name='"+_privateInterface+"']/layer3/units/entry[@name='"+_private_entry_name+"']");
+            params.put("xpath", "/config/devices/entry/network/interface/"+_privateInterfaceType+"/entry[@name='"+_privateInterface+"']/layer3/units/entry[@name='"+_interfaceName+"']");
             String response = request(PaloAltoMethod.GET, params);
             boolean result = (validResponse(response) && responseNotEmpty(response));
-            s_logger.debug("Private sub-interface exists: "+_private_entry_name+", "+result);
+            s_logger.debug("Private sub-interface exists: "+_interfaceName+", "+result);
             return result;
 
         case ADD:
@@ -1170,7 +1170,7 @@ public class PaloAltoResource implements ServerResource {
             Map<String, String> a_sub_params = new HashMap<String, String>();
             a_sub_params.put("type", "config");
             a_sub_params.put("action", "set");
-            a_sub_params.put("xpath", "/config/devices/entry/network/interface/"+_privateInterfaceType+"/entry[@name='"+_privateInterface+"']/layer3/units/entry[@name='"+_private_entry_name+"']");
+            a_sub_params.put("xpath", "/config/devices/entry/network/interface/"+_privateInterfaceType+"/entry[@name='"+_privateInterface+"']/layer3/units/entry[@name='"+_interfaceName+"']");
             a_sub_params.put("element", "<tag>"+privateVlanTag+"</tag><ip><entry name='"+privateGateway+"'/></ip><interface-management-profile>"+_pingManagementProfile+"</interface-management-profile>");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_sub_params));
 
@@ -1179,7 +1179,7 @@ public class PaloAltoResource implements ServerResource {
             a_vr_params.put("type", "config");
             a_vr_params.put("action", "set");
             a_vr_params.put("xpath", "/config/devices/entry/network/virtual-router/entry[@name='"+_virtualRouter+"']/interface");
-            a_vr_params.put("element", "<member>"+_private_entry_name+"</member>");
+            a_vr_params.put("element", "<member>"+_interfaceName+"</member>");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_vr_params));
 
             // add sub-interface to vsys...
@@ -1187,7 +1187,7 @@ public class PaloAltoResource implements ServerResource {
             a_vsys_params.put("type", "config");
             a_vsys_params.put("action", "set");
             a_vsys_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/import/network/interface");
-            a_vsys_params.put("element", "<member>"+_private_entry_name+"</member>");
+            a_vsys_params.put("element", "<member>"+_interfaceName+"</member>");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_vsys_params));
 
             // add sub-interface to zone...
@@ -1195,7 +1195,7 @@ public class PaloAltoResource implements ServerResource {
             a_zone_params.put("type", "config");
             a_zone_params.put("action", "set");
             a_zone_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/zone/entry[@name='"+_privateZone+"']/network/layer3");
-            a_zone_params.put("element", "<member>"+_private_entry_name+"</member>");
+            a_zone_params.put("element", "<member>"+_interfaceName+"</member>");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_zone_params));
 
             return true;
@@ -1210,28 +1210,28 @@ public class PaloAltoResource implements ServerResource {
             Map<String, String> d_zone_params = new HashMap<String, String>();
             d_zone_params.put("type", "config");
             d_zone_params.put("action", "delete");
-            d_zone_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/zone/entry[@name='"+_privateZone+"']/network/layer3/member[text()='"+_private_entry_name+"']");
+            d_zone_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/zone/entry[@name='"+_privateZone+"']/network/layer3/member[text()='"+_interfaceName+"']");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, d_zone_params));
 
             // delete sub-interface from vsys...
             Map<String, String> d_vsys_params = new HashMap<String, String>();
             d_vsys_params.put("type", "config");
             d_vsys_params.put("action", "delete");
-            d_vsys_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/import/network/interface/member[text()='"+_private_entry_name+"']");
+            d_vsys_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/import/network/interface/member[text()='"+_interfaceName+"']");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, d_vsys_params));
 
             // delete sub-interface from VR...
             Map<String, String> d_vr_params = new HashMap<String, String>();
             d_vr_params.put("type", "config");
             d_vr_params.put("action", "delete");
-            d_vr_params.put("xpath", "/config/devices/entry/network/virtual-router/entry[@name='"+_virtualRouter+"']/interface/member[text()='"+_private_entry_name+"']");
+            d_vr_params.put("xpath", "/config/devices/entry/network/virtual-router/entry[@name='"+_virtualRouter+"']/interface/member[text()='"+_interfaceName+"']");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, d_vr_params));
 
             // delete sub-interface...
             Map<String, String> d_sub_params = new HashMap<String, String>();
             d_sub_params.put("type", "config");
             d_sub_params.put("action", "delete");
-            d_sub_params.put("xpath", "/config/devices/entry/network/interface/"+_privateInterfaceType+"/entry[@name='"+_privateInterface+"']/layer3/units/entry[@name='"+_private_entry_name+"']");
+            d_sub_params.put("xpath", "/config/devices/entry/network/interface/"+_privateInterfaceType+"/entry[@name='"+_privateInterface+"']/layer3/units/entry[@name='"+_interfaceName+"']");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, d_sub_params));
 
             return true;
@@ -1270,7 +1270,12 @@ public class PaloAltoResource implements ServerResource {
     }
 
     public boolean managePublicInterface(ArrayList<IPaloAltoCommand> cmdList, PaloAltoPrimative prim, Long publicVlanTag, String publicIp, long privateVlanTag) throws ExecutionException {
-        String _public_entry_name = genPublicInterfaceName(privateVlanTag);
+        String _interfaceName = "";
+        if (publicVlanTag == null) {
+            _interfaceName = genPublicInterfaceName(new Long("9999"));
+        } else {
+            _interfaceName = genPublicInterfaceName(publicVlanTag);
+        }
 
         switch (prim) {
 
@@ -1279,10 +1284,10 @@ public class PaloAltoResource implements ServerResource {
             Map<String, String> params = new HashMap<String, String>();
             params.put("type", "config");
             params.put("action", "get");
-            params.put("xpath", "/config/devices/entry/network/interface/"+_publicInterfaceType+"/entry[@name='"+_publicInterface+"']/layer3/units/entry[@name='"+_public_entry_name+"']");
+            params.put("xpath", "/config/devices/entry/network/interface/"+_publicInterfaceType+"/entry[@name='"+_publicInterface+"']/layer3/units/entry[@name='"+_interfaceName+"']/ip/entry[@name='"+publicIp+"']");
             String response = request(PaloAltoMethod.GET, params);
             boolean result = (validResponse(response) && responseNotEmpty(response));
-            s_logger.debug("Public sub-interface exists: "+_public_entry_name+", "+result);
+            s_logger.debug("Public sub-interface & IP exists: "+_interfaceName+" : "+publicIp+", "+result);
             return result;
 
         case ADD:
@@ -1290,37 +1295,36 @@ public class PaloAltoResource implements ServerResource {
                 return true;
             }
 
-            // add cmds
-            // add sub-interface
+            // add IP to the sub-interface
             Map<String, String> a_sub_params = new HashMap<String, String>();
             a_sub_params.put("type", "config");
             a_sub_params.put("action", "set");
-            a_sub_params.put("xpath", "/config/devices/entry/network/interface/"+_publicInterfaceType+"/entry[@name='"+_publicInterface+"']/layer3/units/entry[@name='"+_public_entry_name+"']");
-            a_sub_params.put("element", "<ip><entry name='"+publicIp+"'/></ip><interface-management-profile>"+_pingManagementProfile+"</interface-management-profile>");
+            a_sub_params.put("xpath", "/config/devices/entry/network/interface/"+_publicInterfaceType+"/entry[@name='"+_publicInterface+"']/layer3/units/entry[@name='"+_interfaceName+"']/ip");
+            a_sub_params.put("element", "<entry name='"+publicIp+"'/>");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_sub_params));
 
-            // add sub-interface to VR...
+            // add sub-interface to VR (does nothing if already done)...
             Map<String, String> a_vr_params = new HashMap<String, String>();
             a_vr_params.put("type", "config");
             a_vr_params.put("action", "set");
             a_vr_params.put("xpath", "/config/devices/entry/network/virtual-router/entry[@name='"+_virtualRouter+"']/interface");
-            a_vr_params.put("element", "<member>"+_public_entry_name+"</member>");
+            a_vr_params.put("element", "<member>"+_interfaceName+"</member>");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_vr_params));
 
-            // add sub-interface to vsys...
+            // add sub-interface to vsys (does nothing if already done)...
             Map<String, String> a_vsys_params = new HashMap<String, String>();
             a_vsys_params.put("type", "config");
             a_vsys_params.put("action", "set");
             a_vsys_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/import/network/interface");
-            a_vsys_params.put("element", "<member>"+_public_entry_name+"</member>");
+            a_vsys_params.put("element", "<member>"+_interfaceName+"</member>");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_vsys_params));
 
-            // add sub-interface to zone...
+            // add sub-interface to zone (does nothing if already done)...
             Map<String, String> a_zone_params = new HashMap<String, String>();
             a_zone_params.put("type", "config");
             a_zone_params.put("action", "set");
             a_zone_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/zone/entry[@name='"+_publicZone+"']/network/layer3");
-            a_zone_params.put("element", "<member>"+_public_entry_name+"</member>");
+            a_zone_params.put("element", "<member>"+_interfaceName+"</member>");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_zone_params));
 
             return true;
@@ -1330,33 +1334,11 @@ public class PaloAltoResource implements ServerResource {
                 return true;
             }
 
-            // add cmds to the list
-            // delete sub-interface from zone...
-            Map<String, String> d_zone_params = new HashMap<String, String>();
-            d_zone_params.put("type", "config");
-            d_zone_params.put("action", "delete");
-            d_zone_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/zone/entry[@name='"+_publicZone+"']/network/layer3/member[text()='"+_public_entry_name+"']");
-            cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, d_zone_params));
-
-            // delete sub-interface from vsys...
-            Map<String, String> d_vsys_params = new HashMap<String, String>();
-            d_vsys_params.put("type", "config");
-            d_vsys_params.put("action", "delete");
-            d_vsys_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/import/network/interface/member[text()='"+_public_entry_name+"']");
-            cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, d_vsys_params));
-
-            // delete sub-interface from VR...
-            Map<String, String> d_vr_params = new HashMap<String, String>();
-            d_vr_params.put("type", "config");
-            d_vr_params.put("action", "delete");
-            d_vr_params.put("xpath", "/config/devices/entry/network/virtual-router/entry[@name='"+_virtualRouter+"']/interface/member[text()='"+_public_entry_name+"']");
-            cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, d_vr_params));
-
-            // delete sub-interface...
+            // delete IP from sub-interface...
             Map<String, String> d_sub_params = new HashMap<String, String>();
             d_sub_params.put("type", "config");
             d_sub_params.put("action", "delete");
-            d_sub_params.put("xpath", "/config/devices/entry/network/interface/"+_publicInterfaceType+"/entry[@name='"+_publicInterface+"']/layer3/units/entry[@name='"+_public_entry_name+"']");
+            d_sub_params.put("xpath", "/config/devices/entry/network/interface/"+_publicInterfaceType+"/entry[@name='"+_publicInterface+"']/layer3/units/entry[@name='"+_interfaceName+"']/ip/entry[@name='"+publicIp+"']");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, d_sub_params));
 
             return true;
@@ -1869,9 +1851,13 @@ public class PaloAltoResource implements ServerResource {
     }
 
     public boolean manageSrcNatRule(ArrayList<IPaloAltoCommand> cmdList, PaloAltoPrimative prim, GuestNetworkType type, Long publicVlanTag, String publicIp, long privateVlanTag, String privateGateway) throws ExecutionException {
-        String _public_entry_name = genPublicInterfaceName(privateVlanTag);
-        String _private_entry_name = genPrivateInterfaceName(privateVlanTag);
-        String _src_nat_entry_name = genSourceNatRuleName(privateVlanTag);
+        String _publicInterfaceName = "";
+        if (publicVlanTag == null) {
+            _publicInterfaceName = genPublicInterfaceName(new Long("9999"));
+        } else {
+            _publicInterfaceName = genPublicInterfaceName(publicVlanTag);
+        }
+        String _srcNatName = genSourceNatRuleName(privateVlanTag);
 
         switch (prim) {
 
@@ -1880,10 +1866,10 @@ public class PaloAltoResource implements ServerResource {
             Map<String, String> params = new HashMap<String, String>();
             params.put("type", "config");
             params.put("action", "get");
-            params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/nat/rules/entry[@name='"+_src_nat_entry_name+"']");
+            params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/nat/rules/entry[@name='"+_srcNatName+"']");
             String response = request(PaloAltoMethod.GET, params);
             boolean result = (validResponse(response) && responseNotEmpty(response));
-            s_logger.debug("Source NAT exists: "+_src_nat_entry_name+", "+result);
+            s_logger.debug("Source NAT exists: "+_srcNatName+", "+result);
             return result;
 
         case ADD:
@@ -1898,13 +1884,12 @@ public class PaloAltoResource implements ServerResource {
             xml = replaceXmlValue(xml, "to", _publicZone);
             xml = replaceXmlValue(xml, "source", privateGateway);
             xml = replaceXmlValue(xml, "destination", publicIp);
-            xml = replaceXmlValue(xml, "to_interface", _public_entry_name);
-            xml = replaceXmlValue(xml, "vlan", Long.toString(privateVlanTag));
+            xml = replaceXmlValue(xml, "to_interface", _publicInterfaceName);
 
             Map<String, String> a_params = new HashMap<String, String>();
             a_params.put("type", "config");
             a_params.put("action", "set");
-            a_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/nat/rules/entry[@name='"+_src_nat_entry_name+"']");
+            a_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/nat/rules/entry[@name='"+_srcNatName+"']");
             a_params.put("element", xml);
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.POST, a_params));
 
@@ -1920,7 +1905,7 @@ public class PaloAltoResource implements ServerResource {
             Map<String, String> d_params = new HashMap<String, String>();
             d_params.put("type", "config");
             d_params.put("action", "delete");
-            d_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/nat/rules/entry[@name='"+_src_nat_entry_name+"']");
+            d_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/nat/rules/entry[@name='"+_srcNatName+"']");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.POST, d_params));
 
             return true;
