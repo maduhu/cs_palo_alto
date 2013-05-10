@@ -65,8 +65,6 @@ import com.cloud.network.NetworkModel;
 import com.cloud.network.PhysicalNetwork;
 import com.cloud.network.PhysicalNetworkServiceProvider;
 import com.cloud.network.PublicIpAddress;
-import com.cloud.network.RemoteAccessVpn;
-import com.cloud.network.VpnUser;
 import com.cloud.network.dao.ExternalFirewallDeviceDao;
 import com.cloud.network.dao.ExternalFirewallDeviceVO;
 import com.cloud.network.dao.NetworkDao;
@@ -92,9 +90,9 @@ import com.cloud.vm.VirtualMachineProfile;
 
 @Local(value = {NetworkElement.class, FirewallServiceProvider.class, 
         PortForwardingServiceProvider.class, IpDeployer.class, 
-        SourceNatServiceProvider.class, RemoteAccessVPNServiceProvider.class})
+        SourceNatServiceProvider.class})
 public class PaloAltoExternalFirewallElement extends ExternalFirewallDeviceManagerImpl implements SourceNatServiceProvider, FirewallServiceProvider,
-PortForwardingServiceProvider, RemoteAccessVPNServiceProvider, IpDeployer, PaloAltoFirewallElementService, StaticNatServiceProvider {
+PortForwardingServiceProvider, IpDeployer, PaloAltoFirewallElementService, StaticNatServiceProvider {
 
     private static final Logger s_logger = Logger.getLogger(PaloAltoExternalFirewallElement.class);
 
@@ -221,42 +219,6 @@ PortForwardingServiceProvider, RemoteAccessVPNServiceProvider, IpDeployer, PaloA
     }
 
     @Override
-    public boolean startVpn(Network config, RemoteAccessVpn vpn) throws ResourceUnavailableException {
-        if (!canHandle(config, Service.Vpn)) {
-            return false;
-        }
-
-        return manageRemoteAccessVpn(true, config, vpn);
-
-    }
-
-    @Override
-    public boolean stopVpn(Network config, RemoteAccessVpn vpn) throws ResourceUnavailableException {
-        if (!canHandle(config, Service.Vpn)) {
-            return false;
-        }
-
-        return manageRemoteAccessVpn(false, config, vpn);
-    }
-
-    @Override
-    public String[] applyVpnUsers(RemoteAccessVpn vpn, List<? extends VpnUser> users) throws ResourceUnavailableException {
-        Network config = _networksDao.findById(vpn.getNetworkId());
-
-        if (!canHandle(config, Service.Vpn)) {
-            return null;
-        }
-
-        boolean result = manageRemoteAccessVpnUsers(config, vpn, users);
-        String[] results = new String[users.size()];
-        for (int i = 0; i < results.length; i++) {
-            results[i] = String.valueOf(result);
-        }
-
-        return results;
-    }
-
-    @Override
     public Provider getProvider() {
         return Provider.PaloAlto;
     }
@@ -276,12 +238,6 @@ PortForwardingServiceProvider, RemoteAccessVPNServiceProvider, IpDeployer, PaloA
         firewallCapabilities.put(Capability.TrafficStatistics, "per public ip");
         firewallCapabilities.put(Capability.SupportedTrafficDirection, "ingress");
         capabilities.put(Service.Firewall, firewallCapabilities);
-
-        // Disabling VPN for Palo Alto in Acton as it 1) Was never tested 2) probably just doesn't work
-// // Set VPN capabilities
-// Map<Capability, String> vpnCapabilities = new HashMap<Capability, String>();
-// vpnCapabilities.put(Capability.SupportedVpnTypes, "ipsec");
-// capabilities.put(Service.Vpn, vpnCapabilities);
 
         capabilities.put(Service.Gateway, null);
 
