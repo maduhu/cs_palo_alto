@@ -1,35 +1,19 @@
-<option>
-	<disable-server-response-inspection>%disable-server-response-inspection%</disable-server-response-inspection>
-</option>
 <from>
-	<member>%from%</member>
+	<member>%from_zone%</member>
 </from>
 <to>
-	<member>%to%</member>
+	<member>%to_zone%</member>
 </to>
 <source>
-	<member>%source%</member>
+	%src_members%
 </source>
 <destination>
-	<member>%destination%</member>
+	%dest_members%
 </destination>
-<source-user>
-	<member>%source-user%</member>
-</source-user>
-<category>
-	<member>%category%</member>
-</category>
 <application>
 	<member>%application%</member>
 </application>
 <service>
 	<member>%service%</member>
 </service>
-<hip-profiles>
-	<member>%hip-profiles%</member>
-</hip-profiles>
-<action>%action%</action>
-<log-start>%log-start%</log-start>
-<log-end>%log-end%</log-end>
-<negate-source>%negate-source%</negate-source>
-<negate-destination>%negate-destination%</negate-destination>
+<action>allow</action>
