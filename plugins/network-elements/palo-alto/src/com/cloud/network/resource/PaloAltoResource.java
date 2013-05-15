@@ -606,10 +606,6 @@ public class PaloAltoResource implements ServerResource {
         privateGateway = privateGateway + "/" + privateCidrNumber;
         privateSubnet = privateSubnet + "/" + privateCidrNumber;
 
-        if (publicIp != null) {
-            publicIp = publicIp+"/32";
-        }
-
         managePrivateInterface(cmdList, PaloAltoPrimative.ADD, privateVlanTag, privateGateway);
 
         if (type.equals(GuestNetworkType.SOURCE_NAT)) {
@@ -633,10 +629,6 @@ public class PaloAltoResource implements ServerResource {
 
         privateGateway = privateGateway + "/" + privateCidrSize;
         privateSubnet = privateSubnet + "/" + privateCidrSize;
-
-        if (sourceNatIpAddress != null) {
-            sourceNatIpAddress = sourceNatIpAddress+"/32";
-        }
 
         if (type.equals(GuestNetworkType.SOURCE_NAT)) {
             manageSrcNatRule(cmdList, PaloAltoPrimative.DELETE, type, publicVlanTag, sourceNatIpAddress, privateVlanTag, privateGateway);
@@ -1034,6 +1026,10 @@ public class PaloAltoResource implements ServerResource {
             interfaceName = genPublicInterfaceName(publicVlanTag);
         }
 
+        if (publicIp != null) {
+            publicIp = publicIp+"/32";
+        }
+
         switch (prim) {
 
         case CHECK_IF_EXISTS:
@@ -1222,17 +1218,17 @@ public class PaloAltoResource implements ServerResource {
 
             String srcZone;
             String destZone;
-            String destAddress;
-            String application;
-            String service;
+            String destAddressXML;
+            String appXML;
+            String serviceXML;
 
             String protocol = rule.getProtocol();
 
             // Only ICMP will use an Application, so others will be any.
             if (protocol.equals(Protocol.ICMP.toString())) {
-                application = "icmp"; // use the default icmp application...
+                appXML = "<member>icmp</member><member>ping</member><member>traceroute</member>"; // use the default icmp applications...
             } else {
-                application = "any";
+                appXML = "<member>any</member>";
             }
 
             // Only TCP and UDP will use a Service, others will use any.
@@ -1247,44 +1243,55 @@ public class PaloAltoResource implements ServerResource {
                         portRange = String.valueOf(startPort)+"-"+String.valueOf(endPort);
                     }
                     manageService(cmdList, PaloAltoPrimative.ADD, protocol, portRange, null);
-                    service = genServiceName(protocol, portRange, null);
+                    serviceXML = "<member>"+genServiceName(protocol, portRange, null)+"</member>";
                 } else {
                     // no equivalent config in PA, so allow all traffic...
-                    service = "any";
+                    serviceXML = "<member>any</member>";
                 }
             } else {
-                service = "any";
+                serviceXML = "<member>any</member>";
             }
 
-            List<String> ruleSourceCidrList = rule.getSourceCidrList();
             if (rule.getTrafficType() == FirewallRule.TrafficType.Egress) { // Network egress rule
-                // Since this maps to the private guest network range, the cidr 0.0.0.0/0 needs to be changed to the private subnet
-                for (int i = 0; i < ruleSourceCidrList.size(); i++) {
-                    if (ruleSourceCidrList.get(i).trim().equals("0.0.0.0/0")) {
-                        ruleSourceCidrList.set(i, getPrivateSubnet(rule.getSrcVlanTag()));
-                    }
-                }
                 srcZone = _privateZone;
                 destZone = _publicZone;
-                destAddress = "any";
+                destAddressXML = "<member>any</member>";
             } else {
                 srcZone = _publicZone;
                 destZone = _publicZone;
-                destAddress = rule.getSrcIp()+"/32";
+                destAddressXML = "<member>"+rule.getSrcIp()+"</member>";
             }
 
+            // build the source cidr xml
             String srcCidrXML = "";
-            for (int i = 0; i < ruleSourceCidrList.size(); i++) {
-                srcCidrXML += "<member>"+ruleSourceCidrList.get(i).trim()+"</member>";
+            List<String> ruleSourceCidrList = rule.getSourceCidrList();
+            if (ruleSourceCidrList.size() > 0) { // a cidr was entered, modify as needed...
+                for (int i = 0; i < ruleSourceCidrList.size(); i++) {
+                    if (ruleSourceCidrList.get(i).trim().equals("0.0.0.0/0")) { // allow any
+                        if (rule.getTrafficType() == FirewallRule.TrafficType.Egress) {
+                            srcCidrXML += "<member>"+getPrivateSubnet(rule.getSrcVlanTag())+"</member>";
+                        } else {
+                            srcCidrXML += "<member>any</member>"; 
+                        }
+                    } else {
+                        srcCidrXML += "<member>"+ruleSourceCidrList.get(i).trim()+"</member>";
+                    }
+                }
+            } else { // no cidr was entered, so allow ALL according to firewall rule type
+                if (rule.getTrafficType() == FirewallRule.TrafficType.Egress) {
+                    srcCidrXML = "<member>"+getPrivateSubnet(rule.getSrcVlanTag())+"</member>";
+                } else {
+                   srcCidrXML = "<member>any</member>"; 
+                }
             }
 
             String xml = PaloAltoXml.SECURITY_POLICY_ADD.getXml();                              
             xml = replaceXmlValue(xml, "from_zone", srcZone);
             xml = replaceXmlValue(xml, "to_zone", destZone);
             xml = replaceXmlValue(xml, "src_members", srcCidrXML);
-            xml = replaceXmlValue(xml, "dest_members", "<member>"+destAddress+"</member>");
-            xml = replaceXmlValue(xml, "application", application);
-            xml = replaceXmlValue(xml, "service", service);
+            xml = replaceXmlValue(xml, "dest_members", destAddressXML);
+            xml = replaceXmlValue(xml, "app_members", appXML);
+            xml = replaceXmlValue(xml, "service_members", serviceXML);
 
             Map<String, String> a_params = new HashMap<String, String>();
             a_params.put("type", "config");

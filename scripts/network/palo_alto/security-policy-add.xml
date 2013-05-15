@@ -11,9 +11,9 @@
 	%dest_members%
 </destination>
 <application>
-	<member>%application%</member>
+	%app_members%
 </application>
 <service>
-	<member>%service%</member>
+	%service_members%
 </service>
 <action>allow</action>
