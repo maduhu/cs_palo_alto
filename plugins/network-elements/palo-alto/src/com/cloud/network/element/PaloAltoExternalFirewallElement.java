@@ -236,15 +236,14 @@ PortForwardingServiceProvider, IpDeployer, PaloAltoFirewallElementService, Stati
         firewallCapabilities.put(Capability.SupportedProtocols, "tcp,udp,icmp");
         firewallCapabilities.put(Capability.MultipleIps, "true");
         firewallCapabilities.put(Capability.TrafficStatistics, "per public ip");
-        firewallCapabilities.put(Capability.SupportedTrafficDirection, "ingress");
+        firewallCapabilities.put(Capability.SupportedTrafficDirection, "ingress, egress");
         capabilities.put(Service.Firewall, firewallCapabilities);
 
         capabilities.put(Service.Gateway, null);
 
         Map<Capability, String> sourceNatCapabilities = new HashMap<Capability, String>();
-        // Specifies that this element supports either one source NAT rule per account, or no source NAT rules at all;
-        // in the latter case a shared interface NAT rule will be used
-        sourceNatCapabilities.put(Capability.SupportedSourceNatTypes, "peraccount, perzone");
+        // Specifies that this element supports either one source NAT rule per account;
+        sourceNatCapabilities.put(Capability.SupportedSourceNatTypes, "peraccount");
         capabilities.put(Service.SourceNat, sourceNatCapabilities);
 
         // Specifies that port forwarding rules are supported by this element

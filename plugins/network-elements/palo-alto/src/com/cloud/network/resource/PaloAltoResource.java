@@ -141,7 +141,8 @@ public class PaloAltoResource implements ServerResource {
 
     private enum PaloAltoXml {
         SECURITY_POLICY_ADD("security-policy-add.xml"),
-        SOURCE_NAT_ADD("source-nat-add.xml");
+        SRC_NAT_ADD("src-nat-add.xml"),
+        DST_NAT_ADD("dst-nat-add.xml");
 
         private String scriptsDir = "scripts/network/palo_alto";
         private String xml;
@@ -609,8 +610,8 @@ public class PaloAltoResource implements ServerResource {
         managePrivateInterface(cmdList, PaloAltoPrimative.ADD, privateVlanTag, privateGateway);
 
         if (type.equals(GuestNetworkType.SOURCE_NAT)) {
-            managePublicInterface(cmdList, PaloAltoPrimative.ADD, publicVlanTag, publicIp, privateVlanTag);
-            manageSrcNatRule(cmdList, PaloAltoPrimative.ADD, type, publicVlanTag, publicIp, privateVlanTag, privateGateway);         
+            managePublicInterface(cmdList, PaloAltoPrimative.ADD, publicVlanTag, publicIp+"/32", privateVlanTag);
+            manageSrcNatRule(cmdList, PaloAltoPrimative.ADD, type, publicVlanTag, publicIp+"/32", privateVlanTag, privateGateway);         
             //--manageUsageFilter(PaloAltoPrimative.ADD, _usageFilterIPOutput, privateSubnet, null, genIpFilterTermName(publicIp));
             //--manageUsageFilter(PaloAltoPrimative.ADD, _usageFilterIPInput, publicIp, null, genIpFilterTermName(publicIp));
         } else if (type.equals(GuestNetworkType.INTERFACE_NAT)){            
@@ -631,8 +632,8 @@ public class PaloAltoResource implements ServerResource {
         privateSubnet = privateSubnet + "/" + privateCidrSize;
 
         if (type.equals(GuestNetworkType.SOURCE_NAT)) {
-            manageSrcNatRule(cmdList, PaloAltoPrimative.DELETE, type, publicVlanTag, sourceNatIpAddress, privateVlanTag, privateGateway);
-            managePublicInterface(cmdList, PaloAltoPrimative.DELETE, publicVlanTag, sourceNatIpAddress, privateVlanTag);  
+            manageSrcNatRule(cmdList, PaloAltoPrimative.DELETE, type, publicVlanTag, sourceNatIpAddress+"/32", privateVlanTag, privateGateway);
+            managePublicInterface(cmdList, PaloAltoPrimative.DELETE, publicVlanTag, sourceNatIpAddress+"/32", privateVlanTag);  
             //--manageUsageFilter(PaloAltoPrimative.DELETE, _usageFilterIPOutput, privateSubnet, null, genIpFilterTermName(sourceNatIpAddress));
             //--manageUsageFilter(PaloAltoPrimative.DELETE, _usageFilterIPInput, sourceNatIpAddress, null, genIpFilterTermName(sourceNatIpAddress));                                                                  
         } else if (type.equals(GuestNetworkType.INTERFACE_NAT)) {
@@ -784,56 +785,33 @@ public class PaloAltoResource implements ServerResource {
     
 
     /*
-     * Destination NAT
+     * Destination NAT (Port Forwarding)
      */
-
     private synchronized Answer execute (SetPortForwardingRulesCommand cmd) {
         refreshPaloAltoConnection();
         return execute(cmd, _numRetries);
     }
 
     private Answer execute(SetPortForwardingRulesCommand cmd, int numRetries) {     
-        PortForwardingRuleTO[] allRules = cmd.getRules();
-        //Map<String, ArrayList<FirewallRuleTO>> activeRules = getActiveRules(allRules);
+        PortForwardingRuleTO[] rules = cmd.getRules();
 
         try {
-            boolean thr = false;
-            if (thr) {
-                throw(new ExecutionException("fake error"));
+            ArrayList<IPaloAltoCommand> commandList = new ArrayList<IPaloAltoCommand>();
+
+            for (PortForwardingRuleTO rule : rules) {
+                if (!rule.revoked()) {
+                    manageDstNatRule(commandList, PaloAltoPrimative.ADD, rule);
+                } else {
+                    manageDstNatRule(commandList, PaloAltoPrimative.DELETE, rule);
+                }
             }
-            //openConfiguration();
 
-//            Set<String> ipPairs = activeRules.keySet();
-//            for (String ipPair : ipPairs) {             
-//                String[] ipPairComponents = ipPair.split("-");
-//                String publicIp = ipPairComponents[0];
-//                String privateIp = ipPairComponents[1];                                                                     
-//
-//                List<FirewallRuleTO> activeRulesForIpPair = activeRules.get(ipPair);                
-//
-//                // Get a list of all destination NAT rules for the public/private IP address pair
-//                //List<String[]> destNatRules = getDestNatRules(RuleMatchCondition.PUBLIC_PRIVATE_IPS, publicIp, privateIp, null, null);
-//                //Map<String, Long> publicVlanTags = getPublicVlanTagsForNatRules(destNatRules);
-//
-//                // Delete all of these rules, along with the destination NAT pools and security policies they use
-//                //removeDestinationNatRules(null, publicVlanTags, destNatRules);
-//
-//                // If there are active rules for the public/private IP address pair, add them back
-//                for (FirewallRuleTO rule : activeRulesForIpPair) {
-//                    //Long publicVlanTag = getVlanTag(rule.getSrcVlanTag());
-//                    PortForwardingRuleTO portForwardingRule = (PortForwardingRuleTO) rule;
-//                    //addDestinationNatRule(getProtocol(rule.getProtocol()), publicVlanTag, portForwardingRule.getSrcIp(), portForwardingRule.getDstIp(), 
-//                    //                      portForwardingRule.getSrcPortRange()[0], portForwardingRule.getSrcPortRange()[1],
-//                    //                      portForwardingRule.getDstPortRange()[0], portForwardingRule.getDstPortRange()[1]);
-//                }
-//            }           
+            boolean status = requestWithCommit(commandList);         
 
-            //commitConfiguration();
             return new Answer(cmd);
         } catch (ExecutionException e) {
             s_logger.error(e);
-            //closeConfiguration();
-
+            
             if (numRetries > 0 && refreshPaloAltoConnection()) {
                 int numRetriesRemaining = numRetries - 1;
                 s_logger.debug("Retrying SetPortForwardingRulesCommand. Number of retries remaining: " + numRetriesRemaining);
@@ -1026,10 +1004,6 @@ public class PaloAltoResource implements ServerResource {
             interfaceName = genPublicInterfaceName(publicVlanTag);
         }
 
-        if (publicIp != null) {
-            publicIp = publicIp+"/32";
-        }
-
         switch (prim) {
 
         case CHECK_IF_EXISTS:
@@ -1104,22 +1078,10 @@ public class PaloAltoResource implements ServerResource {
 
 
     /*
-     * Static NAT rules
-     */
-
-
-
-    /*
-     * Destination NAT rules
-     */
-
-
-
-    /*
      * Source NAT rules
      */
 
-    private String genSourceNatRuleName(Long privateVlanTag) {
+    private String genSrcNatRuleName(Long privateVlanTag) {
         return "src_nat."+Long.toString(privateVlanTag);
     }
 
@@ -1130,7 +1092,7 @@ public class PaloAltoResource implements ServerResource {
         } else {
             publicInterfaceName = genPublicInterfaceName(publicVlanTag);
         }
-        String srcNatName = genSourceNatRuleName(privateVlanTag);
+        String srcNatName = genSrcNatRuleName(privateVlanTag);
 
         switch (prim) {
 
@@ -1150,12 +1112,14 @@ public class PaloAltoResource implements ServerResource {
                 return true;
             }
 
-            String xml = PaloAltoXml.SOURCE_NAT_ADD.getXml();                              
+            String xml = PaloAltoXml.SRC_NAT_ADD.getXml();                              
             xml = replaceXmlValue(xml, "from", _privateZone);
             xml = replaceXmlValue(xml, "to", _publicZone);
             xml = replaceXmlValue(xml, "source", privateGateway);
-            xml = replaceXmlValue(xml, "destination", publicIp);
+            xml = replaceXmlValue(xml, "destination", "any");
             xml = replaceXmlValue(xml, "to_interface", publicInterfaceName);
+            xml = replaceXmlValue(xml, "src_trans_ip", publicIp);
+            xml = replaceXmlValue(xml, "src_trans_interface", publicInterfaceName);
 
             Map<String, String> a_params = new HashMap<String, String>();
             a_params.put("type", "config");
@@ -1184,6 +1148,142 @@ public class PaloAltoResource implements ServerResource {
             return false;
         }
     }
+
+
+    /*
+     * Destination NAT rules (Port Forwarding)
+     */
+    private String genDstNatRuleName(String publicIp, long id) {
+        return "dst_nat."+genIpIdentifier(publicIp)+"_"+Long.toString(id);
+    }
+
+    public boolean manageDstNatRule(ArrayList<IPaloAltoCommand> cmdList, PaloAltoPrimative prim, PortForwardingRuleTO rule) throws ExecutionException {
+        String publicIp = rule.getSrcIp();
+        String dstNatName = genDstNatRuleName(publicIp, rule.getId());
+
+        String publicInterfaceName;
+        String publicVlanTag = rule.getSrcVlanTag();
+        if (publicVlanTag == null || publicVlanTag.equals("untagged")) {
+            publicInterfaceName = genPublicInterfaceName(new Long("9999"));
+        } else {
+            publicInterfaceName = genPublicInterfaceName(Long.getLong(publicVlanTag));
+        }
+
+        switch (prim) {
+
+        case CHECK_IF_EXISTS:
+            // check if one exists already
+            Map<String, String> params = new HashMap<String, String>();
+            params.put("type", "config");
+            params.put("action", "get");
+            params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/nat/rules/entry[@name='"+dstNatName+"']");
+            String response = request(PaloAltoMethod.GET, params);
+            boolean result = (validResponse(response) && responseNotEmpty(response));
+            s_logger.debug("Destination NAT exists: "+dstNatName+", "+result);
+            return result;
+
+        case ADD:
+            if (manageDstNatRule(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS, rule)) {
+                return true;
+            }
+
+            // build the source cidr xml
+            String srcCidrXML = "";
+            List<String> ruleSrcCidrList = rule.getSourceCidrList();
+            if (ruleSrcCidrList != null) { // a cidr was entered, modify as needed...
+                for (int i = 0; i < ruleSrcCidrList.size(); i++) {
+                    srcCidrXML += "<member>"+ruleSrcCidrList.get(i).trim()+"</member>";
+                }
+            } else { // no cidr was entered, so allow ALL
+                srcCidrXML = "<member>any</member>";
+            }
+
+            // build source service xml
+            String srcService;
+            String protocol = rule.getProtocol();
+            int[] srcPortRange = rule.getSrcPortRange();
+            if (srcPortRange != null) {
+                String portRange;
+                if (srcPortRange.length == 1 || srcPortRange[0] == srcPortRange[1]) {
+                    portRange = String.valueOf(srcPortRange[0]);
+                } else {
+                    portRange = String.valueOf(srcPortRange[0])+"-"+String.valueOf(srcPortRange[1]);
+                }
+                manageService(cmdList, PaloAltoPrimative.ADD, protocol, portRange, null);
+                srcService = genServiceName(protocol, portRange, null);
+            } else {
+                // no equivalent config in PA, so allow all traffic...
+                srcService = "any";
+            }
+
+
+            // build destination port xml (single port limit in PA)
+            String dstPortXML = "";
+            int[] dstPortRange = rule.getDstPortRange();
+            if (dstPortRange != null) {
+                dstPortXML = "<translated-port>"+dstPortRange[0]+"</translated-port>";
+            }
+
+            // add public IP to the sub-interface
+            Map<String, String> a_sub_params = new HashMap<String, String>();
+            a_sub_params.put("type", "config");
+            a_sub_params.put("action", "set");
+            a_sub_params.put("xpath", "/config/devices/entry/network/interface/"+_publicInterfaceType+"/entry[@name='"+_publicInterface+"']/layer3/units/entry[@name='"+publicInterfaceName+"']/ip");
+            a_sub_params.put("element", "<entry name='"+publicIp+"/32'/>");
+            cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_sub_params));
+
+            // add the destination nat rule for the public IP
+            String xml = PaloAltoXml.DST_NAT_ADD.getXml();                              
+            xml = replaceXmlValue(xml, "from", _publicZone);
+            xml = replaceXmlValue(xml, "to", _privateZone);
+            xml = replaceXmlValue(xml, "src_members", srcCidrXML);
+            xml = replaceXmlValue(xml, "dst_members", "<member>"+publicIp+"</member>");
+            xml = replaceXmlValue(xml, "service", srcService);
+            xml = replaceXmlValue(xml, "to_interface", publicInterfaceName);
+            xml = replaceXmlValue(xml, "dst_trans_ip", rule.getDstIp());
+            xml = replaceXmlValue(xml, "dst_trans_port_xml", dstPortXML);
+
+            Map<String, String> a_params = new HashMap<String, String>();
+            a_params.put("type", "config");
+            a_params.put("action", "set");
+            a_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/nat/rules/entry[@name='"+dstNatName+"']");
+            a_params.put("element", xml);
+            cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.POST, a_params));
+
+            return true;
+
+        case DELETE:
+            if (!manageDstNatRule(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS, rule)) {
+                return true;
+            }
+
+            // delete the dst nat rule
+            Map<String, String> d_params = new HashMap<String, String>();
+            d_params.put("type", "config");
+            d_params.put("action", "delete");
+            d_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/nat/rules/entry[@name='"+dstNatName+"']");
+            cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.POST, d_params));
+
+            // delete IP from sub-interface...
+            Map<String, String> d_sub_params = new HashMap<String, String>();
+            d_sub_params.put("type", "config");
+            d_sub_params.put("action", "delete");
+            d_sub_params.put("xpath", "/config/devices/entry/network/interface/"+_publicInterfaceType+"/entry[@name='"+_publicInterface+"']/layer3/units/entry[@name='"+publicInterfaceName+"']/ip/entry[@name='"+publicIp+"/32']");
+            cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, d_sub_params));
+
+            return true;
+
+        default:
+            s_logger.debug("Unrecognized command.");
+            return false;
+        }
+    }
+
+
+
+    /*
+     * Static NAT rules
+     */
 
 
     
@@ -1217,8 +1317,8 @@ public class PaloAltoResource implements ServerResource {
             }
 
             String srcZone;
-            String destZone;
-            String destAddressXML;
+            String dstZone;
+            String dstAddressXML;
             String appXML;
             String serviceXML;
 
@@ -1254,27 +1354,27 @@ public class PaloAltoResource implements ServerResource {
 
             if (rule.getTrafficType() == FirewallRule.TrafficType.Egress) { // Network egress rule
                 srcZone = _privateZone;
-                destZone = _publicZone;
-                destAddressXML = "<member>any</member>";
+                dstZone = _publicZone;
+                dstAddressXML = "<member>any</member>";
             } else {
                 srcZone = _publicZone;
-                destZone = _publicZone;
-                destAddressXML = "<member>"+rule.getSrcIp()+"</member>";
+                dstZone = _privateZone;
+                dstAddressXML = "<member>"+rule.getSrcIp()+"</member>";
             }
 
             // build the source cidr xml
             String srcCidrXML = "";
-            List<String> ruleSourceCidrList = rule.getSourceCidrList();
-            if (ruleSourceCidrList.size() > 0) { // a cidr was entered, modify as needed...
-                for (int i = 0; i < ruleSourceCidrList.size(); i++) {
-                    if (ruleSourceCidrList.get(i).trim().equals("0.0.0.0/0")) { // allow any
+            List<String> ruleSrcCidrList = rule.getSourceCidrList();
+            if (ruleSrcCidrList.size() > 0) { // a cidr was entered, modify as needed...
+                for (int i = 0; i < ruleSrcCidrList.size(); i++) {
+                    if (ruleSrcCidrList.get(i).trim().equals("0.0.0.0/0")) { // allow any
                         if (rule.getTrafficType() == FirewallRule.TrafficType.Egress) {
                             srcCidrXML += "<member>"+getPrivateSubnet(rule.getSrcVlanTag())+"</member>";
                         } else {
                             srcCidrXML += "<member>any</member>"; 
                         }
                     } else {
-                        srcCidrXML += "<member>"+ruleSourceCidrList.get(i).trim()+"</member>";
+                        srcCidrXML += "<member>"+ruleSrcCidrList.get(i).trim()+"</member>";
                     }
                 }
             } else { // no cidr was entered, so allow ALL according to firewall rule type
@@ -1287,9 +1387,9 @@ public class PaloAltoResource implements ServerResource {
 
             String xml = PaloAltoXml.SECURITY_POLICY_ADD.getXml();                              
             xml = replaceXmlValue(xml, "from_zone", srcZone);
-            xml = replaceXmlValue(xml, "to_zone", destZone);
+            xml = replaceXmlValue(xml, "to_zone", dstZone);
             xml = replaceXmlValue(xml, "src_members", srcCidrXML);
-            xml = replaceXmlValue(xml, "dest_members", destAddressXML);
+            xml = replaceXmlValue(xml, "dst_members", dstAddressXML);
             xml = replaceXmlValue(xml, "app_members", appXML);
             xml = replaceXmlValue(xml, "service_members", serviceXML);
 
@@ -1518,18 +1618,18 @@ public class PaloAltoResource implements ServerResource {
     }
 
 
-    private String genServiceName(String protocol, String destPorts, String srcPorts) {
+    private String genServiceName(String protocol, String dstPorts, String srcPorts) {
         String name;
         if (srcPorts == null) {
-            name = "cs_"+protocol.toLowerCase()+"_"+destPorts.replace(',', '.');
+            name = "cs_"+protocol.toLowerCase()+"_"+dstPorts.replace(',', '.');
         } else {
-            name = "cs_"+protocol.toLowerCase()+"_"+destPorts.replace(',', '.')+"_"+srcPorts.replace(',', '.');
+            name = "cs_"+protocol.toLowerCase()+"_"+dstPorts.replace(',', '.')+"_"+srcPorts.replace(',', '.');
         }
         return name;
     }
 
-    public boolean manageService(ArrayList<IPaloAltoCommand> cmdList, PaloAltoPrimative prim, String protocol, String destPorts, String srcPorts) throws ExecutionException {
-        String serviceName = genServiceName(protocol, destPorts, srcPorts);
+    public boolean manageService(ArrayList<IPaloAltoCommand> cmdList, PaloAltoPrimative prim, String protocol, String dstPorts, String srcPorts) throws ExecutionException {
+        String serviceName = genServiceName(protocol, dstPorts, srcPorts);
         
         switch (prim) {
 
@@ -1545,11 +1645,11 @@ public class PaloAltoResource implements ServerResource {
             return result;
 
         case ADD:
-            if (manageService(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS, protocol, destPorts, srcPorts)) {
+            if (manageService(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS, protocol, dstPorts, srcPorts)) {
                 return true;
             }
 
-            String destPortXML = "<port>"+destPorts+"</port>";
+            String dstPortXML = "<port>"+dstPorts+"</port>";
             String srcPortXML = "";
             if (srcPorts != null) {
                 srcPortXML = "<source-port>"+srcPorts+"</source-port>";
@@ -1560,13 +1660,13 @@ public class PaloAltoResource implements ServerResource {
             a_params.put("type", "config");
             a_params.put("action", "set");
             a_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/service/entry[@name='"+serviceName+"']");
-            a_params.put("element", "<protocol><"+protocol.toLowerCase()+">"+destPortXML+srcPortXML+"</"+protocol.toLowerCase()+"></protocol>");
+            a_params.put("element", "<protocol><"+protocol.toLowerCase()+">"+dstPortXML+srcPortXML+"</"+protocol.toLowerCase()+"></protocol>");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_params));
 
             return true;
 
         case DELETE:
-            if (!manageService(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS, protocol, destPorts, srcPorts)) {
+            if (!manageService(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS, protocol, dstPorts, srcPorts)) {
                 return true;
             }
 
@@ -1608,9 +1708,6 @@ public class PaloAltoResource implements ServerResource {
         }
         return null;
     }
-
-
-
 
 
     /*
