@@ -1235,7 +1235,7 @@ public class PaloAltoResource implements ServerResource {
             // add the destination nat rule for the public IP
             String xml = PaloAltoXml.DST_NAT_ADD.getXml();                              
             xml = replaceXmlValue(xml, "from", _publicZone);
-            xml = replaceXmlValue(xml, "to", _privateZone);
+            xml = replaceXmlValue(xml, "to", _publicZone);
             xml = replaceXmlValue(xml, "src_members", srcCidrXML);
             xml = replaceXmlValue(xml, "dst_members", "<member>"+publicIp+"</member>");
             xml = replaceXmlValue(xml, "service", srcService);
