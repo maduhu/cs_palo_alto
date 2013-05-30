@@ -16,4 +16,3 @@
 <destination-translation>
 	<translated-address>%dst_trans_ip%</translated-address>%dst_trans_port_xml%
 </destination-translation>
-<active-active-device-binding>primary</active-active-device-binding>
