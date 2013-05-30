@@ -142,7 +142,8 @@ public class PaloAltoResource implements ServerResource {
     private enum PaloAltoXml {
         SECURITY_POLICY_ADD("security-policy-add.xml"),
         SRC_NAT_ADD("src-nat-add.xml"),
-        DST_NAT_ADD("dst-nat-add.xml");
+        DST_NAT_ADD("dst-nat-add.xml"),
+        STC_NAT_ADD("stc-nat-add.xml");
 
         private String scriptsDir = "scripts/network/palo_alto";
         private String xml;
@@ -244,32 +245,10 @@ public class PaloAltoResource implements ServerResource {
         }
     }
 
-//    private enum RuleMatchCondition {
-//        ALL,
-//        PUBLIC_PRIVATE_IPS,
-//        PRIVATE_SUBNET;
-//    }
-
     private enum GuestNetworkType {
         SOURCE_NAT,
         INTERFACE_NAT;
     }
-
-//    private enum SecurityPolicyType {
-//        STATIC_NAT("staticnat"),
-//        DESTINATION_NAT("destnat"),
-//        VPN("vpn");
-//
-//        private String identifier;
-//
-//        private SecurityPolicyType(String identifier) {
-//            this.identifier = identifier;
-//        }
-//
-//        private String getIdentifier() {
-//            return identifier;
-//        }
-//    }
 
     public Answer executeRequest(Command cmd) {
         if (cmd instanceof ReadyCommand) {
@@ -353,12 +332,6 @@ public class PaloAltoResource implements ServerResource {
             _timeoutInSeconds = NumbersUtil.parseInt((String) params.get("timeout"), 300);
 
             _objectNameWordSep = "-";
-            
-//            _ikeProposalName = "cloud-ike-proposal";
-//            _ipsecPolicyName = "cloud-ipsec-policy";
-//            _ikeGatewayHostname = "cloud";
-//            _vpnObjectPrefix = "vpn-a";
-//            _primaryDnsAddress = "4.2.2.2";
 
             // Open a socket and login
             if (!refreshPaloAltoConnection()) {
@@ -522,6 +495,9 @@ public class PaloAltoResource implements ServerResource {
     }
 
 
+    // ENTRY POINTS...
+
+
     /*
      * Guest networks
      */
@@ -573,8 +549,6 @@ public class PaloAltoResource implements ServerResource {
             ArrayList<IPaloAltoCommand> commandList = new ArrayList<IPaloAltoCommand>();
 
             // Remove the guest network:
-            // Remove source, static, and destination NAT rules
-            // Remove VPN 
             shutdownGuestNetwork(commandList, type, publicVlanTag, sourceNatIpAddress, guestVlanTag, guestVlanGateway, guestVlanSubnet, cidrSize);
             s_logger.debug("Shutdown Command List: "+commandList.size());
 
@@ -650,9 +624,9 @@ public class PaloAltoResource implements ServerResource {
 
     
 
-
-
-    /* Firewall rules */
+    /*
+     * Firewall rule entry point
+     */
     private synchronized Answer execute(SetFirewallRulesCommand cmd) {
         refreshPaloAltoConnection();
         return execute(cmd, _numRetries);
@@ -687,8 +661,9 @@ public class PaloAltoResource implements ServerResource {
         }
     }
 
+
     /*
-     * Static NAT
+     * Static NAT rule entry point
      */
 
     private synchronized Answer execute(SetStaticNatRulesCommand cmd) {
@@ -697,44 +672,28 @@ public class PaloAltoResource implements ServerResource {
     }       
 
     private Answer execute(SetStaticNatRulesCommand cmd, int numRetries) {      
-        StaticNatRuleTO[] allRules = cmd.getRules();
-        //Map<String, ArrayList<FirewallRuleTO>> activeRules = getActiveRules(allRules);
-        //Map<String, String> vlanTagMap = getVlanTagMap(allRules);
+        StaticNatRuleTO[] rules = cmd.getRules();
 
         try {
-            boolean thr = false;
-            if (thr) {
-                throw(new ExecutionException("fake error"));
-            }
-//            //openConfiguration();
-//
-//            Set<String> ipPairs = activeRules.keySet();
-//            for (String ipPair : ipPairs) {             
-//                String[] ipPairComponents = ipPair.split("-");
-//                String publicIp = ipPairComponents[0];
-//                String privateIp = ipPairComponents[1];                                                                     
-//
-//                List<FirewallRuleTO> activeRulesForIpPair = activeRules.get(ipPair);      
-//                //Long publicVlanTag = getVlanTag(vlanTagMap.get(publicIp));
-//
-//                // Delete the existing static NAT rule for this IP pair
-//                //removeStaticNatRule(publicVlanTag, publicIp, privateIp);
-//
-//                if (activeRulesForIpPair.size() > 0) {
-//                    // If there are active FirewallRules for this IP pair, add the static NAT rule and open the specified port ranges
-//                    //addStaticNatRule(publicVlanTag, publicIp, privateIp, activeRulesForIpPair);
-//                } 
-//            }           
+            ArrayList<IPaloAltoCommand> commandList = new ArrayList<IPaloAltoCommand>();
 
-            //commitConfiguration();
+            for (StaticNatRuleTO rule : rules) {
+                if (!rule.revoked()) {
+                    manageStcNatRule(commandList, PaloAltoPrimative.ADD, rule);
+                } else {
+                    manageStcNatRule(commandList, PaloAltoPrimative.DELETE, rule);
+                }
+            }
+
+            boolean status = requestWithCommit(commandList);
+
             return new Answer(cmd);
         } catch (ExecutionException e) {
             s_logger.error(e);
-            //closeConfiguration();
 
             if (numRetries > 0 && refreshPaloAltoConnection()) {
                 int numRetriesRemaining = numRetries - 1;
-                s_logger.debug("Retrying SetPortForwardingRulesCommand. Number of retries remaining: " + numRetriesRemaining);
+                s_logger.debug("Retrying SetStaticNatRulesCommand. Number of retries remaining: " + numRetriesRemaining);
                 return execute(cmd, numRetriesRemaining);
             } else {
                 return new Answer(cmd, e);
@@ -742,50 +701,9 @@ public class PaloAltoResource implements ServerResource {
         }
     }
 
-//    private void addStaticNatRule(Long publicVlanTag, String publicIp, String privateIp, List<FirewallRuleTO> rules) throws ExecutionException {
-//        //manageProxyArp(PaloAltoPrimative.ADD, publicVlanTag, publicIp);
-//        //manageStaticNatRule(PaloAltoPrimative.ADD, publicIp, privateIp);
-//        //manageAddressBookEntry(PaloAltoPrimative.ADD, _privateZone, privateIp, null);
-//
-//        // Add a new security policy with the current set of applications
-//        //addSecurityPolicyAndApplications(SecurityPolicyType.STATIC_NAT, privateIp, extractApplications(rules));
-//
-//        s_logger.debug("Added static NAT rule for public IP " + publicIp + ", and private IP " + privateIp);
-//    }       
-
-//    private void removeStaticNatRule(Long publicVlanTag, String publicIp, String privateIp) throws ExecutionException {     
-//        //manageStaticNatRule(PaloAltoPrimative.DELETE, publicIp, privateIp);
-//        //manageProxyArp(PaloAltoPrimative.DELETE, publicVlanTag, publicIp);   
-//
-//        // Remove any existing security policy and clean up applications
-//        //removeSecurityPolicyAndApplications(SecurityPolicyType.STATIC_NAT, privateIp);
-//
-//        //manageAddressBookEntry(PaloAltoPrimative.DELETE, _privateZone, privateIp, null);     
-//
-//        s_logger.debug("Removed static NAT rule for public IP " + publicIp + ", and private IP " + privateIp);
-//    }
-
-//    private void removeStaticNatRules(Long privateVlanTag, Map<String, Long> publicVlanTags, List<String[]> staticNatRules) throws ExecutionException {
-//        for (String[] staticNatRuleToRemove : staticNatRules) {
-//            String staticNatRulePublicIp = staticNatRuleToRemove[0];
-//            String staticNatRulePrivateIp = staticNatRuleToRemove[1];
-//            
-//            Long publicVlanTag = null;
-//            if (publicVlanTags.containsKey(staticNatRulePublicIp)) {
-//                publicVlanTag = publicVlanTags.get(staticNatRulePublicIp);
-//            }
-//
-//            if (privateVlanTag != null) {
-//                s_logger.warn("Found a static NAT rule (" + staticNatRulePublicIp + " <-> " + staticNatRulePrivateIp + ") for guest VLAN with tag " + privateVlanTag + " that is active when the guest network is being removed. Removing rule...");
-//            }
-//
-//            //removeStaticNatRule(publicVlanTag, staticNatRulePublicIp, staticNatRulePrivateIp);
-//        }
-//    }
-    
 
     /*
-     * Destination NAT (Port Forwarding)
+     * Destination NAT (Port Forwarding) entry point
      */
     private synchronized Answer execute (SetPortForwardingRulesCommand cmd) {
         refreshPaloAltoConnection();
@@ -822,67 +740,12 @@ public class PaloAltoResource implements ServerResource {
         }
     }
 
-//    private void addDestinationNatRule(Protocol protocol, Long publicVlanTag, String publicIp, String privateIp, int srcPortStart, int srcPortEnd, int destPortStart, int destPortEnd) throws ExecutionException {
-//        //manageProxyArp(PaloAltoPrimative.ADD, publicVlanTag, publicIp);       
-//        
-//        int offset = 0;
-//        for (int srcPort = srcPortStart; srcPort <= srcPortEnd; srcPort++) {
-//            int destPort = destPortStart + offset;
-//            //manageDestinationNatPool(PaloAltoPrimative.ADD, privateIp, destPort);      
-//            //manageDestinationNatRule(PaloAltoPrimative.ADD, publicIp, privateIp, srcPort, destPort); 
-//            offset += 1;
-//        }
-//                
-//        //manageAddressBookEntry(PaloAltoPrimative.ADD, _privateZone, privateIp, null);
-//
-//        List<Object[]> applications = new ArrayList<Object[]>();
-//        applications.add(new Object[]{protocol, destPortStart, destPortEnd});
-//        //addSecurityPolicyAndApplications(SecurityPolicyType.DESTINATION_NAT, privateIp, applications);
-//
-//        String srcPortRange = srcPortStart + "-" + srcPortEnd;
-//        String destPortRange = destPortStart + "-" + destPortEnd;
-//        s_logger.debug("Added destination NAT rule for protocol " + protocol + ", public IP " + publicIp + ", private IP " + privateIp +  ", source port range " + srcPortRange + ", and dest port range " + destPortRange);
-//    }
 
-//    private void removeDestinationNatRule(Long publicVlanTag, String publicIp, String privateIp, int srcPort, int destPort) throws ExecutionException {               
-//        //manageDestinationNatRule(PaloAltoPrimative.DELETE, publicIp, privateIp, srcPort, destPort);
-//        //manageDestinationNatPool(PaloAltoPrimative.DELETE, privateIp, destPort);   
-//        //manageProxyArp(PaloAltoPrimative.DELETE, publicVlanTag, publicIp);    
-//
-//        //removeSecurityPolicyAndApplications(SecurityPolicyType.DESTINATION_NAT, privateIp);
-//
-//        //manageAddressBookEntry(PaloAltoPrimative.DELETE, _privateZone, privateIp, null);             
-//
-//        s_logger.debug("Removed destination NAT rule for public IP " + publicIp + ", private IP " + privateIp +  ", source port " + srcPort + ", and dest port " + destPort);   
-//    }
+    // IMPLEMENTATIONS...
 
-
-//    private void removeDestinationNatRules(Long privateVlanTag, Map<String, Long> publicVlanTags, List<String[]> destNatRules) throws ExecutionException {
-//        for (String[] destNatRule : destNatRules) {
-//            String publicIp = destNatRule[0];
-//            String privateIp = destNatRule[1];
-//            int srcPort = Integer.valueOf(destNatRule[2]);
-//            int destPort = Integer.valueOf(destNatRule[3]);
-//            
-//            Long publicVlanTag = null;
-//            if (publicVlanTags.containsKey(publicIp)) {
-//                publicVlanTag = publicVlanTags.get(publicIp);
-//            }
-//
-//            if (privateVlanTag != null) {
-//                s_logger.warn("Found a destination NAT rule (public IP: " + publicIp + ", private IP: " + privateIp + 
-//                        ", public port: " + srcPort + ", private port: " + destPort + ") for guest VLAN with tag " + 
-//                        privateVlanTag + " that is active when the guest network is being removed. Removing rule...");
-//            }
-//
-//            removeDestinationNatRule(publicVlanTag, publicIp, privateIp, srcPort, destPort);
-//        }
-//    }
-    
- 
 
     /*
-     * Private interfaces
+     * Private interface implementation
      */
 
     private String genPrivateInterfaceName(long vlanTag) {
@@ -989,7 +852,7 @@ public class PaloAltoResource implements ServerResource {
 
 
     /*
-     * Public Interfaces
+     * Public Interface implementation
      */
 
     private String genPublicInterfaceName(Long id) {
@@ -1078,7 +941,7 @@ public class PaloAltoResource implements ServerResource {
 
 
     /*
-     * Source NAT rules
+     * Source NAT rule implementation
      */
 
     private String genSrcNatRuleName(Long privateVlanTag) {
@@ -1151,7 +1014,7 @@ public class PaloAltoResource implements ServerResource {
 
 
     /*
-     * Destination NAT rules (Port Forwarding)
+     * Destination NAT rules (Port Forwarding) implementation
      */
     private String genDstNatRuleName(String publicIp, long id) {
         return "dst_nat."+genIpIdentifier(publicIp)+"_"+Long.toString(id);
@@ -1187,17 +1050,6 @@ public class PaloAltoResource implements ServerResource {
                 return true;
             }
 
-            // build the source cidr xml
-            String srcCidrXML = "";
-            List<String> ruleSrcCidrList = rule.getSourceCidrList();
-            if (ruleSrcCidrList != null) { // a cidr was entered, modify as needed...
-                for (int i = 0; i < ruleSrcCidrList.size(); i++) {
-                    srcCidrXML += "<member>"+ruleSrcCidrList.get(i).trim()+"</member>";
-                }
-            } else { // no cidr was entered, so allow ALL
-                srcCidrXML = "<member>any</member>";
-            }
-
             // build source service xml
             String srcService;
             String protocol = rule.getProtocol();
@@ -1215,7 +1067,6 @@ public class PaloAltoResource implements ServerResource {
                 // no equivalent config in PA, so allow all traffic...
                 srcService = "any";
             }
-
 
             // build destination port xml (single port limit in PA)
             String dstPortXML = "";
@@ -1236,7 +1087,7 @@ public class PaloAltoResource implements ServerResource {
             String xml = PaloAltoXml.DST_NAT_ADD.getXml();                              
             xml = replaceXmlValue(xml, "from", _publicZone);
             xml = replaceXmlValue(xml, "to", _publicZone);
-            xml = replaceXmlValue(xml, "src_members", srcCidrXML);
+            xml = replaceXmlValue(xml, "src_members", "<member>any</member>"); // specifying this is depreciated
             xml = replaceXmlValue(xml, "dst_members", "<member>"+publicIp+"</member>");
             xml = replaceXmlValue(xml, "service", srcService);
             xml = replaceXmlValue(xml, "to_interface", publicInterfaceName);
@@ -1257,11 +1108,125 @@ public class PaloAltoResource implements ServerResource {
                 return true;
             }
 
+            // determine if we need to delete the ip from the interface as well...
+            Map<String, String> c_params = new HashMap<String, String>();
+            c_params.put("type", "config");
+            c_params.put("action", "get");
+            c_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/nat/rules/entry[destination/member[text()='"+publicIp+"']]");
+            String c_response = request(PaloAltoMethod.GET, c_params);
+
+            String count = "";
+            NodeList response_body;
+            Document doc = getDocument(c_response);
+            XPath xpath = XPathFactory.newInstance().newXPath();
+            try {
+                XPathExpression expr = xpath.compile("/response[@status='success']/result");
+                response_body = (NodeList) expr.evaluate(doc, XPathConstants.NODESET);
+            } catch (XPathExpressionException e) {
+                throw new ExecutionException(e.getCause().getMessage());
+            }
+            if (response_body.getLength() > 0 && response_body.item(0).getAttributes().getLength() > 0) {
+                count = response_body.item(0).getAttributes().getNamedItem("count").getTextContent();
+            }
+
             // delete the dst nat rule
             Map<String, String> d_params = new HashMap<String, String>();
             d_params.put("type", "config");
             d_params.put("action", "delete");
             d_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/nat/rules/entry[@name='"+dstNatName+"']");
+            cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.POST, d_params));
+
+            if (!count.equals("") && Integer.parseInt(count) == 1) { // this dst nat rule is the last, so remove the ip...
+                // delete IP from sub-interface...
+                Map<String, String> d_sub_params = new HashMap<String, String>();
+                d_sub_params.put("type", "config");
+                d_sub_params.put("action", "delete");
+                d_sub_params.put("xpath", "/config/devices/entry/network/interface/"+_publicInterfaceType+"/entry[@name='"+_publicInterface+"']/layer3/units/entry[@name='"+publicInterfaceName+"']/ip/entry[@name='"+publicIp+"/32']");
+                cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, d_sub_params));
+            }
+
+            return true;
+
+        default:
+            s_logger.debug("Unrecognized command.");
+            return false;
+        }
+    }
+
+
+
+    /*
+     * Static NAT rule implementation
+     */
+    private String genStcNatRuleName(String publicIp, long id) {
+        return "stc_nat."+genIpIdentifier(publicIp)+"_"+Long.toString(id);
+    }
+
+    public boolean manageStcNatRule(ArrayList<IPaloAltoCommand> cmdList, PaloAltoPrimative prim, StaticNatRuleTO rule) throws ExecutionException {
+        String publicIp = rule.getSrcIp();
+        String stcNatName = genStcNatRuleName(publicIp, rule.getId());
+
+        String publicInterfaceName;
+        String publicVlanTag = rule.getSrcVlanTag();
+        if (publicVlanTag == null || publicVlanTag.equals("untagged")) {
+            publicInterfaceName = genPublicInterfaceName(new Long("9999"));
+        } else {
+            publicInterfaceName = genPublicInterfaceName(Long.getLong(publicVlanTag));
+        }
+
+        switch (prim) {
+
+        case CHECK_IF_EXISTS:
+            // check if one exists already
+            Map<String, String> params = new HashMap<String, String>();
+            params.put("type", "config");
+            params.put("action", "get");
+            params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/nat/rules/entry[@name='"+stcNatName+"']");
+            String response = request(PaloAltoMethod.GET, params);
+            boolean result = (validResponse(response) && responseNotEmpty(response));
+            s_logger.debug("Static NAT exists: "+stcNatName+", "+result);
+            return result;
+
+        case ADD:
+            if (manageStcNatRule(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS, rule)) {
+                return true;
+            }
+
+            // add public IP to the sub-interface
+            Map<String, String> a_sub_params = new HashMap<String, String>();
+            a_sub_params.put("type", "config");
+            a_sub_params.put("action", "set");
+            a_sub_params.put("xpath", "/config/devices/entry/network/interface/"+_publicInterfaceType+"/entry[@name='"+_publicInterface+"']/layer3/units/entry[@name='"+publicInterfaceName+"']/ip");
+            a_sub_params.put("element", "<entry name='"+publicIp+"/32'/>");
+            cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_sub_params));
+
+            // add the static nat rule for the public IP
+            String xml = PaloAltoXml.STC_NAT_ADD.getXml();                              
+            xml = replaceXmlValue(xml, "from", _publicZone);
+            xml = replaceXmlValue(xml, "to", _publicZone);
+            xml = replaceXmlValue(xml, "dst_members", "<member>"+publicIp+"</member>");
+            xml = replaceXmlValue(xml, "to_interface", publicInterfaceName);
+            xml = replaceXmlValue(xml, "dst_trans_ip", rule.getDstIp());
+
+            Map<String, String> a_params = new HashMap<String, String>();
+            a_params.put("type", "config");
+            a_params.put("action", "set");
+            a_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/nat/rules/entry[@name='"+stcNatName+"']");
+            a_params.put("element", xml);
+            cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.POST, a_params));
+
+            return true;
+
+        case DELETE:
+            if (!manageStcNatRule(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS, rule)) {
+                return true;
+            }
+
+            // delete the static nat rule
+            Map<String, String> d_params = new HashMap<String, String>();
+            d_params.put("type", "config");
+            d_params.put("action", "delete");
+            d_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/nat/rules/entry[@name='"+stcNatName+"']");
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.POST, d_params));
 
             // delete IP from sub-interface...
@@ -1279,16 +1244,9 @@ public class PaloAltoResource implements ServerResource {
         }
     }
 
-
-
-    /*
-     * Static NAT rules
-     */
-
-
     
     /*
-     * Security policies
+     * Firewall rule implementation
      */
 
     private String genFirewallRuleName(long id) {
