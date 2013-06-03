@@ -36,14 +36,10 @@ import java.util.concurrent.ExecutionException;
 import javax.inject.Inject;
 import javax.naming.ConfigurationException;
 
+import com.cloud.storage.dao.*;
 import org.apache.cloudstack.api.BaseCmd;
-import org.apache.cloudstack.api.command.user.volume.AttachVolumeCmd;
-import org.apache.cloudstack.api.command.user.volume.CreateVolumeCmd;
-import org.apache.cloudstack.api.command.user.volume.DetachVolumeCmd;
-import org.apache.cloudstack.api.command.user.volume.MigrateVolumeCmd;
-import org.apache.cloudstack.api.command.user.volume.ResizeVolumeCmd;
-import org.apache.cloudstack.api.command.user.volume.UploadVolumeCmd;
 import org.apache.cloudstack.engine.subsystem.api.storage.CommandResult;
+import org.apache.cloudstack.api.command.user.volume.*;
 import org.apache.cloudstack.engine.subsystem.api.storage.DataStore;
 import org.apache.cloudstack.engine.subsystem.api.storage.DataStoreManager;
 import org.apache.cloudstack.engine.subsystem.api.storage.DataStoreProviderManager;
@@ -122,18 +118,6 @@ import com.cloud.storage.Storage.ImageFormat;
 import com.cloud.storage.Storage.StoragePoolType;
 import com.cloud.storage.Volume.Event;
 import com.cloud.storage.Volume.Type;
-import com.cloud.storage.dao.DiskOfferingDao;
-import com.cloud.storage.dao.SnapshotDao;
-import com.cloud.storage.dao.SnapshotPolicyDao;
-import com.cloud.storage.dao.StoragePoolHostDao;
-import com.cloud.storage.dao.StoragePoolWorkDao;
-import com.cloud.storage.dao.VMTemplateDao;
-import com.cloud.storage.dao.VMTemplateHostDao;
-import com.cloud.storage.dao.VMTemplatePoolDao;
-import com.cloud.storage.dao.VMTemplateS3Dao;
-import com.cloud.storage.dao.VMTemplateSwiftDao;
-import com.cloud.storage.dao.VolumeDao;
-import com.cloud.storage.dao.VolumeHostDao;
 import com.cloud.storage.download.DownloadMonitor;
 import com.cloud.storage.s3.S3Manager;
 import com.cloud.storage.secondary.SecondaryStorageVmManager;
@@ -144,9 +128,11 @@ import com.cloud.template.TemplateManager;
 import com.cloud.user.Account;
 import com.cloud.user.AccountManager;
 import com.cloud.user.ResourceLimitService;
+import com.cloud.user.VmDiskStatisticsVO;
 import com.cloud.user.UserContext;
 import com.cloud.user.dao.AccountDao;
 import com.cloud.user.dao.UserDao;
+import com.cloud.user.dao.VmDiskStatisticsDao;
 import com.cloud.uservm.UserVm;
 import com.cloud.utils.EnumUtils;
 import com.cloud.utils.NumbersUtil;
@@ -296,11 +282,15 @@ public class VolumeManagerImpl extends ManagerBase implements VolumeManager {
     @Inject
     protected ResourceTagDao _resourceTagDao;
     @Inject
+    protected VmDiskStatisticsDao _vmDiskStatsDao;
+    @Inject
     protected VMSnapshotDao _vmSnapshotDao;
     @Inject
     protected List<StoragePoolAllocator> _storagePoolAllocators;
     @Inject
     ConfigurationDao _configDao;
+    @Inject
+    VolumeDetailsDao _volDetailDao;
     @Inject
     ManagementServer _msServer;
     @Inject
@@ -372,6 +362,7 @@ public class VolumeManagerImpl extends ManagerBase implements VolumeManager {
             throws ResourceAllocationException {
         Account caller = UserContext.current().getCaller();
         long ownerId = cmd.getEntityOwnerId();
+        Account owner = _accountDao.findById(ownerId);
         Long zoneId = cmd.getZoneId();
         String volumeName = cmd.getVolumeName();
         String url = cmd.getUrl();
@@ -381,7 +372,7 @@ public class VolumeManagerImpl extends ManagerBase implements VolumeManager {
 
         validateVolume(caller, ownerId, zoneId, volumeName, url, format);
         
-        VolumeVO volume = persistVolume(caller, ownerId, zoneId, volumeName,
+        VolumeVO volume = persistVolume(owner, zoneId, volumeName,
                 url, cmd.getFormat());
         
         VolumeInfo vol = this.volFactory.getVolume(volume.getId());
@@ -714,7 +705,7 @@ public class VolumeManagerImpl extends ManagerBase implements VolumeManager {
         return UUID.randomUUID().toString();
     }
     
-    private VolumeVO persistVolume(Account caller, long ownerId, Long zoneId,
+    private VolumeVO persistVolume(Account owner, Long zoneId,
             String volumeName, String url, String format) {
 
         Transaction txn = Transaction.currentTxn();
@@ -725,17 +716,14 @@ public class VolumeManagerImpl extends ManagerBase implements VolumeManager {
         volume.setPoolId(null);
         volume.setDataCenterId(zoneId);
         volume.setPodId(null);
-        volume.setAccountId(ownerId);
-        volume.setDomainId(((caller == null) ? Domain.ROOT_DOMAIN : caller
-                .getDomainId()));
+        volume.setAccountId(owner.getAccountId());
+        volume.setDomainId(owner.getDomainId());
         long diskOfferingId = _diskOfferingDao.findByUniqueName(
                 "Cloud.com-Custom").getId();
         volume.setDiskOfferingId(diskOfferingId);
         // volume.setSize(size);
         volume.setInstanceId(null);
         volume.setUpdated(new Date());
-        volume.setDomainId((caller == null) ? Domain.ROOT_DOMAIN : caller
-                .getDomainId());
 
         volume = _volsDao.persist(volume);
         try {
@@ -817,6 +805,7 @@ public class VolumeManagerImpl extends ManagerBase implements VolumeManager {
         Account caller = UserContext.current().getCaller();
 
         long ownerId = cmd.getEntityOwnerId();
+        Boolean displayVolumeEnabled = cmd.getDisplayVolume();
 
         // permission check
         _accountMgr.checkAccess(caller, null, true,
@@ -922,6 +911,14 @@ public class VolumeManagerImpl extends ManagerBase implements VolumeManager {
             _accountMgr.checkAccess(caller, null, true, snapshotCheck);
         }
 
+        if(displayVolumeEnabled == null){
+            displayVolumeEnabled = true;
+        } else{
+            if(!_accountMgr.isRootAdmin(caller.getType())){
+                throw new PermissionDeniedException( "Cannot update parameter displayvolume, only admin permitted ");
+            }
+        }
+
         // Check that the resource limit for primary storage won't be exceeded
         _resourceLimitMgr.checkResourceLimit(_accountMgr.getAccount(ownerId), ResourceType.primary_storage,
                 new Long(size));
@@ -971,6 +968,7 @@ public class VolumeManagerImpl extends ManagerBase implements VolumeManager {
         volume.setUpdated(new Date());
         volume.setDomainId((caller == null) ? Domain.ROOT_DOMAIN : caller
                 .getDomainId());
+        volume.setDisplayVolume(displayVolumeEnabled);
         if (parentVolume != null) {
             volume.setTemplateId(parentVolume.getTemplateId());
         }  else {
@@ -1564,6 +1562,13 @@ public class VolumeManagerImpl extends ManagerBase implements VolumeManager {
             } else {
                 _volsDao.attachVolume(volume.getId(), vm.getId(), deviceId);
             }
+            // insert record for disk I/O statistics
+            VmDiskStatisticsVO diskstats = _vmDiskStatsDao.findBy(vm.getAccountId(), vm.getDataCenterId(),vm.getId(), volume.getId());
+            if (diskstats == null) {
+               diskstats = new VmDiskStatisticsVO(vm.getAccountId(), vm.getDataCenterId(),vm.getId(), volume.getId());
+               _vmDiskStatsDao.persist(diskstats);
+            }
+
             return _volsDao.findById(volume.getId());
         } else {
             if (answer != null) {
@@ -1731,6 +1736,8 @@ public class VolumeManagerImpl extends ManagerBase implements VolumeManager {
             }
         }
 
+        // reload the volume from db
+        volumeOnPrimaryStorage = volFactory.getVolume(volumeOnPrimaryStorage.getId());
         boolean moveVolumeNeeded = needMoveVolume(rootVolumeOfVm, volumeOnPrimaryStorage);
 
         if (moveVolumeNeeded) {
@@ -1780,6 +1787,23 @@ public class VolumeManagerImpl extends ManagerBase implements VolumeManager {
         newVol = sendAttachVolumeCommand(vm, newVol, deviceId);
         return newVol;
     }
+
+    @Override
+    public Volume updateVolume(UpdateVolumeCmd cmd){
+        Long volumeId = cmd.getId();
+        String path = cmd.getPath();
+
+        if(path == null){
+            throw new InvalidParameterValueException("Failed to update the volume as path was null");
+        }
+
+        VolumeVO volume = ApiDBUtils.findVolumeById(volumeId);
+        volume.setPath(path);
+        _volumeDao.update(volumeId, volume);
+
+        return volume;
+    }
+
 
     @Override
     @ActionEvent(eventType = EventTypes.EVENT_VOLUME_DETACH, eventDescription = "detaching volume", async = true)
@@ -1881,6 +1905,9 @@ public class VolumeManagerImpl extends ManagerBase implements VolumeManager {
             StoragePoolVO volumePool = _storagePoolDao.findById(volume
                     .getPoolId());
             cmd.setPoolUuid(volumePool.getUuid());
+
+            // Collect vm disk statistics from host before stopping Vm
+            _userVmMgr.collectVmDiskStatistics(vm);
 
             try {
                 answer = _agentMgr.send(vm.getHostId(), cmd);
@@ -2591,4 +2618,17 @@ public class VolumeManagerImpl extends ManagerBase implements VolumeManager {
         }
     }
 
+
+    @Override
+    public String getVmNameFromVolumeId(long volumeId) {
+        Long instanceId;
+        VolumeVO volume = _volsDao.findById(volumeId);
+        return getVmNameOnVolume(volume);
+    }
+
+    @Override
+    public String getStoragePoolOfVolume(long volumeId) {
+        VolumeVO vol = _volsDao.findById(volumeId);
+        return dataStoreMgr.getPrimaryDataStore(vol.getPoolId()).getUuid();
+    }
 }

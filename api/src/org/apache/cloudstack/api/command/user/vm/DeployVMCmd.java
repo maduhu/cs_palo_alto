@@ -51,6 +51,7 @@ import com.cloud.dc.DataCenter.NetworkType;
 import com.cloud.event.EventTypes;
 import com.cloud.exception.ConcurrentOperationException;
 import com.cloud.exception.InsufficientCapacityException;
+import com.cloud.exception.InsufficientServerCapacityException;
 import com.cloud.exception.InvalidParameterValueException;
 import com.cloud.exception.ResourceAllocationException;
 import com.cloud.exception.ResourceUnavailableException;
@@ -128,7 +129,7 @@ public class DeployVMCmd extends BaseAsyncCreateCmd {
     @Parameter(name=ApiConstants.HYPERVISOR, type=CommandType.STRING, description="the hypervisor on which to deploy the virtual machine")
     private String hypervisor;
 
-    @Parameter(name=ApiConstants.USER_DATA, type=CommandType.STRING, description="an optional binary data that can be sent to the virtual machine upon a successful deployment. This binary data must be base64 encoded before adding it to the request. Currently only HTTP GET is supported. Using HTTP GET (via querystring), you can send up to 2KB of data after base64 encoding.", length=2048)
+    @Parameter(name=ApiConstants.USER_DATA, type=CommandType.STRING, description="an optional binary data that can be sent to the virtual machine upon a successful deployment. This binary data must be base64 encoded before adding it to the request. Using HTTP GET (via querystring), you can send up to 2KB of data after base64 encoding. Using HTTP POST(via POST body), you can send up to 32K of data after base64 encoding.", length=32768)
     private String userData;
 
     @Parameter(name=ApiConstants.SSH_KEYPAIR, type=CommandType.STRING, description="name of the ssh key pair used to login to the virtual machine")
@@ -183,6 +184,8 @@ public class DeployVMCmd extends BaseAsyncCreateCmd {
             + "Mutually exclusive with affinitygroupids parameter")
     private List<String> affinityGroupNameList;
 
+    @Parameter(name=ApiConstants.DISPLAY_VM, type=CommandType.BOOLEAN, since="4.2", description="an optional field, whether to the display the vm to the end user or not.")
+    private Boolean displayVm;
 
     /////////////////////////////////////////////////////
     /////////////////// Accessors ///////////////////////
@@ -217,6 +220,10 @@ public class DeployVMCmd extends BaseAsyncCreateCmd {
 
     public HypervisorType getHypervisor() {
         return HypervisorType.getType(hypervisor);
+    }
+
+    public Boolean getDisplayVm() {
+        return displayVm;
     }
 
     public List<Long> getSecurityGroupIdList() {
@@ -312,8 +319,8 @@ public class DeployVMCmd extends BaseAsyncCreateCmd {
                         throw new InvalidParameterValueException("Unable to translate and find entity with networkId: " + ips.get("networkid"));
                     }
                 }
-                String requestedIp = (String) ips.get("ip");
-                String requestedIpv6 = (String) ips.get("ipv6");
+                String requestedIp = ips.get("ip");
+                String requestedIpv6 = ips.get("ipv6");
                 if (requestedIpv6 != null) {
                 	requestedIpv6 = requestedIpv6.toLowerCase();
                 }
@@ -418,9 +425,15 @@ public class DeployVMCmd extends BaseAsyncCreateCmd {
                 s_logger.warn("Exception: ", ex);
                 throw new ServerApiException(ApiErrorCode.INTERNAL_ERROR, ex.getMessage());
             } catch (InsufficientCapacityException ex) {
+                StringBuilder message = new StringBuilder(ex.getMessage());
+                if (ex instanceof InsufficientServerCapacityException) {
+                    if(((InsufficientServerCapacityException)ex).isAffinityApplied()){
+                        message.append(", Please check the affinity groups provided, there may not be sufficient capacity to follow them");
+                    }
+                }
                 s_logger.info(ex);
-                s_logger.info(ex.getMessage(), ex);
-                throw new ServerApiException(ApiErrorCode.INSUFFICIENT_CAPACITY_ERROR, ex.getMessage());
+                s_logger.info(message.toString(), ex);
+                throw new ServerApiException(ApiErrorCode.INSUFFICIENT_CAPACITY_ERROR, message.toString());
             }
         } else {
             result = _userVmService.getUserVm(getEntityId());
@@ -481,18 +494,20 @@ public class DeployVMCmd extends BaseAsyncCreateCmd {
                     throw new InvalidParameterValueException("Can't specify network Ids in Basic zone");
                 } else {
                     vm = _userVmService.createBasicSecurityGroupVirtualMachine(zone, serviceOffering, template, getSecurityGroupIdList(), owner, name,
-                                displayName, diskOfferingId, size, group, getHypervisor(), userData, sshKeyPairName, getIpToNetworkMap(), addrs, keyboard, getAffinityGroupIdList());
+                            displayName, diskOfferingId, size, group, getHypervisor(), this.getHttpMethod(), userData, sshKeyPairName, getIpToNetworkMap(), addrs, displayVm, keyboard, getAffinityGroupIdList());
                 }
             } else {
                 if (zone.isSecurityGroupEnabled())  {
                     vm = _userVmService.createAdvancedSecurityGroupVirtualMachine(zone, serviceOffering, template, getNetworkIds(), getSecurityGroupIdList(),
-                                owner, name, displayName, diskOfferingId, size, group, getHypervisor(), userData, sshKeyPairName, getIpToNetworkMap(), addrs, keyboard, getAffinityGroupIdList());
+                            owner, name, displayName, diskOfferingId, size, group, getHypervisor(), this.getHttpMethod(), userData, sshKeyPairName, getIpToNetworkMap(), addrs, displayVm, keyboard, getAffinityGroupIdList());
+
                 } else {
                     if (getSecurityGroupIdList() != null && !getSecurityGroupIdList().isEmpty()) {
                         throw new InvalidParameterValueException("Can't create vm with security groups; security group feature is not enabled per zone");
                     }
                     vm = _userVmService.createAdvancedVirtualMachine(zone, serviceOffering, template, getNetworkIds(), owner, name, displayName,
-                                diskOfferingId, size, group, getHypervisor(), userData, sshKeyPairName, getIpToNetworkMap(), addrs, keyboard, getAffinityGroupIdList());
+                            diskOfferingId, size, group, getHypervisor(), this.getHttpMethod(), userData, sshKeyPairName, getIpToNetworkMap(), addrs, displayVm, keyboard, getAffinityGroupIdList());
+
                 }
             }
 

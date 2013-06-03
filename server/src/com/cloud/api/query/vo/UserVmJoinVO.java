@@ -128,6 +128,9 @@ public class UserVmJoinVO extends BaseViewVO implements ControlledViewEntity {
     @Column(name="limit_cpu_use", updatable=true, nullable=true)
     private boolean limitCpuUse;
 
+    @Column(name="display_vm", updatable=true, nullable=false)
+    protected boolean displayVm = true;
+
     @Column(name="last_host_id", updatable=true, nullable=true)
     private Long lastHostId;
 
@@ -332,7 +335,7 @@ public class UserVmJoinVO extends BaseViewVO implements ControlledViewEntity {
     private String keypairName;
 
     @Column(name="job_id")
-    private long jobId;
+    private Long jobId;
 
     @Column(name="job_uuid")
     private String jobUuid;
@@ -780,6 +783,13 @@ public class UserVmJoinVO extends BaseViewVO implements ControlledViewEntity {
         limitCpuUse = value;
     }
 
+    public boolean isDisplayVm() {
+        return displayVm;
+    }
+
+    public void setDisplayVm(boolean displayVm) {
+        this.displayVm = displayVm;
+    }
 
     public String getDataCenterUuid() {
         return dataCenterUuid;
@@ -1608,14 +1618,14 @@ public class UserVmJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public long getJobId() {
+    public Long getJobId() {
         return jobId;
     }
 
 
 
 
-    public void setJobId(long jobId) {
+    public void setJobId(Long jobId) {
         this.jobId = jobId;
     }
 

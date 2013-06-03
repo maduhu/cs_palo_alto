@@ -38,6 +38,12 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-engine-storage</artifactId>
+      <version>4.2.0-SNAPSHOT</version>
+      <scope>compile</scope>
+    </dependency>
+    <dependency>
       <groupId>com.cloud.com.vmware</groupId>
       <artifactId>vmware-vim25</artifactId>
       <version>${cs.vmware.api.version}</version>
@@ -58,5 +64,15 @@
       <artifactId>wsdl4j</artifactId>
       <version>1.4</version>
     </dependency>
+      <dependency>
+          <groupId>junit</groupId>
+          <artifactId>junit</artifactId>
+          <version>4.10</version>
+      </dependency>
+      <dependency>
+          <groupId>org.mockito</groupId>
+          <artifactId>mockito-all</artifactId>
+          <version>1.9.5</version>
+      </dependency>
   </dependencies>
 </project>

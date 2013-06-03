@@ -104,6 +104,10 @@
               cloudStack.ui.notifications.add(
                 notification,
                 function(args) {
+                  if (listViewArgs.onActionComplete) {
+                    listViewArgs.onActionComplete();
+                  }
+                  
                   if ($item.is(':visible') && !isHeader) {
                     replaceItem(
                       $item,
@@ -175,6 +179,10 @@
 
                 if (additional && additional.success) additional.success(args);
 
+                if (listViewArgs.onActionComplete == true) {
+                  listViewArgs.onActionComplete();
+                }
+                
                 cloudStack.ui.notifications.add(
                   notification,
 
@@ -212,6 +220,10 @@
 
                     if (options.complete) {
                       options.complete(args);
+                    }
+
+                    if (listViewArgs.onActionComplete) {
+                      listViewArgs.onActionComplete();
                     }
                   },
 
@@ -734,6 +746,8 @@
   var makeActionIcons = function($td, actions, options) {
     options = options ? options : {};
     var allowedActions = options.allowedActions;
+    var $tr = $td.closest('tr');
+    var data = $tr && $tr.data('json-obj') ? $tr.data('json-obj') : null;
 
     $.each(actions, function(actionName, action) {
       if (actionName == 'add' || action.isHeader)
@@ -766,7 +780,9 @@
             .append(
               $('<input>').attr({
                 type: 'checkbox',
-                name: actionName
+                name: actionName,
+                checked: data && data._isSelected ?
+                  'checked' : false
               })
             )
             .attr({
@@ -775,6 +791,10 @@
             })
             .data('list-view-action-id', actionName)
         );
+
+        if ($td.find('input[type=checkbox]').is(':checked')) {
+          $tr.addClass('multi-edit-selected');
+        }
 
         return true;
       }
@@ -1179,6 +1199,10 @@
                       $quickViewTooltip.hide();
                     },
                     onActionComplete: function() {
+                      if (listViewArgs.onActionComplete) {
+                        listViewArgs.onActionComplete();
+                      }
+                      
                       $tr.removeClass('loading').find('td:last .loading').remove();
                       $quickViewTooltip.remove();
                     }
@@ -1679,6 +1703,9 @@
       return false;
     });		
 				
+    var tableHeight = $table.height();
+    var endTable = false;
+
     // Infinite scrolling event
     $listView.bind('scroll', function(event) {
       if (args.listView && args.listView.disableInfiniteScrolling) return false;
@@ -1689,7 +1716,7 @@
         var loadMoreData = $listView.scrollTop() >= ($table.height() - $listView.height()) - $listView.height() / 4;
         var context = $listView.data('view-args').context;
 
-        if (loadMoreData) {
+        if (loadMoreData && !endTable) {
           page = page + 1;
 					
 					var filterBy = {
@@ -1717,6 +1744,7 @@
             reorder: listViewData.reorder,
             detailView: listViewData.detailView
           });
+          $table.height() == tableHeight ? endTable = true : tableHeight = $table.height();
         }
       }, 500);
 
@@ -1785,6 +1813,8 @@
             context: detailViewArgs.context
           });
         }
+
+        detailViewArgs.data.onActionComplete = listViewArgs.onActionComplete;
 
         createDetailView(
           detailViewArgs,
@@ -1861,7 +1891,7 @@
     if (!options) options = {};
 
     var viewArgs = listView.data('view-args');
-    var listViewArgs = viewArgs.listView ? viewArgs.listView : viewArgs;
+    var listViewArgs = $.isPlainObject(viewArgs.listView) ? viewArgs.listView : viewArgs;
     var targetArgs = listViewArgs.activeSection ? listViewArgs.sections[
       listViewArgs.activeSection
     ].listView : listViewArgs;
@@ -1891,7 +1921,7 @@
     var $newRow;
     var $listView = $row.closest('.list-view');
     var viewArgs = $listView.data('view-args');
-    var listViewArgs = viewArgs.listView ? viewArgs.listView : viewArgs;
+    var listViewArgs = $.isPlainObject(viewArgs.listView) ? viewArgs.listView : viewArgs;
     var targetArgs = listViewArgs.activeSection ? listViewArgs.sections[
       listViewArgs.activeSection
     ].listView : listViewArgs;

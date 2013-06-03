@@ -16,30 +16,51 @@
 // under the License.
 package com.cloud.api;
 
-import com.cloud.api.response.ApiResponseSerializer;
-import com.cloud.async.AsyncCommandQueued;
-import com.cloud.async.AsyncJob;
-import com.cloud.async.AsyncJobManager;
-import com.cloud.async.AsyncJobVO;
-import com.cloud.configuration.Config;
-import com.cloud.configuration.ConfigurationVO;
-import com.cloud.configuration.dao.ConfigurationDao;
-import com.cloud.domain.Domain;
-import com.cloud.domain.DomainVO;
-import com.cloud.event.ActionEventUtils;
-import com.cloud.exception.*;
-import com.cloud.user.*;
-import com.cloud.utils.NumbersUtil;
-import com.cloud.utils.Pair;
-import com.cloud.utils.StringUtils;
-import com.cloud.utils.component.ComponentContext;
-import com.cloud.utils.component.PluggableService;
-import com.cloud.utils.concurrency.NamedThreadFactory;
-import com.cloud.utils.db.SearchCriteria;
-import com.cloud.utils.db.Transaction;
-import com.cloud.utils.exception.CloudRuntimeException;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URLEncoder;
+import java.security.SecureRandom;
+import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TimeZone;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+
+import javax.annotation.PostConstruct;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+import javax.inject.Inject;
+import javax.naming.ConfigurationException;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+
 import org.apache.cloudstack.acl.APIChecker;
-import org.apache.cloudstack.api.*;
+import org.apache.cloudstack.api.APICommand;
+import org.apache.cloudstack.api.ApiErrorCode;
+import org.apache.cloudstack.api.BaseAsyncCmd;
+import org.apache.cloudstack.api.BaseAsyncCreateCmd;
+import org.apache.cloudstack.api.BaseCmd;
+import org.apache.cloudstack.api.BaseListCmd;
+import org.apache.cloudstack.api.ResponseObject;
+import org.apache.cloudstack.api.ServerApiException;
 import org.apache.cloudstack.api.command.admin.host.ListHostsCmd;
 import org.apache.cloudstack.api.command.admin.router.ListRoutersCmd;
 import org.apache.cloudstack.api.command.admin.storage.ListStoragePoolsCmd;
@@ -59,9 +80,14 @@ import org.apache.cloudstack.api.command.user.volume.ListVolumesCmd;
 import org.apache.cloudstack.api.command.user.zone.ListZonesByCmd;
 import org.apache.cloudstack.api.response.ExceptionResponse;
 import org.apache.cloudstack.api.response.ListResponse;
-import org.apache.cloudstack.region.RegionManager;
 import org.apache.commons.codec.binary.Base64;
-import org.apache.http.*;
+import org.apache.http.ConnectionClosedException;
+import org.apache.http.HttpException;
+import org.apache.http.HttpRequest;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpServerConnection;
+import org.apache.http.HttpStatus;
+import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URLEncodedUtils;
 import org.apache.http.entity.BasicHttpEntity;
 import org.apache.http.impl.DefaultHttpResponseFactory;
@@ -72,32 +98,59 @@ import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.CoreConnectionPNames;
 import org.apache.http.params.CoreProtocolPNames;
 import org.apache.http.params.HttpParams;
-import org.apache.http.protocol.*;
+import org.apache.http.protocol.BasicHttpContext;
+import org.apache.http.protocol.BasicHttpProcessor;
+import org.apache.http.protocol.HttpContext;
+import org.apache.http.protocol.HttpRequestHandler;
+import org.apache.http.protocol.HttpRequestHandlerRegistry;
+import org.apache.http.protocol.HttpService;
+import org.apache.http.protocol.ResponseConnControl;
+import org.apache.http.protocol.ResponseContent;
+import org.apache.http.protocol.ResponseDate;
+import org.apache.http.protocol.ResponseServer;
 import org.apache.log4j.Logger;
 import org.springframework.stereotype.Component;
 
-import javax.annotation.PostConstruct;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import javax.inject.Inject;
-import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.io.InterruptedIOException;
-import java.net.*;
-import java.security.SecureRandom;
-import java.text.DateFormat;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import com.cloud.api.response.ApiResponseSerializer;
+import com.cloud.async.AsyncCommandQueued;
+import com.cloud.async.AsyncJob;
+import com.cloud.async.AsyncJobManager;
+import com.cloud.async.AsyncJobVO;
+import com.cloud.configuration.Config;
+import com.cloud.configuration.ConfigurationVO;
+import com.cloud.configuration.dao.ConfigurationDao;
+import com.cloud.domain.Domain;
+import com.cloud.domain.DomainVO;
+import com.cloud.event.ActionEventUtils;
+import com.cloud.exception.AccountLimitException;
+import com.cloud.exception.CloudAuthenticationException;
+import com.cloud.exception.InsufficientCapacityException;
+import com.cloud.exception.InvalidParameterValueException;
+import com.cloud.exception.PermissionDeniedException;
+import com.cloud.exception.RequestLimitException;
+import com.cloud.exception.ResourceAllocationException;
+import com.cloud.exception.ResourceUnavailableException;
+import com.cloud.user.Account;
+import com.cloud.user.AccountManager;
+import com.cloud.user.DomainManager;
+import com.cloud.user.User;
+import com.cloud.user.UserAccount;
+import com.cloud.user.UserContext;
+import com.cloud.user.UserVO;
+import com.cloud.utils.NumbersUtil;
+import com.cloud.utils.Pair;
+import com.cloud.utils.StringUtils;
+import com.cloud.utils.component.ComponentContext;
+import com.cloud.utils.component.ManagerBase;
+import com.cloud.utils.component.PluggableService;
+import com.cloud.utils.concurrency.NamedThreadFactory;
+import com.cloud.utils.db.SearchCriteria;
+import com.cloud.utils.db.Transaction;
+import com.cloud.utils.exception.CloudRuntimeException;
+import com.cloud.utils.exception.ExceptionProxyObject;
 
 @Component
-public class ApiServer implements HttpRequestHandler, ApiServerService {
+public class ApiServer extends ManagerBase implements HttpRequestHandler, ApiServerService {
     private static final Logger s_logger = Logger.getLogger(ApiServer.class.getName());
     private static final Logger s_accessLogger = Logger.getLogger("apiserver." + ApiServer.class.getName());
 
@@ -113,8 +166,6 @@ public class ApiServer implements HttpRequestHandler, ApiServerService {
     @Inject List<PluggableService> _pluggableServices;
     @Inject List<APIChecker> _apiAccessCheckers;
 
-    @Inject private RegionManager _regionMgr = null;
-
     private static int _workerCount = 0;
     private static ApiServer s_instance = null;
     private static final DateFormat _dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
@@ -128,17 +179,23 @@ public class ApiServer implements HttpRequestHandler, ApiServerService {
     @PostConstruct
     void initComponent() {
         s_instance = this;
-        init();
     }
 
     public static ApiServer getInstance() {
         return s_instance;
     }
-
+    
+	@Override
+	public boolean configure(String name, Map<String, Object> params)
+			throws ConfigurationException {
+		init();
+		return true;
+	}
+ 
     public void init() {
         Integer apiPort = null; // api port, null by default
         SearchCriteria<ConfigurationVO> sc = _configDao.createSearchCriteria();
-        sc.addAnd("name", SearchCriteria.Op.EQ, "integration.api.port");
+        sc.addAnd("name", SearchCriteria.Op.EQ, Config.IntegrationAPIPort.key());
         List<ConfigurationVO> values = _configDao.search(sc, null);
         if ((values != null) && (values.size() > 0)) {
             ConfigurationVO apiPortConfig = values.get(0);
@@ -151,7 +208,7 @@ public class ApiServer implements HttpRequestHandler, ApiServerService {
         String strSnapshotLimit = configs.get(Config.ConcurrentSnapshotsThresholdPerHost.key());
         if (strSnapshotLimit != null) {
             Long snapshotLimit = NumbersUtil.parseLong(strSnapshotLimit, 1L);
-            if (snapshotLimit <= 0) {
+            if (snapshotLimit.longValue() <= 0) {
                 s_logger.debug("Global config parameter " + Config.ConcurrentSnapshotsThresholdPerHost.toString()
                         + " is less or equal 0; defaulting to unlimited");
             } else {
@@ -227,6 +284,9 @@ public class ApiServer implements HttpRequestHandler, ApiServerService {
                 parameterMap.put(param.getName(), new String[] { param.getValue() });
             }
 
+	    // Get the type of http method being used.
+            parameterMap.put("httpmethod", new String[] { request.getRequestLine().getMethod() });
+
             // Check responseType, if not among valid types, fallback to JSON
             if (!(responseType.equals(BaseCmd.RESPONSE_TYPE_JSON) || responseType.equals(BaseCmd.RESPONSE_TYPE_XML)))
                 responseType = BaseCmd.RESPONSE_TYPE_XML;
@@ -254,10 +314,12 @@ public class ApiServer implements HttpRequestHandler, ApiServerService {
         }
     }
 
+    @Override
     @SuppressWarnings("rawtypes")
     public String handleRequest(Map params, String responseType, StringBuffer auditTrailSb) throws ServerApiException {
         String response = null;
         String[] command = null;
+
         try {
             command = (String[]) params.get("command");
             if (command == null) {
@@ -299,6 +361,7 @@ public class ApiServer implements HttpRequestHandler, ApiServerService {
                     cmdObj.configure();
                     cmdObj.setFullUrlParams(paramMap);
                     cmdObj.setResponseType(responseType);
+		    cmdObj.setHttpMethod(paramMap.get("httpmethod").toString());
 
                     // This is where the command is either serialized, or directly dispatched
                     response = queueCommand(cmdObj, paramMap);
@@ -322,9 +385,16 @@ public class ApiServer implements HttpRequestHandler, ApiServerService {
             throw new ServerApiException(ApiErrorCode.PARAM_ERROR, ex.getMessage(), ex);
         }
         catch (PermissionDeniedException ex){
-            ArrayList<String> idList = ex.getIdProxyList();
+            ArrayList<ExceptionProxyObject> idList = ex.getIdProxyList();
             if (idList != null) {
-                s_logger.info("PermissionDenied: " + ex.getMessage() + " on uuids: [" + StringUtils.listToCsvTags(idList) + "]");
+                StringBuffer buf = new StringBuffer();
+                for (ExceptionProxyObject obj : idList){
+                    buf.append(obj.getDescription());
+                    buf.append(":");
+                    buf.append(obj.getUuid());
+                    buf.append(" ");
+                }
+                s_logger.info("PermissionDenied: " + ex.getMessage() + " on objs: [" + buf.toString() + "]");
             } else {
                 s_logger.info("PermissionDenied: " + ex.getMessage());
             }
@@ -481,6 +551,7 @@ public class ApiServer implements HttpRequestHandler, ApiServerService {
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void buildAsyncListResponse(BaseListCmd command, Account account) {
         List<ResponseObject> responses = ((ListResponse) command.getResponseObject()).getResponses();
         if (responses != null && responses.size() > 0) {
@@ -530,6 +601,7 @@ public class ApiServer implements HttpRequestHandler, ApiServerService {
         }
     }
 
+    @Override
     public boolean verifyRequest(Map<String, Object[]> requestParameters, Long userId) throws ServerApiException {
         try {
             String apiKey = null;
@@ -692,10 +764,12 @@ public class ApiServer implements HttpRequestHandler, ApiServerService {
         return false;
     }
 
+    @Override
     public Long fetchDomainId(String domainUUID) {
         return _domainMgr.getDomain(domainUUID).getId();
     }
 
+    @Override
     public void loginUser(HttpSession session, String username, String password, Long domainId, String domainPath, String loginIpAddress ,Map<String, Object[]> requestParameters) throws CloudAuthenticationException {
         // We will always use domainId first. If that does not exist, we will use domain name. If THAT doesn't exist
         // we will default to ROOT
@@ -770,11 +844,13 @@ public class ApiServer implements HttpRequestHandler, ApiServerService {
         throw new CloudAuthenticationException("Failed to authenticate user " + username + " in domain " + domainId + "; please provide valid credentials");
     }
 
+    @Override
     public void logoutUser(long userId) {
-        _accountMgr.logoutUser(Long.valueOf(userId));
+        _accountMgr.logoutUser(userId);
         return;
     }
 
+    @Override
     public boolean verifyUser(Long userId) {
         User user = _accountMgr.getUserIncludingRemoved(userId);
         Account account = null;
@@ -931,6 +1007,7 @@ public class ApiServer implements HttpRequestHandler, ApiServerService {
         }
     }
 
+    @Override
     public String getSerializedApiError(int errorCode, String errorText, Map<String, Object[]> apiCommandParams, String responseType) {
         String responseName = null;
         Class<?> cmdClass = null;
@@ -965,6 +1042,7 @@ public class ApiServer implements HttpRequestHandler, ApiServerService {
         return responseText;
     }
 
+    @Override
     public String getSerializedApiError(ServerApiException ex, Map<String, Object[]> apiCommandParams, String responseType) {
         String responseName = null;
         Class<?> cmdClass = null;
@@ -995,7 +1073,7 @@ public class ApiServer implements HttpRequestHandler, ApiServerService {
             apiResponse.setErrorCode(ex.getErrorCode().getHttpCode());
             apiResponse.setErrorText(ex.getDescription());
             apiResponse.setResponseName(responseName);
-            ArrayList<String> idList = ex.getIdProxyList();
+            ArrayList<ExceptionProxyObject> idList = ex.getIdProxyList();
             if (idList != null) {
                 for (int i=0; i < idList.size(); i++) {
                     apiResponse.addProxyObject(idList.get(i));

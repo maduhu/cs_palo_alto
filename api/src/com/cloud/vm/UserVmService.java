@@ -21,9 +21,22 @@ import java.util.Map;
 
 import javax.naming.InsufficientResourcesException;
 
+import org.apache.cloudstack.api.BaseCmd.HTTPMethod;
 import org.apache.cloudstack.api.command.admin.vm.AssignVMCmd;
 import org.apache.cloudstack.api.command.admin.vm.RecoverVMCmd;
-import org.apache.cloudstack.api.command.user.vm.*;
+import org.apache.cloudstack.api.command.user.vm.AddNicToVMCmd;
+import org.apache.cloudstack.api.command.user.vm.DeployVMCmd;
+import org.apache.cloudstack.api.command.user.vm.DestroyVMCmd;
+import org.apache.cloudstack.api.command.user.vm.RebootVMCmd;
+import org.apache.cloudstack.api.command.user.vm.RemoveNicFromVMCmd;
+import org.apache.cloudstack.api.command.user.vm.ResetVMPasswordCmd;
+import org.apache.cloudstack.api.command.user.vm.ResetVMSSHKeyCmd;
+import org.apache.cloudstack.api.command.user.vm.RestoreVMCmd;
+import org.apache.cloudstack.api.command.user.vm.ScaleVMCmd;
+import org.apache.cloudstack.api.command.user.vm.StartVMCmd;
+import org.apache.cloudstack.api.command.user.vm.UpdateDefaultNicForVMCmd;
+import org.apache.cloudstack.api.command.user.vm.UpdateVMCmd;
+import org.apache.cloudstack.api.command.user.vm.UpgradeVMCmd;
 import org.apache.cloudstack.api.command.user.vmgroup.CreateVMGroupCmd;
 import org.apache.cloudstack.api.command.user.vmgroup.DeleteVMGroupCmd;
 import com.cloud.dc.DataCenter;
@@ -164,7 +177,10 @@ public interface UserVmService {
      *            TODO
      * @param defaultIp
      *            TODO
+     * @param displayVm
+     *            - Boolean flag whether to the display the vm to the end user or not
      * @param affinityGroupIdList
+     *
      * @param accountName
      *            - an optional account for the virtual machine. Must be used
      *            with domainId
@@ -184,9 +200,9 @@ public interface UserVmService {
      * @throws InsufficientResourcesException
      */
     UserVm createBasicSecurityGroupVirtualMachine(DataCenter zone, ServiceOffering serviceOffering, VirtualMachineTemplate template, List<Long> securityGroupIdList, Account owner, String hostName,
-            String displayName, Long diskOfferingId, Long diskSize, String group, HypervisorType hypervisor,
-            String userData, String sshKeyPair, Map<Long, IpAddresses> requestedIps, IpAddresses defaultIp,
-            String keyboard, List<Long> affinityGroupIdList)
+        String displayName, Long diskOfferingId, Long diskSize, String group, HypervisorType hypervisor,
+	    HTTPMethod httpmethod, String userData, String sshKeyPair, Map<Long, IpAddresses> requestedIps,
+	    IpAddresses defaultIp, Boolean displayVm, String keyboard, List<Long> affinityGroupIdList)
             throws InsufficientCapacityException, ConcurrentOperationException, ResourceUnavailableException, StorageUnavailableException, ResourceAllocationException;
 
     /**
@@ -237,7 +253,10 @@ public interface UserVmService {
      *            TODO
      * @param defaultIps
      *            TODO
+     * @param displayVm
+     *            - Boolean flag whether to the display the vm to the end user or not
      * @param affinityGroupIdList
+     *
      * @param accountName
      *            - an optional account for the virtual machine. Must be used
      *            with domainId
@@ -257,8 +276,8 @@ public interface UserVmService {
      * @throws InsufficientResourcesException
      */
     UserVm createAdvancedSecurityGroupVirtualMachine(DataCenter zone, ServiceOffering serviceOffering, VirtualMachineTemplate template, List<Long> networkIdList, List<Long> securityGroupIdList,
-            Account owner, String hostName, String displayName, Long diskOfferingId, Long diskSize, String group, HypervisorType hypervisor, String userData, String sshKeyPair, Map<Long, IpAddresses> requestedIps,
-            IpAddresses defaultIps, String keyboard, List<Long> affinityGroupIdList)
+        Account owner, String hostName, String displayName, Long diskOfferingId, Long diskSize, String group, HypervisorType hypervisor, HTTPMethod httpmethod, String userData, String sshKeyPair,
+	    Map<Long, IpAddresses> requestedIps, IpAddresses defaultIps, Boolean displayVm, String keyboard, List<Long> affinityGroupIdList)
             throws InsufficientCapacityException, ConcurrentOperationException, ResourceUnavailableException, StorageUnavailableException, ResourceAllocationException;
 
     /**
@@ -306,7 +325,10 @@ public interface UserVmService {
      *            TODO
      * @param defaultIps
      *            TODO
+     * @param displayVm
+     *            - Boolean flag whether to the display the vm to the end user or not
      * @param affinityGroupIdList
+     *
      * @param accountName
      *            - an optional account for the virtual machine. Must be used
      *            with domainId
@@ -327,8 +349,9 @@ public interface UserVmService {
      */
     UserVm createAdvancedVirtualMachine(DataCenter zone, ServiceOffering serviceOffering, VirtualMachineTemplate template, List<Long> networkIdList, Account owner, String hostName,
             String displayName, Long diskOfferingId, Long diskSize, String group, HypervisorType hypervisor,
-            String userData, String sshKeyPair, Map<Long, IpAddresses> requestedIps, IpAddresses defaultIps,
-            String keyboard, List<Long> affinityGroupIdList)
+	        HTTPMethod httpmethod, String userData, String sshKeyPair, Map<Long, IpAddresses> requestedIps,
+	        IpAddresses defaultIps, Boolean displayVm, String keyboard, List<Long> affinityGroupIdList)
+
             throws InsufficientCapacityException, ConcurrentOperationException, ResourceUnavailableException, StorageUnavailableException, ResourceAllocationException;
 
     /**
@@ -436,8 +459,8 @@ public interface UserVmService {
 
     VirtualMachine vmStorageMigration(Long vmId, StoragePool destPool);
 
-    UserVm restoreVM(RestoreVMCmd cmd);
+    UserVm restoreVM(RestoreVMCmd cmd) throws InsufficientCapacityException, ResourceUnavailableException;
 
-    UserVm upgradeVirtualMachine(ScaleVMCmd scaleVMCmd) throws ResourceUnavailableException, ConcurrentOperationException, ManagementServerException, VirtualMachineMigrationException;
+    UserVm upgradeVirtualMachine(ScaleVMCmd cmd) throws ResourceUnavailableException, ConcurrentOperationException, ManagementServerException, VirtualMachineMigrationException;
 
 }

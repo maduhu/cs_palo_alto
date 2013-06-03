@@ -63,7 +63,7 @@ class Services:
                                     "displaytext": "Tiny Instance",
                                     "cpunumber": 1,
                                     "cpuspeed": 100, # in MHz
-                                    "memory": 64, # In MBs
+                                    "memory": 128, # In MBs
                         },
                         "disk_offering": {
                                     "displaytext": "Tiny Disk Offering",
@@ -193,7 +193,7 @@ class TestProjectLimits(cloudstackTestCase):
         #    Also, verify resource limits for the project are independent of
         #    account resource limits
         # 3. Increase Projects Resources limits above domains limit. Verify
-        #    project can’t have more resources than domain level limit allows.
+        #    project can't have more resources than domain level limit allows.
         # 4. Create Resource more than its set limit for a project. Verify
         #    resource allocation should fail giving proper message
 
@@ -201,8 +201,8 @@ class TestProjectLimits(cloudstackTestCase):
         project = Project.create(
                                  self.apiclient,
                                  self.services["project"],
-                                 account=self.admin.account.name,
-                                 domainid=self.admin.account.domainid
+                                 account=self.admin.name,
+                                 domainid=self.admin.domainid
                                  )
         # Cleanup created project at end of test
         self.cleanup.append(project)
@@ -312,6 +312,7 @@ class TestProjectLimits(cloudstackTestCase):
                                         max=2
                                       )
             with self.assertRaises(Exception):
+                max_value = 3
                 self.debug(
                     "Attempting to update project: %s resource limit to: %s" % (
                                                                 project.id,
@@ -321,7 +322,7 @@ class TestProjectLimits(cloudstackTestCase):
                 update_resource_limit(
                                         self.apiclient,
                                         resource.resourcetype,
-                                        max=3,
+                                        max=max_value,
                                         projectid=project.id
                                       )
         return
@@ -342,8 +343,8 @@ class TestProjectLimits(cloudstackTestCase):
         project = Project.create(
                                  self.apiclient,
                                  self.services["project"],
-                                 account=self.admin.account.name,
-                                 domainid=self.admin.account.domainid
+                                 account=self.admin.name,
+                                 domainid=self.admin.domainid
                                  )
         # Cleanup created project at end of test
         self.cleanup.append(project)
@@ -429,14 +430,14 @@ class TestProjectLimits(cloudstackTestCase):
                          )
 
         self.debug("Adding %s user to project: %s" % (
-                                                self.user.account.name,
+                                                self.user.name,
                                                 project.name
                                                 ))
 
         # Add user to the project
         project.addAccount(
                            self.apiclient,
-                           self.user.account.name,
+                           self.user.name,
                            )
 
         # Get the resource limits for domain
@@ -459,14 +460,14 @@ class TestProjectLimits(cloudstackTestCase):
             #with self.assertRaises(Exception):
             self.debug(
                     "Attempting to update resource limit by user: %s" % (
-                                                        self.user.account.name
+                                                        self.user.name
                                                         ))
             # Update project resource limits to 3
             update_resource_limit(
                                     self.apiclient,
                                     resource.resourcetype,
-                                    account=self.user.account.name,
-                                    domainid=self.user.account.domainid,
+                                    account=self.user.name,
+                                    domainid=self.user.domainid,
                                     max=3,
                                     projectid=project.id
                                 )
@@ -505,10 +506,10 @@ class TestResourceLimitsProject(cloudstackTestCase):
         cls.project = Project.create(
                                  cls.api_client,
                                  cls.services["project"],
-                                 account=cls.account.account.name,
-                                 domainid=cls.account.account.domainid
+                                 account=cls.account.name,
+                                 domainid=cls.account.domainid
                                  )
-        cls.services["account"] = cls.account.account.name
+        cls.services["account"] = cls.account.name
 
         # Create Service offering and disk offerings etc
         cls.service_offering = ServiceOffering.create(
@@ -720,7 +721,7 @@ class TestResourceLimitsProject(cloudstackTestCase):
                               projectid=self.project.id
                               )
 
-        self.debug("Deploying VM for account: %s" % self.account.account.name)
+        self.debug("Deploying VM for account: %s" % self.account.name)
         virtual_machine_1 = VirtualMachine.create(
                                 self.apiclient,
                                 self.services["server"],
@@ -843,7 +844,7 @@ class TestResourceLimitsProject(cloudstackTestCase):
                               )
         self.debug(
             "Updating template resource limits for domain: %s" %
-                                        self.account.account.domainid)
+                                        self.account.domainid)
         # Set usage_vm=1 for Account 1
         update_resource_limit(
                               self.apiclient,
@@ -852,7 +853,7 @@ class TestResourceLimitsProject(cloudstackTestCase):
                               projectid=self.project.id
                               )
 
-        self.debug("Deploying VM for account: %s" % self.account.account.name)
+        self.debug("Deploying VM for account: %s" % self.account.name)
         virtual_machine_1 = VirtualMachine.create(
                                 self.apiclient,
                                 self.services["server"],
@@ -994,13 +995,13 @@ class TestMaxProjectNetworks(cloudstackTestCase):
         # 3. Create network should fail
 
         self.debug("Creating project with '%s' as admin" %
-                                            self.account.account.name)
+                                            self.account.name)
         # Create project as a domain admin
         project = Project.create(
                                  self.apiclient,
                                  self.services["project"],
-                                 account=self.account.account.name,
-                                 domainid=self.account.account.domainid
+                                 account=self.account.name,
+                                 domainid=self.account.domainid
                                  )
         # Cleanup created project at end of test
         self.cleanup.append(project)

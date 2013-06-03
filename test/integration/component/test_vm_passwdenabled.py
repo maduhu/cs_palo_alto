@@ -83,15 +83,15 @@ class TestVMPasswordEnabled(cloudstackTestCase):
         # Get Zone, Domain and templates
         domain = get_domain(cls.api_client, cls.services)
         zone = get_zone(cls.api_client, cls.services)
-        cls.services['mode'] = cls.zone.networktype
+        cls.services['mode'] = zone.networktype
         template = get_template(
             cls.api_client,
             zone.id,
             cls.services["ostype"]
         )
         # Set Zones and disk offerings
-        cls.services["small"]["zoneid"] = zone.id
-        cls.services["small"]["template"] = template.id
+        cls.services["service_offerings"]["small"]["zoneid"] = zone.id
+        cls.services["service_offerings"]["small"]["template"] = template.id
 
         # Create VMs, NAT Rules etc
         cls.account = Account.create(
@@ -108,8 +108,8 @@ class TestVMPasswordEnabled(cloudstackTestCase):
         cls.virtual_machine = VirtualMachine.create(
             cls.api_client,
             cls.services["small"],
-            accountid=cls.account.account.name,
-            domainid=cls.account.account.domainid,
+            accountid=cls.account.name,
+            domainid=cls.account.domainid,
             serviceofferingid=cls.small_offering.id,
             mode=cls.services["mode"]
         )
@@ -159,8 +159,8 @@ class TestVMPasswordEnabled(cloudstackTestCase):
             cls.api_client,
             cls.services["template"],
             cls.volume.id,
-            account=cls.account.account.name,
-            domainid=cls.account.account.domainid
+            account=cls.account.name,
+            domainid=cls.account.domainid
         )
         # Delete the VM - No longer needed
         cls.virtual_machine.delete(cls.api_client)
@@ -169,8 +169,8 @@ class TestVMPasswordEnabled(cloudstackTestCase):
         cls.vm = VirtualMachine.create(
             cls.api_client,
             cls.services["small"],
-            accountid=cls.account.account.name,
-            domainid=cls.account.account.domainid,
+            accountid=cls.account.name,
+            domainid=cls.account.domainid,
             serviceofferingid=cls.small_offering.id,
             mode=cls.services["mode"]
         )

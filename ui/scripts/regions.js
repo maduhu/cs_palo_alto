@@ -116,7 +116,22 @@
           },
           detailView: {
             name: 'Region details',
-            viewAll: { path: 'regions.GSLB', label: 'GSLB' },
+            viewAll: [
+              { 
+                path: 'regions.GSLB', 
+                label: 'GSLB' 
+              },
+              { 
+                path: 'regions.portableIpRanges', 
+                label: 'Portable IP',
+                preFilter: function(args) {                  
+                  if (isAdmin())
+                    return true;
+
+                  return false;
+                }
+              }
+            ],
             actions: {
               edit: {
                 label: 'label.edit.region',
@@ -382,7 +397,7 @@
 										
 					detailView: {
             name: 'GSLB details',
-            viewAll: { path: 'regions.lbUnderGSLB', label: 'load balancer rules' },
+            viewAll: { path: 'regions.lbUnderGSLB', label: 'assigned load balancing' },
             actions: {              
 							remove: {
                 label: 'delete GSLB',
@@ -451,78 +466,286 @@
 					}					
         }
       },
-						
-			lbUnderGSLB: {
-        id: 'lbUnderGSLB',
+					      
+      portableIpRanges: {
+        id: 'portableIpRanges',
         type: 'select',
-        title: 'assigned load balancer rules',
+        title: 'Portable IP Ranges',
         listView: {
-          section: 'lbUnderGSLB',
-          id: 'lbUnderGSLB',
-          label: 'assigned load balancer rules',
+          id: 'portableIpRanges',
+          label: 'Portable IP Ranges',
           fields: {
-            name: { label: 'label.name' },
-            publicport: { label: 'label.public.port' },
-						privateport: { label: 'label.private.port' },
-						algorithm: { label: 'label.algorithm' }
-          },					
-					dataProvider: function(args) {					
-						var data = {
-						  globalloadbalancerruleid: args.context.GSLB[0].id,
-						  listAll: true
-						};
+            startip: { label: 'label.start.IP' },
+            endip: { label: 'label.end.IP' },
+            gateway: { label: 'label.gateway' },
+            netmask: { label: 'label.netmask' },
+            vlan: { label: 'label.vlan' }                    
+          },
+          dataProvider: function(args) {            
             $.ajax({
-              url: createURL('listLoadBalancerRules'),
-							data: data,
-              success: function(json) {
-                var items = json.listloadbalancerrulesresponse.loadbalancerrule;
-                args.response.success({								 
+              url: createURL('listPortableIpRanges'),
+              data: {
+                regionid: args.context.regions[0].id
+              },
+              success: function(json) {                
+                var items = json.listportableipresponse.portableiprange;
+                args.response.success({                
                   data: items
                 });
+              },
+              error: function(json) {
+                args.response.error(parseXMLHttpResponse(json));
               }
             });
-          },	        
-					actions: {            
+          },
+          actions: {
             add: {
-              label: 'assign load balancer rule to GSLB',
-              messages: {
-                confirm: function(args) {
-                  return 'Please confirm you want to assign load balancer rule to GSLB';
-                },
+              label: 'Add Portable IP Range',
+              messages: {               
                 notification: function(args) {
-                  return 'assign load balancer rule to GSLB';
+                  return 'Add Portable IP Range';
                 }
               },
               createForm: {
-                title: 'assign load balancer rule to GSLB',              
+                title: 'Add Portable IP Range',
+                fields: {
+                  startip: {
+                    label: 'label.start.IP',                    
+                    validation: { required: true }
+                  },
+                  endip: {
+                    label: 'label.end.IP',                    
+                    validation: { required: true }
+                  },
+                  gateway: {
+                    label: 'label.gateway',                    
+                    validation: { required: true }
+                  },
+                  netmask: {
+                    label: 'label.netmask',                    
+                    validation: { required: true }
+                  },
+                  vlan: {
+                    label: 'label.vlan',                    
+                    validation: { required: false }
+                  }
+                }                
+              },     
+              action: function(args) {                
+                var data = {
+                  regionid: args.context.regions[0].id,
+                  startip: args.data.startip,
+                  endip: args.data.endip,
+                  gateway: args.data.gateway,
+                  netmask: args.data.netmask                      
+                };       
+                if(args.data.vlan != null && args.data.vlan.length > 0) {
+                  $.extend(data, {
+                    vlan: args.data.vlan
+                  })
+                }                  
+                $.ajax({
+                  url: createURL('createPortableIpRange'),
+                  data: data,                 
+                  success: function(json) {             
+                    var jid = json.createportableiprangeresponse.jobid;
+                    args.response.success({
+                      _custom: { 
+                        jobId: jid,
+                        getUpdatedItem: function(json) {                          
+                          return json.queryasyncjobresultresponse.jobresult.portableiprange;
+                        }
+                      }
+                    });                    
+                  },
+                  error: function(data) {
+                    args.response.error(parseXMLHttpResponse(data));
+                  }
+                });
+              },
+              notification: {
+                poll: pollAsyncJobResult
+              }    
+            }
+          },
+          
+          detailView: {
+            name: 'Portable IP Range details',
+            actions: {              
+              remove: {
+                label: 'Delete Portable IP Range',
+                messages: {
+                  confirm: function(args) {
+                    return 'Please confirm you want to delete Portable IP Range';
+                  },
+                  notification: function(args) {
+                    return 'Delete Portable IP Range';
+                  }
+                },
+                action: function(args) {           
+                  var data = {
+                    id: args.context.portableIpRanges[0].id
+                  };                
+                  $.ajax({
+                    url: createURL('deletePortableIpRange'),
+                    data: data,
+                    async: true,
+                    success: function(json) {                
+                      var jid = json.deleteportablepublicipresponse.jobid;
+                      args.response.success({
+                        _custom: { 
+                          jobId: jid
+                        }
+                      });     
+                    },
+                    error: function(data) {
+                      args.response.error(parseXMLHttpResponse(data));
+                    }
+                  });
+                },
+                notification: {
+                  poll: pollAsyncJobResult
+                }
+              }
+            }, 
+            tabs: {
+              details: {
+                title: 'label.details',
+                fields: [      
+                  {
+                    id: { label: 'label.id' }
+                  },
+                  {                    
+                    startip: { label: 'label.start.IP' },
+                    endip: { label: 'label.end.IP' },
+                    gateway: { label: 'label.gateway' },
+                    netmask: { label: 'label.netmask' },
+                    vlan: { label: 'label.vlan' },
+                    portableipaddress: { 
+                      label: 'Portable IPs',
+                      converter: function(args) {                       
+                        var text1 = '';
+                        if(args != null) {
+                          for(var i = 0; i < args.length; i++) {
+                            if(i > 0) {
+                              text1 += ', ';
+                            }                            
+                            text1 += args[i].ipaddress;
+                          }
+                        }                        
+                        return text1;
+                      }
+                    }
+                  }
+                ],
+                dataProvider: function(args) {                       
+                  $.ajax({
+                    url: createURL('listPortableIpRanges'),
+                    data: {
+                      id: args.context.portableIpRanges[0].id
+                    },
+                    success: function(json) {                
+                      var item = json.listportableipresponse.portableiprange[0];
+                      args.response.success({                
+                        data: item
+                      });
+                    },
+                    error: function(json) {
+                      args.response.error(parseXMLHttpResponse(json));
+                    }
+                  });  
+                }
+              }
+            }   
+          }
+        }
+      },      
+            
+      lbUnderGSLB: {
+        id: 'lbUnderGSLB',
+        type: 'select',
+        title: 'assigned load balancing',
+        listView: {
+          section: 'lbUnderGSLB',
+          id: 'lbUnderGSLB',
+          label: 'assigned load balancing',
+          fields: {
+            name: { label: 'label.name' },
+            publicport: { label: 'label.public.port' },
+	          privateport: { label: 'label.private.port' },
+	          algorithm: { label: 'label.algorithm' }
+          },					
+	        dataProvider: function(args) {		
+	          var data = {
+              id: args.context.GSLB[0].id
+            };
+            $.ajax({
+              url: createURL('listGlobalLoadBalancerRules'),
+              data: data,
+              success: function(json) {    
+                var items = json.listgloballoadbalancerrulesresponse.globalloadbalancerrule[0].loadbalancerrule;
+                args.response.success({
+                  data: items
+                });
+              }
+            });	          
+          },	        
+	        actions: {            
+            add: {
+              label: 'assign more load balancing',
+              messages: {                
+                notification: function(args) {
+                  return 'assign more load balancing';
+                }
+              },
+              createForm: {
+                title: 'assign more load balancing',              
                 fields: {                  
                   loadbalancerrule: {
-                    label: 'load balancer rule',                    
+                    label: 'load balancing rule',                    
                     select: function(args) {		
-											var data = {
-												globalloadbalancerruleid: args.context.GSLB[0].id,
-												listAll: true
-											};
-											$.ajax({
-												url: createURL('listLoadBalancerRules'),
-												data: data,
-												success: function(json) {
-													var items = json.listloadbalancerrulesresponse.loadbalancerrule;
-													args.response.success({								 
-														data: items,
-														descriptionField: 'name'
-													});													
-												}
-											});																						
+		      var data = {
+			globalloadbalancerruleid: args.context.GSLB[0].id,
+			listAll: true
+		      };
+		      $.ajax({
+			url: createURL('listLoadBalancerRules'),
+			data: data,
+			success: function(json) {
+			  var allLbRules = json.listloadbalancerrulesresponse.loadbalancerrule;
+                          var assignedLbRules = args.context.GSLB[0].loadbalancerrule;
+                          var items = [];
+                          if(allLbRules != null) {
+                            for(var i = 0; i < allLbRules.length; i++) {  
+                              var isAssigned = false;                            
+                              if(assignedLbRules != null) {
+                                for(var k = 0; k < assignedLbRules.length; k++) {
+                                  if(allLbRules[i].id == assignedLbRules[k].id) {
+                                    isAssigned = true;
+                                    break; 
+                                  }
+                                }
+                              }
+                              if(isAssigned == false) {
+                                items.push(allLbRules[i]);
+                              }
+                            }
+                          }                        
+			  args.response.success({								 
+			    data: items,
+			    descriptionField: 'name'
+			  });													
+			}
+		      });																						
                     }
                   }  
                 }
               },
               action: function(args) {							  
-								var data = {
-								  id: args.context.GSLB[0].id,
-									loadbalancerrulelist: args.data.loadbalancerrule
-								};			
+		var data = {
+		  id: args.context.GSLB[0].id,
+		  loadbalancerrulelist: args.data.loadbalancerrule
+		};			
                 $.ajax({
                   url: createURL('assignToGlobalLoadBalancerRule'),
                   data: data,                 
@@ -547,16 +770,16 @@
 					},						
 									
 					detailView: {
-            name: 'load balancer rule details',            
+            name: 'load balancing details',            
             actions: {              
               remove: {
-                label: 'remove load balancer rule from this GSLB',
+                label: 'remove load balancing from this GSLB',
                 messages: {
                   notification: function() { 
-									  return 'remove load balancer rule from GSLB'; 
+									  return 'remove load balancing from GSLB'; 
 									},
                   confirm: function() { 
-									  return 'Please confirm you want to remove load balancer rule from GSLB'; 
+									  return 'Please confirm you want to remove load balancing from GSLB'; 
 									}
                 },               
                 action: function(args) {								                

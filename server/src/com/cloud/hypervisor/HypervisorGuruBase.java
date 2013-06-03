@@ -25,7 +25,9 @@ import com.cloud.agent.api.Command;
 import com.cloud.agent.api.to.NicTO;
 import com.cloud.agent.api.to.VirtualMachineTO;
 import com.cloud.agent.api.to.VolumeTO;
+import com.cloud.configuration.Config;
 import com.cloud.offering.ServiceOffering;
+import com.cloud.server.ConfigurationServer;
 import com.cloud.storage.dao.VMTemplateDetailsDao;
 import com.cloud.utils.component.AdapterBase;
 import com.cloud.vm.NicProfile;
@@ -43,6 +45,8 @@ public abstract class HypervisorGuruBase extends AdapterBase implements Hypervis
     @Inject NicDao _nicDao;
     @Inject VMInstanceDao _virtualMachineDao;
     @Inject NicSecondaryIpDao _nicSecIpDao;
+    @Inject ConfigurationServer _configServer;
+
 
     protected HypervisorGuruBase() {
         super();
@@ -86,9 +90,9 @@ public abstract class HypervisorGuruBase extends AdapterBase implements Hypervis
 
         ServiceOffering offering = vmProfile.getServiceOffering();  
         VirtualMachine vm = vmProfile.getVirtualMachine();
-        Long minMemory = (long) (offering.getRamSize()/vmProfile.getCpuOvercommitRatio());
-        int  minspeed= (int)(offering.getSpeed()/vmProfile.getMemoryOvercommitRatio());
-        int  maxspeed = (offering.getSpeed());
+        Long minMemory = (long) (offering.getRamSize() / vmProfile.getMemoryOvercommitRatio());
+        int minspeed = (int) (offering.getSpeed() / vmProfile.getCpuOvercommitRatio());
+        int maxspeed = (offering.getSpeed());
         VirtualMachineTO to = new VirtualMachineTO(vm.getId(), vm.getInstanceName(), vm.getType(), offering.getCpu(), minspeed, maxspeed,
                 minMemory * 1024l * 1024l, offering.getRamSize() * 1024l * 1024l, null, null, vm.isHaEnabled(), vm.limitCpuUse(), vm.getVncPassword());
         to.setBootArgs(vmProfile.getBootArgs());
@@ -121,12 +125,20 @@ public abstract class HypervisorGuruBase extends AdapterBase implements Hypervis
         // Workaround to make sure the TO has the UUID we need for Niciri integration
         VMInstanceVO vmInstance = _virtualMachineDao.findById(to.getId());
         to.setUuid(vmInstance.getUuid());
-        
+
+        //
+        to.setEnableDynamicallyScaleVm(Boolean.parseBoolean(_configServer.getConfigValue(Config.EnableDynamicallyScaleVm.key(), Config.ConfigurationParameterScope.zone.toString(), vm.getDataCenterId())));
+
         return to;
     }
 
     @Override
     public long getCommandHostDelegation(long hostId, Command cmd) {
         return hostId;
+    }
+    
+    @Override
+    public List<Command> finalizeExpunge(VirtualMachine vm) {
+        return null;
     }
 }

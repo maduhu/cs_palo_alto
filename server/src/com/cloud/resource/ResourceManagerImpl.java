@@ -74,11 +74,23 @@ import com.cloud.cluster.ManagementServerNode;
 import com.cloud.configuration.Config;
 import com.cloud.configuration.ConfigurationManager;
 import com.cloud.configuration.dao.ConfigurationDao;
+import com.cloud.dc.ClusterDetailsDao;
+import com.cloud.dc.ClusterDetailsVO;
+import com.cloud.dc.ClusterVO;
+import com.cloud.dc.DataCenterIpAddressVO;
+import com.cloud.dc.DataCenterVO;
+import com.cloud.dc.HostPodVO;
+import com.cloud.dc.PodCluster;
 import com.cloud.dc.dao.ClusterDao;
 import com.cloud.dc.dao.ClusterVSMMapDao;
 import com.cloud.dc.dao.DataCenterDao;
 import com.cloud.dc.dao.DataCenterIpAddressDao;
+import com.cloud.dc.dao.DedicatedResourceDao;
 import com.cloud.dc.dao.HostPodDao;
+import com.cloud.deploy.PlannerHostReservationVO;
+import com.cloud.deploy.dao.PlannerHostReservationDao;
+import com.cloud.event.ActionEvent;
+import com.cloud.event.EventTypes;
 import com.cloud.exception.AgentUnavailableException;
 import com.cloud.exception.DiscoveryException;
 import com.cloud.exception.InvalidParameterValueException;
@@ -151,6 +163,7 @@ import com.cloud.vm.VMInstanceVO;
 import com.cloud.vm.VirtualMachine.State;
 import com.cloud.vm.VirtualMachineManager;
 import com.cloud.vm.dao.VMInstanceDao;
+import com.cloud.dc.DataCenter.NetworkType;
 
 @Component
 @Local({ ResourceManager.class, ResourceService.class })
@@ -206,6 +219,10 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
     protected HighAvailabilityManager        _haMgr;
     @Inject
     protected StorageService                 _storageSvr;
+    @Inject
+    PlannerHostReservationDao _plannerHostReserveDao;
+    @Inject
+    protected DedicatedResourceDao           _dedicatedDao;
 
     protected List<? extends Discoverer> _discoverers;
     public List<? extends Discoverer> getDiscoverers() {
@@ -379,7 +396,7 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
         if (zone == null) {
 			InvalidParameterValueException ex = new InvalidParameterValueException(
 					"Can't find zone by the id specified");
-            ex.addProxyObject(zone, dcId, "dcId");
+            ex.addProxyObject(String.valueOf(dcId), "dcId");
             throw ex;
         }
 
@@ -388,7 +405,7 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
 				&& !_accountMgr.isRootAdmin(account.getType())) {
 			PermissionDeniedException ex = new PermissionDeniedException(
 					"Cannot perform this operation, Zone with specified id is currently disabled");
-            ex.addProxyObject(zone, dcId, "dcId");
+            ex.addProxyObject(zone.getUuid(), "dcId");
             throw ex;
         }
 
@@ -407,8 +424,8 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
         if (!Long.valueOf(pod.getDataCenterId()).equals(dcId)) {
 			InvalidParameterValueException ex = new InvalidParameterValueException(
 					"Pod with specified id doesn't belong to the zone " + dcId);
-            ex.addProxyObject(pod, podId, "podId");
-            ex.addProxyObject(zone, dcId, "dcId");
+            ex.addProxyObject(pod.getUuid(), "podId");
+            ex.addProxyObject(zone.getUuid(), "dcId");
             throw ex;
         }
 
@@ -430,6 +447,13 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
 					+ " to a valid supported hypervisor type");
 			throw new InvalidParameterValueException("Unable to resolve "
 					+ cmd.getHypervisor() + " to a supported ");
+        }
+
+        if (zone.isSecurityGroupEnabled() && zone.getNetworkType().equals(NetworkType.Advanced)) {
+            if (hypervisorType != HypervisorType.KVM && hypervisorType != HypervisorType.XenServer
+                    && hypervisorType != HypervisorType.Simulator) {
+                throw new InvalidParameterValueException("Don't support hypervisor type " + hypervisorType + " in advanced security enabled zone");
+            }
         }
 
         Cluster.ClusterType clusterType = null;
@@ -486,17 +510,17 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
 					"Unable to create cluster " + clusterName
 							+ " in pod and data center with specified ids", e);
             // Get the pod VO object's table name.
-            ex.addProxyObject(pod, podId, "podId");
-            ex.addProxyObject(zone, dcId, "dcId");
+            ex.addProxyObject(pod.getUuid(), "podId");
+            ex.addProxyObject(zone.getUuid(), "dcId");
             throw ex;
         }
         clusterId = cluster.getId();
         result.add(cluster);
 
-           ClusterDetailsVO cluster_detail_cpu = new ClusterDetailsVO(clusterId, "cpuOvercommitRatio", Float.toString(cmd.getCpuOvercommitRatio()));
-           ClusterDetailsVO cluster_detail_ram = new ClusterDetailsVO(clusterId, "memoryOvercommitRatio", Float.toString(cmd.getMemoryOvercommitRaito()));
-           _clusterDetailsDao.persist(cluster_detail_cpu);
-           _clusterDetailsDao.persist(cluster_detail_ram);
+        ClusterDetailsVO cluster_detail_cpu = new ClusterDetailsVO(clusterId, "cpuOvercommitRatio", Float.toString(cmd.getCpuOvercommitRatio()));
+        ClusterDetailsVO cluster_detail_ram = new ClusterDetailsVO(clusterId, "memoryOvercommitRatio", Float.toString(cmd.getMemoryOvercommitRatio()));
+        _clusterDetailsDao.persist(cluster_detail_cpu);
+        _clusterDetailsDao.persist(cluster_detail_ram);
 
         if (clusterType == Cluster.ClusterType.CloudManaged) {
             return result;
@@ -518,8 +542,8 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
         }
 
 
-        if(cmd.getMemoryOvercommitRaito().compareTo(1f) > 0) {
-             cluster_detail_ram = new ClusterDetailsVO(clusterId, "memoryOvercommitRatio", Float.toString(cmd.getMemoryOvercommitRaito()));
+        if(cmd.getMemoryOvercommitRatio().compareTo(1f) > 0) {
+             cluster_detail_ram = new ClusterDetailsVO(clusterId, "memoryOvercommitRatio", Float.toString(cmd.getMemoryOvercommitRatio()));
             _clusterDetailsDao.persist(cluster_detail_ram);
         }
 
@@ -621,7 +645,7 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
             if (cluster == null) {
 				InvalidParameterValueException ex = new InvalidParameterValueException(
 						"can not find cluster for specified clusterId");
-                ex.addProxyObject(cluster, clusterId, "clusterId");
+                ex.addProxyObject(clusterId.toString(), "clusterId");
                 throw ex;
             } else {
                 if (cluster.getGuid() == null) {
@@ -629,7 +653,7 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
                     if (!hosts.isEmpty()) {
 						CloudRuntimeException ex = new CloudRuntimeException(
 								"Guid is not updated for cluster with specified cluster id; need to wait for hosts in this cluster to come up");
-                        ex.addProxyObject(cluster, clusterId, "clusterId");
+                        ex.addProxyObject(cluster.getUuid(), "clusterId");
                         throw ex;
                     }
                 }
@@ -685,7 +709,7 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
 				&& !_accountMgr.isRootAdmin(account.getType())) {
 			PermissionDeniedException ex = new PermissionDeniedException(
 					"Cannot perform this operation, Zone with specified id is currently disabled");
-            ex.addProxyObject(zone, dcId, "dcId");
+            ex.addProxyObject(zone.getUuid(), "dcId");
             throw ex;
         }
 
@@ -703,8 +727,8 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
 								+ podId
 								+ " doesn't belong to the zone with specified zoneId"
 								+ dcId);
-                ex.addProxyObject(pod, podId, "podId");
-                ex.addProxyObject(zone, dcId, "dcId");
+                ex.addProxyObject(pod.getUuid(), "podId");
+                ex.addProxyObject(zone.getUuid(), "dcId");
                 throw ex;
             }
         }
@@ -774,8 +798,8 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
 									+ clusterName
 									+ " in pod with specified podId and data center with specified dcID",
 							e);
-                    ex.addProxyObject(pod, podId, "podId");
-                    ex.addProxyObject(zone, dcId, "dcId");
+                    ex.addProxyObject(pod.getUuid(), "podId");
+                    ex.addProxyObject(zone.getUuid(), "dcId");
                     throw ex;
                 }
             }
@@ -1006,6 +1030,11 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
 		hostCapacitySC.addAnd("capacityType", SearchCriteria.Op.IN,
 				capacityTypes);
         _capacityDao.remove(hostCapacitySC);
+        // remove from dedicated resources
+        DedicatedResourceVO dr = _dedicatedDao.findByHostId(hostId);
+        if (dr != null) {
+            _dedicatedDao.remove(dr.getId());
+        }
         txn.commit();
         return true;
     }
@@ -1080,11 +1109,16 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
 						&& Boolean.parseBoolean(_configDao
 								.getValue(Config.VmwareUseNexusVSwitch
 										.toString()))) {
-                    _clusterVSMMapDao.removeByClusterId(cmd.getId());
-                }
-            }
+				    _clusterVSMMapDao.removeByClusterId(cmd.getId());
+				}
+				// remove from dedicated resources
+				DedicatedResourceVO dr = _dedicatedDao.findByClusterId(cluster.getId());
+				if (dr != null) {
+				    _dedicatedDao.remove(dr.getId());
+				}
+			}
 
-            txn.commit();
+			txn.commit();
             return true;
 		} catch (CloudRuntimeException e) {
             throw e;
@@ -1638,10 +1672,10 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
 	private Object dispatchToStateAdapters(ResourceStateAdapter.Event event,
 			boolean singleTaker, Object... args) {
         synchronized (_resourceStateAdapters) {
-            Iterator it = _resourceStateAdapters.entrySet().iterator();
+            Iterator<Map.Entry<String, ResourceStateAdapter>> it = _resourceStateAdapters.entrySet().iterator();
             Object result = null;
             while (it.hasNext()) {
-				Map.Entry<String, ResourceStateAdapter> item = (Map.Entry<String, ResourceStateAdapter>) it
+				Map.Entry<String, ResourceStateAdapter> item = it
 						.next();
                 ResourceStateAdapter adapter = item.getValue();
 
@@ -2845,4 +2879,41 @@ public class ResourceManagerImpl extends ManagerBase implements ResourceManager,
 				ResourceState.Enabled);
         return sc.list();
 	}
+
+    @Override
+    @DB
+    @ActionEvent(eventType = EventTypes.EVENT_HOST_RESERVATION_RELEASE, eventDescription = "releasing host reservation", async = true)
+    public boolean releaseHostReservation(Long hostId) {
+        Transaction txn = Transaction.currentTxn();
+        try {
+            txn.start();
+            PlannerHostReservationVO reservationEntry = _plannerHostReserveDao.findByHostId(hostId);
+            if (reservationEntry != null) {
+                long id = reservationEntry.getId();
+                PlannerHostReservationVO hostReservation = _plannerHostReserveDao.lockRow(id, true);
+                if (hostReservation == null) {
+                    if (s_logger.isDebugEnabled()) {
+                        s_logger.debug("Host reservation for host: " + hostId + " does not even exist.  Release reservartion call is ignored.");
+                    }
+                    txn.rollback();
+                    return false;
+                }
+                hostReservation.setResourceUsage(null);
+                _plannerHostReserveDao.persist(hostReservation);
+                txn.commit();
+                return true;
+            }
+            if (s_logger.isDebugEnabled()) {
+                s_logger.debug("Host reservation for host: " + hostId
+                        + " does not even exist.  Release reservartion call is ignored.");
+            }
+            return false;
+        } catch (CloudRuntimeException e) {
+            throw e;
+        } catch (Throwable t) {
+            s_logger.error("Unable to release host reservation for host: " + hostId, t);
+            txn.rollback();
+            return false;
+        }
+    }
 }

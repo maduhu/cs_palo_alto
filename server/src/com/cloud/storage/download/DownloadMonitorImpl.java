@@ -552,7 +552,7 @@ public class DownloadMonitorImpl extends ManagerBase implements  DownloadMonitor
 			//Create usage event
             long size = -1;
             if(volumeHost!=null){
-                size = volumeHost.getPhysicalSize();
+                size = volumeHost.getSize();
                 volume.setSize(size);
                 this._volumeDao.update(volume.getId(), volume);
             }
@@ -875,7 +875,9 @@ public class DownloadMonitorImpl extends ManagerBase implements  DownloadMonitor
                         tmpltHost.setPhysicalSize(tmpltInfo.getPhysicalSize());
                         tmpltHost.setLastUpdated(new Date());
 
-                        if (tmpltInfo.getSize() > 0) {
+                        // Skipping limit checks for SYSTEM Account and for the templates created from volumes or snapshots
+                        // which already got checked and incremented during createTemplate API call.
+                        if (tmpltInfo.getSize() > 0 && tmplt.getAccountId() != Account.ACCOUNT_ID_SYSTEM && tmplt.getUrl() != null) {
                             long accountId = tmplt.getAccountId();
                             try {
                                 _resourceLimitMgr.checkResourceLimit(_accountMgr.getAccount(accountId),

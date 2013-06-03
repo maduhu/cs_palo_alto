@@ -114,38 +114,30 @@ function createURL(apiName, options) {
   if (cloudStack.context && cloudStack.context.projects && !options.ignoreProject) {
     urlString = urlString + '&projectid=' + cloudStack.context.projects[0].id;
   }
+    
+  if(cloudStack.context != null && cloudStack.context.zoneType != null && cloudStack.context.zoneType.length > 0) { //Basic type or Advanced type
+    urlString = urlString + '&zonetype=' + cloudStack.context.zoneType;    
+  }    
   
   return urlString;
 }
-
-/*
-function fromdb(val) {
-  return sanitizeXSS(noNull(val));
-}
-*/
 
 function todb(val) {
   return encodeURIComponent(val);
 }
 
-/*
-function noNull(val) {
-  if(val == null)
-    return "";
-  else
-    return val;
-}
-*/
+//LB provider map
+var lbProviderMap = {
+  "publicLb": {
+    "non-vpc": ["VirtualRouter", "Netscaler", "F5"],
+    "vpc": ["VpcVirtualRouter", "Netscaler"]
+  },
+  "internalLb": {
+    "non-vpc": [],
+    "vpc": ["InternalLbVm"]
+  }
+};
 
-/*
-function sanitizeXSS(val) {  // Prevent cross-site-script(XSS) attack
-  if(val == null || typeof(val) != "string")
-    return val;
-  val = val.replace(/</g, "&lt;");  //replace < whose unicode is \u003c
-  val = val.replace(/>/g, "&gt;");  //replace > whose unicode is \u003e
-  return unescape(val);
-}
-*/
 
 // Role Functions
 function isAdmin() {
@@ -284,7 +276,7 @@ cloudStack.actionFilter = {
   guestNetwork: function(args) {    
     var jsonObj = args.context.item;
 		var allowedActions = [];
-    
+                allowedActions.push('replaceacllist');
 		if(jsonObj.type == 'Isolated') {
 		  allowedActions.push('edit');		//only Isolated network is allowed to upgrade to a different network offering (Shared network is not allowed to)
 			allowedActions.push('restart');   

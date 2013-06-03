@@ -137,6 +137,18 @@ public class UserVmResponse extends BaseResponse implements ControlledEntityResp
     @SerializedName("networkkbswrite") @Param(description="the outgoing network traffic on the host")
     private Long networkKbsWrite;
 
+    @SerializedName("diskkbsread") @Param(description="the read (bytes) of disk on the vm")
+    private Long diskKbsRead;
+    
+    @SerializedName("diskkbswrite") @Param(description="the write (bytes) of disk on the vm")
+    private Long diskKbsWrite;
+    
+    @SerializedName("diskioread") @Param(description="the read (io) of disk on the vm")
+    private Long diskIORead;
+    
+    @SerializedName("diskiowrite") @Param(description="the write (io) of disk on the vm")
+    private Long diskIOWrite;
+    
     @SerializedName("guestosid") @Param(description="Os type ID of the virtual machine")
     private String guestOsId;
 
@@ -177,6 +189,9 @@ public class UserVmResponse extends BaseResponse implements ControlledEntityResp
     @Param(description = "list of affinity groups associated with the virtual machine", responseObject = AffinityGroupResponse.class)
     private Set<AffinityGroupResponse> affinityGroupList;
 
+    @SerializedName(ApiConstants.DISPLAY_VM) @Param(description="an optional field whether to the display the vm to the end user or not.")
+    private Boolean displayVm;
+
     public UserVmResponse(){
         securityGroupList = new LinkedHashSet<SecurityGroupResponse>();
         nics = new LinkedHashSet<NicResponse>();
@@ -196,7 +211,13 @@ public class UserVmResponse extends BaseResponse implements ControlledEntityResp
         return this.id;
     }
 
+    public Boolean getDisplayVm() {
+        return displayVm;
+    }
 
+    public void setDisplayVm(Boolean displayVm) {
+        this.displayVm = displayVm;
+    }
 
     @Override
     public String getObjectId() {
@@ -290,6 +311,22 @@ public class UserVmResponse extends BaseResponse implements ControlledEntityResp
 
     public void setIsoDisplayText(String isoDisplayText) {
         this.isoDisplayText = isoDisplayText;
+    }
+    
+    public void setDiskKbsRead(Long diskKbsRead) {
+        this.diskKbsRead = diskKbsRead;
+    }
+
+    public void setDiskKbsWrite(Long diskKbsWrite) {
+        this.diskKbsWrite = diskKbsWrite;
+    }
+    
+    public void setDiskIORead(Long diskIORead) {
+        this.diskIORead = diskIORead;
+    }
+
+    public void setDiskIOWrite(Long diskIOWrite) {
+        this.diskIOWrite = diskIOWrite;
     }
 
     public void setServiceOfferingId(String serviceOfferingId) {

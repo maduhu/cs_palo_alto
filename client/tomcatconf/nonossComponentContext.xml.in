@@ -42,7 +42,7 @@
   independent configuration
     
 -->
-  <bean id="premiumDatabaseUpgradeChecker" class="com.cloud.upgrade.PremiumDatabaseUpgradeChecker"/>
+  <bean id="DatabaseUpgradeChecker" class="com.cloud.upgrade.DatabaseUpgradeChecker"/>
   <bean id="GlobalLoadBalancingRulesServiceImpl" class ="org.apache.cloudstack.region.gslb.GlobalLoadBalancingRulesServiceImpl" >
     <property name="GslbServiceProvider">
       <ref bean="Netscaler"/>
@@ -77,6 +77,10 @@
   </bean>
   <bean id="VmwareManager" class="com.cloud.hypervisor.vmware.manager.VmwareManagerImpl"/>
   <bean id="vmwareContextFactory" class="com.cloud.hypervisor.vmware.resource.VmwareContextFactory" />
+  <bean id="VmwareDatacenterDaoImpl" class="com.cloud.hypervisor.vmware.dao.VmwareDatacenterDaoImpl" />
+  <bean id="VmwareDatacenterZoneMapDaoImpl" class="com.cloud.hypervisor.vmware.dao.VmwareDatacenterZoneMapDaoImpl" />
+  <bean id="LegacyZoneDaoImpl" class="com.cloud.hypervisor.vmware.dao.LegacyZoneDaoImpl" />
+  <bean id="vmwareStorageMotionStrategy" class="org.apache.cloudstack.storage.motion.VmwareStorageMotionStrategy"/>
 
   <!--
     Nicira support components
@@ -258,7 +262,7 @@
           <ref bean="FirstFitPlanner" />
           <ref bean="UserDispersingPlanner" />
           <ref bean="UserConcentratedPodPlanner" />
-          
+          <ref bean="ImplicitDedicationPlanner" />
 <!--
           <ref bean="BareMetalPlanner" />
 -->
@@ -301,6 +305,7 @@
           <ref bean="VirtualRouter"/>
           <ref bean="VpcVirtualRouter"/>
           <ref bean="NiciraNvp"/>
+          <ref bean="InternalLbVm"/>
       </list>
     </property>
   </bean>
@@ -351,6 +356,7 @@
           <ref bean="SecurityGroupProvider"/>
           <ref bean="VpcVirtualRouter"/>
           <ref bean="PaloAlto"/>
+          <ref bean="InternalLbVm"/>
 <!--
           <ref bean="BareMetalDhcp"/>
           <ref bean="BareMetalPxe"/>
@@ -374,6 +380,16 @@
           <ref bean="HostAntiAffinityProcessor" />
       </list>
     </property>
+  </bean>
+
+  <!--
+    Dedicated Resources components
+  -->
+
+  <bean id="DedicatedResourceManagerImpl" class="org.apache.cloudstack.dedicated.DedicatedResourceManagerImpl"/>
+  <bean id="ExplicitDedicationProcessor" class="org.apache.cloudstack.affinity.ExplicitDedicationProcessor">
+    <property name="name" value="ExplicitDedicationProcessor"/>
+    <property name="type" value="ExplicitDedication"/>
   </bean>
 
 </beans>

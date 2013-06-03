@@ -51,7 +51,7 @@ class Services:
                                     "displaytext": "Tiny Instance",
                                     "cpunumber": 1,
                                     "cpuspeed": 100,    # in MHz
-                                    "memory": 64,       # In MBs
+                                    "memory": 128,       # In MBs
                         },
                         "disk_offering": {
                                     "displaytext": "Small",
@@ -93,7 +93,6 @@ class Services:
                                 "templatefilter": 'self',
                         },
                         "templatefilter": 'self',
-                        "destzoneid": 2,    # For Copy template (Destination zone)
                         "ostype": 'CentOS 5.3 (64-bit)',
                         "sleep": 60,
                         "timeout": 10,
@@ -139,7 +138,7 @@ class TestCreateTemplate(cloudstackTestCase):
                             cls.services["account"],
                             domainid=cls.domain.id
                             )
-        cls.services["account"] = cls.account.account.name
+        cls.services["account"] = cls.account.name
 
         cls._cleanup = [
                         cls.account,
@@ -183,8 +182,8 @@ class TestCreateTemplate(cloudstackTestCase):
                                         self.apiclient,
                                         v,
                                         zoneid=self.zone.id,
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
             self.debug(
                 "Registered a template of format: %s with ID: %s" % (
@@ -205,8 +204,8 @@ class TestCreateTemplate(cloudstackTestCase):
                                     self.services["templatefilter"],
                                     id=template.id,
                                     zoneid=self.zone.id,
-                                    account=self.account.account.name,
-                                    domainid=self.account.account.domainid
+                                    account=self.account.name,
+                                    domainid=self.account.domainid
                                     )
                 if isinstance(list_template_response, list):
                     break
@@ -240,8 +239,8 @@ class TestCreateTemplate(cloudstackTestCase):
                                     self.apiclient,
                                     self.services["virtual_machine"],
                                     templateid=template.id,
-                                    accountid=self.account.account.name,
-                                    domainid=self.account.account.domainid,
+                                    accountid=self.account.name,
+                                    domainid=self.account.domainid,
                                     serviceofferingid=self.service_offering.id,
                                     mode=self.services["mode"]
                                     )
@@ -249,8 +248,8 @@ class TestCreateTemplate(cloudstackTestCase):
             vm_response = list_virtual_machines(
                                         self.apiclient,
                                         id=virtual_machine.id,
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
             self.assertEqual(
                              isinstance(vm_response, list),
@@ -304,7 +303,7 @@ class TestTemplates(cloudstackTestCase):
                             domainid=cls.domain.id
                             )
 
-        cls.services["account"] = cls.account.account.name
+        cls.services["account"] = cls.account.name
         cls.service_offering = ServiceOffering.create(
                                             cls.api_client,
                                             cls.services["service_offering"]
@@ -315,8 +314,8 @@ class TestTemplates(cloudstackTestCase):
                                     cls.api_client,
                                     cls.services["virtual_machine"],
                                     templateid=template.id,
-                                    accountid=cls.account.account.name,
-                                    domainid=cls.account.account.domainid,
+                                    accountid=cls.account.name,
+                                    domainid=cls.account.domainid,
                                     serviceofferingid=cls.service_offering.id,
                                     )
         #Stop virtual machine
@@ -396,8 +395,8 @@ class TestTemplates(cloudstackTestCase):
                                     self.apiclient,
                                     self.services["virtual_machine"],
                                     templateid=self.template.id,
-                                    accountid=self.account.account.name,
-                                    domainid=self.account.account.domainid,
+                                    accountid=self.account.name,
+                                    domainid=self.account.domainid,
                                     serviceofferingid=self.service_offering.id,
                                     )
 
@@ -406,8 +405,8 @@ class TestTemplates(cloudstackTestCase):
         vm_response = list_virtual_machines(
                                         self.apiclient,
                                         id=virtual_machine.id,
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
         #Verify VM response to check whether VM deployment was successful
         self.assertNotEqual(
@@ -421,94 +420,6 @@ class TestTemplates(cloudstackTestCase):
                             'Running',
                             "Check the state of VM created from Template"
                         )
-        return
-
-    @attr(tags = ["advanced", "advancedns", "multizone"])
-    def test_02_copy_template(self):
-        """Test for copy template from one zone to another"""
-
-        # Validate the following
-        # 1. copy template should be successful and
-        #    secondary storage should contain new copied template.
-
-        self.debug(
-            "Copying template from zone: %s to %s" % (
-                                                self.template.id,
-                                                self.services["destzoneid"]
-                                                ))
-        cmd = copyTemplate.copyTemplateCmd()
-        cmd.id = self.template.id
-        cmd.destzoneid = self.services["destzoneid"]
-        cmd.sourcezoneid = self.zone.id
-        self.apiclient.copyTemplate(cmd)
-
-        # Verify template is copied to another zone using ListTemplates
-        list_template_response = list_templates(
-                                    self.apiclient,
-                                    templatefilter=\
-                                    self.services["templatefilter"],
-                                    id=self.template.id,
-                                    zoneid=self.services["destzoneid"]
-                                    )
-        self.assertEqual(
-                        isinstance(list_template_response, list),
-                        True,
-                        "Check for list template response return valid list"
-                        )
-
-        self.assertNotEqual(
-                            len(list_template_response),
-                            0,
-                            "Check template extracted in List Templates"
-                        )
-
-        template_response = list_template_response[0]
-        self.assertEqual(
-                            template_response.id,
-                            self.template.id,
-                            "Check ID of the downloaded template"
-                        )
-        self.assertEqual(
-                            template_response.zoneid,
-                            self.services["destzoneid"],
-                            "Check zone ID of the copied template"
-                        )
-
-        # Cleanup- Delete the copied template
-        timeout = self.services["timeout"]
-        while True:
-            time.sleep(self.services["sleep"])
-            list_template_response = list_templates(
-                                        self.apiclient,
-                                        templatefilter=\
-                                        self.services["templatefilter"],
-                                        id=self.template_2.id,
-                                        zoneid=self.services["destzoneid"]
-                                        )
-            self.assertEqual(
-                                isinstance(list_template_response, list),
-                                True,
-                                "Check list response returns a valid list"
-                            )
-            self.assertNotEqual(
-                                len(list_template_response),
-                                0,
-                                "Check template extracted in List Templates"
-                            )
-    
-            template_response = list_template_response[0]
-            if template_response.isready == True:
-                break
-
-            if timeout == 0:
-                raise Exception(
-                        "Failed to download copied template(ID: %s)" % template_response.id)
-
-            timeout = timeout - 1
-        cmd = deleteTemplate.deleteTemplateCmd()
-        cmd.id = self.template.id
-        cmd.zoneid = self.services["destzoneid"]
-        self.apiclient.deleteTemplate(cmd)
         return
 
     @attr(tags = ["advanced", "advancedns"])
@@ -591,8 +502,8 @@ class TestTemplates(cloudstackTestCase):
         snapshot = Snapshot.create(
                                    self.apiclient,
                                    volume.id,
-                                   account=self.account.account.name,
-                                   domainid=self.account.account.domainid
+                                   account=self.account.name,
+                                   domainid=self.account.domainid
                                    )
         self.debug("Creating a template from snapshot: %s" % snapshot.id)
         # Generate template from the snapshot
@@ -626,8 +537,8 @@ class TestTemplates(cloudstackTestCase):
                                     self.apiclient,
                                     self.services["virtual_machine"],
                                     templateid=template.id,
-                                    accountid=self.account.account.name,
-                                    domainid=self.account.account.domainid,
+                                    accountid=self.account.name,
+                                    domainid=self.account.domainid,
                                     serviceofferingid=self.service_offering.id,
                                     )
         self.cleanup.append(virtual_machine)
@@ -635,8 +546,8 @@ class TestTemplates(cloudstackTestCase):
         vm_response = list_virtual_machines(
                                         self.apiclient,
                                         id=virtual_machine.id,
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
         self.assertEqual(
                         isinstance(vm_response, list),

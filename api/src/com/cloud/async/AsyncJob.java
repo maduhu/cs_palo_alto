@@ -35,6 +35,7 @@ public interface AsyncJob extends Identity, InternalIdentity {
         Host,
         StoragePool,
         IpAddress,
+        PortableIpAddress,
         SecurityGroup,
         PhysicalNetwork,
         TrafficType,
@@ -50,7 +51,10 @@ public interface AsyncJob extends Identity, InternalIdentity {
         AutoScaleVmProfile,
         AutoScaleVmGroup,
         GlobalLoadBalancerRule,
-        AffinityGroup
+        LoadBalancerRule,
+        AffinityGroup,
+        InternalLbVm,
+        DedicatedGuestVlanRange
     }
 
     long getUserId();

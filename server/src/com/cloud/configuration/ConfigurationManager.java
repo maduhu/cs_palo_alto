@@ -30,13 +30,13 @@ import com.cloud.dc.Vlan;
 import com.cloud.exception.ConcurrentOperationException;
 import com.cloud.exception.InsufficientCapacityException;
 import com.cloud.exception.InvalidParameterValueException;
-import com.cloud.exception.ResourceAllocationException;
 import com.cloud.network.Network;
 import com.cloud.network.Network.Capability;
 import com.cloud.network.Network.Provider;
 import com.cloud.network.Network.Service;
 import com.cloud.network.Networks.TrafficType;
 import com.cloud.offering.DiskOffering;
+import com.cloud.offering.NetworkOffering;
 import com.cloud.offering.NetworkOffering.Availability;
 import com.cloud.offerings.NetworkOfferingVO;
 import com.cloud.org.Grouping.AllocationState;
@@ -60,7 +60,7 @@ public interface ConfigurationManager extends ConfigurationService, Manager {
      * @param name
      * @param value
      */
-    void updateConfiguration(long userId, String name, String category, String value, String scope, Long id);
+    String updateConfiguration(long userId, String name, String category, String value, String scope, Long id);
 
     /**
      * Creates a new service offering
@@ -79,10 +79,12 @@ public interface ConfigurationManager extends ConfigurationService, Manager {
      *            TODO
      * @param id
      * @param useVirtualNetwork
+     * @param deploymentPlanner
+     * @param details
      * @return ID
      */
     ServiceOfferingVO createServiceOffering(long userId, boolean isSystem, VirtualMachine.Type vm_typeType, String name, int cpu, int ramSize, int speed, String displayText, boolean localStorageRequired,
-            boolean offerHA, boolean limitResourceUse, boolean volatileVm, String tags, Long domainId, String hostTag, Integer networkRate);
+            boolean offerHA, boolean limitResourceUse, boolean volatileVm, String tags, Long domainId, String hostTag, Integer networkRate, String deploymentPlanner, Map<String, String> details);
 
     /**
      * Creates a new disk offering
@@ -93,9 +95,11 @@ public interface ConfigurationManager extends ConfigurationService, Manager {
      * @param numGibibytes
      * @param tags
      * @param isCustomized
+     * @param localStorageRequired
+     * @param isDisplayOfferingEnabled
      * @return newly created disk offering
      */
-    DiskOfferingVO createDiskOffering(Long domainId, String name, String description, Long numGibibytes, String tags, boolean isCustomized, boolean localStorageRequired);
+    DiskOfferingVO createDiskOffering(Long domainId, String name, String description, Long numGibibytes, String tags, boolean isCustomized, boolean localStorageRequired, boolean isDisplayOfferingEnabled);
 
     /**
      * Creates a new pod
@@ -150,8 +154,6 @@ public interface ConfigurationManager extends ConfigurationService, Manager {
      */
     boolean deleteVlanAndPublicIpRange(long userId, long vlanDbId, Account caller);
 
-    boolean releasePublicIpRange(long userId, long vlanDbId, Account caller);
-
     /**
      * Converts a comma separated list of tags to a List
      * 
@@ -179,8 +181,6 @@ public interface ConfigurationManager extends ConfigurationService, Manager {
      * @param trafficType
      * @param tags
      * @param specifyVlan
-     * @param isPersistent
-     *            ;
      * @param networkRate
      *            TODO
      * @param serviceProviderMap
@@ -196,14 +196,16 @@ public interface ConfigurationManager extends ConfigurationService, Manager {
      *            ;
      * @param specifyIpRanges
      *            TODO
+     * @param isPersistent
+     *            ;
+     * @param details TODO
      * @param id
-     * 
      * @return network offering object
      */
 
     NetworkOfferingVO createNetworkOffering(String name, String displayText, TrafficType trafficType, String tags, boolean specifyVlan, Availability availability, Integer networkRate, Map<Service, Set<Provider>> serviceProviderMap,
             boolean isDefault, Network.GuestType type, boolean systemOnly, Long serviceOfferingId, boolean conserveMode, Map<Service, Map<Capability, String>> serviceCapabilityMap,
-            boolean specifyIpRanges, boolean isPersistent);
+            boolean specifyIpRanges, boolean isPersistent, Map<NetworkOffering.Detail,String> details);
 
     Vlan createVlanAndPublicIpRange(long zoneId, long networkId, long physicalNetworkId, boolean forVirtualNetwork, Long podId, String startIP, String endIP, String vlanGateway, String vlanNetmask, String vlanId, Account vlanOwner, String startIPv6, String endIPv6, String vlanIp6Gateway, String vlanIp6Cidr) throws InsufficientCapacityException, ConcurrentOperationException, InvalidParameterValueException;
 

@@ -47,6 +47,10 @@ public class VolumeResponse extends BaseResponse implements ControlledViewEntity
     @SerializedName(ApiConstants.ZONE_NAME)
     @Param(description = "name of the availability zone")
     private String zoneName;
+    
+    @SerializedName(ApiConstants.ZONE_TYPE)
+    @Param(description = "network type of the availability zone")
+    private String zoneType;
 
     @SerializedName(ApiConstants.TYPE)
     @Param(description = "type of the disk volume (ROOT or DATADISK)")
@@ -161,6 +165,9 @@ public class VolumeResponse extends BaseResponse implements ControlledViewEntity
     @SerializedName(ApiConstants.TAGS)  @Param(description="the list of resource tags associated with volume", responseObject = ResourceTagResponse.class)
     private Set<ResourceTagResponse> tags;
 
+    @SerializedName(ApiConstants.DISPLAY_VOLUME) @Param(description="an optional field whether to the display the volume to the end user or not.")
+    private Boolean displayVm;
+
     public VolumeResponse(){
         tags = new LinkedHashSet<ResourceTagResponse>();
     }
@@ -198,6 +205,10 @@ public class VolumeResponse extends BaseResponse implements ControlledViewEntity
         this.zoneName = zoneName;
     }
 
+    public void setZoneType(String zoneType) {
+        this.zoneType = zoneType;
+    }
+    
     public void setVolumeType(String volumeType) {
         this.volumeType = volumeType;
     }
@@ -316,4 +327,13 @@ public class VolumeResponse extends BaseResponse implements ControlledViewEntity
     public void addTag(ResourceTagResponse tag){
         this.tags.add(tag);
     }
+
+    public Boolean getDisplayVm() {
+        return displayVm;
+    }
+
+    public void setDisplayVm(Boolean displayVm) {
+        this.displayVm = displayVm;
+    }
+
 }

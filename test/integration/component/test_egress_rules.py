@@ -69,7 +69,7 @@ class Services:
                     "displaytext": "Tiny Instance",
                     "cpunumber": 1,
                     "cpuspeed": 100,    # in MHz
-                    "memory": 64,       # In MBs
+                    "memory": 128,       # In MBs
                 },
                 "security_group": {
                     "name": 'SSH',
@@ -175,7 +175,7 @@ class TestDefaultSecurityGroupEgress(cloudstackTestCase):
                             admin=True,
                             domainid=cls.domain.id
                             )
-        cls.services["account"] = cls.account.account.name
+        cls.services["account"] = cls.account.name
 
         cls._cleanup = [
                         cls.account,
@@ -194,7 +194,7 @@ class TestDefaultSecurityGroupEgress(cloudstackTestCase):
 
         return
 
-    @attr(tags = ["sg", "eip"])
+    @attr(tags = ["sg", "eip", "advancedsg"])
     def test_deployVM_InDefaultSecurityGroup(self):
         """Test deploy VM in default security group with no egress rules
         """
@@ -208,12 +208,12 @@ class TestDefaultSecurityGroupEgress(cloudstackTestCase):
         # 4. listVirtualMachines should show that the VM belongs to default
         #    security group
 
-        self.debug("Deploying VM in account: %s" % self.account.account.name)
+        self.debug("Deploying VM in account: %s" % self.account.name)
         self.virtual_machine = VirtualMachine.create(
                                     self.apiclient,
                                     self.services["virtual_machine"],
-                                    accountid=self.account.account.name,
-                                    domainid=self.account.account.domainid,
+                                    accountid=self.account.name,
+                                    domainid=self.account.domainid,
                                     serviceofferingid=self.service_offering.id
                                 )
         self.debug("Deployed VM with ID: %s" % self.virtual_machine.id)
@@ -260,8 +260,8 @@ class TestDefaultSecurityGroupEgress(cloudstackTestCase):
         # Verify listSecurity groups response
         security_groups = SecurityGroup.list(
                                         self.apiclient,
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
         self.assertEqual(
                          isinstance(security_groups, list),
@@ -333,7 +333,7 @@ class TestAuthorizeIngressRule(cloudstackTestCase):
                             cls.services["account"],
                             domainid=cls.domain.id
                             )
-        cls.services["account"] = cls.account.account.name
+        cls.services["account"] = cls.account.name
         cls._cleanup = [
                         cls.account,
                         cls.service_offering
@@ -351,7 +351,7 @@ class TestAuthorizeIngressRule(cloudstackTestCase):
 
         return
 
-    @attr(tags = ["sg", "eip"])
+    @attr(tags = ["sg", "eip", "advancedsg"])
     def test_authorizeIngressRule(self):
         """Test authorize ingress rule
         """
@@ -371,15 +371,15 @@ class TestAuthorizeIngressRule(cloudstackTestCase):
         security_group = SecurityGroup.create(
                                               self.apiclient,
                                               self.services["security_group"],
-                                              account=self.account.account.name,
-                                              domainid=self.account.account.domainid
+                                              account=self.account.name,
+                                              domainid=self.account.domainid
                                               )
         self.debug("Created security group with ID: %s" % security_group.id)
         # Default Security group should not have any ingress rule
         sercurity_groups = SecurityGroup.list(
                                               self.apiclient,
-                                              account=self.account.account.name,
-                                              domainid=self.account.account.domainid
+                                              account=self.account.name,
+                                              domainid=self.account.domainid
                                               )
         self.assertEqual(
                          isinstance(sercurity_groups, list),
@@ -396,8 +396,8 @@ class TestAuthorizeIngressRule(cloudstackTestCase):
         ingress_rule = security_group.authorize(
                                 self.apiclient,
                                 self.services["security_group"],
-                                account=self.account.account.name,
-                                domainid=self.account.account.domainid
+                                account=self.account.name,
+                                domainid=self.account.domainid
                                 )
         self.assertEqual(
                           isinstance(ingress_rule, dict),
@@ -410,12 +410,12 @@ class TestAuthorizeIngressRule(cloudstackTestCase):
         self.virtual_machine = VirtualMachine.create(
                                     self.apiclient,
                                     self.services["virtual_machine"],
-                                    accountid=self.account.account.name,
-                                    domainid=self.account.account.domainid,
+                                    accountid=self.account.name,
+                                    domainid=self.account.domainid,
                                     serviceofferingid=self.service_offering.id,
                                     securitygroupids=[security_group.id]
                                 )
-        self.debug("Deploying VM in account: %s" % self.account.account.name)
+        self.debug("Deploying VM in account: %s" % self.account.name)
         # Should be able to SSH VM
         try:
             self.debug("SSH into VM: %s" % self.virtual_machine.ssh_ip)
@@ -491,7 +491,7 @@ class TestDefaultGroupEgress(cloudstackTestCase):
                             cls.services["account"],
                             domainid=cls.domain.id
                             )
-        cls.services["account"] = cls.account.account.name
+        cls.services["account"] = cls.account.name
         cls._cleanup = [
                         cls.account,
                         cls.service_offering
@@ -509,7 +509,7 @@ class TestDefaultGroupEgress(cloudstackTestCase):
 
         return
 
-    @attr(tags = ["sg", "eip"])
+    @attr(tags = ["sg", "eip", "advancedsg"])
     def test_01_default_group_with_egress(self):
         """Test default group with egress rule before VM deploy and ping, ssh
         """
@@ -529,16 +529,16 @@ class TestDefaultGroupEgress(cloudstackTestCase):
         security_group = SecurityGroup.create(
                                               self.apiclient,
                                               self.services["security_group"],
-                                              account=self.account.account.name,
-                                              domainid=self.account.account.domainid
+                                              account=self.account.name,
+                                              domainid=self.account.domainid
                                               )
         self.debug("Created security group with ID: %s" % security_group.id)
 
         # Default Security group should not have any ingress rule
         sercurity_groups = SecurityGroup.list(
                                               self.apiclient,
-                                              account=self.account.account.name,
-                                              domainid=self.account.account.domainid
+                                              account=self.account.name,
+                                              domainid=self.account.domainid
                                               )
         self.assertEqual(
                          isinstance(sercurity_groups, list),
@@ -557,8 +557,8 @@ class TestDefaultGroupEgress(cloudstackTestCase):
         ingress_rule = security_group.authorize(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
 
         self.assertEqual(
@@ -575,8 +575,8 @@ class TestDefaultGroupEgress(cloudstackTestCase):
         egress_rule = security_group.authorizeEgress(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
 
         self.assertEqual(
@@ -589,12 +589,12 @@ class TestDefaultGroupEgress(cloudstackTestCase):
         self.virtual_machine = VirtualMachine.create(
                                     self.apiclient,
                                     self.services["virtual_machine"],
-                                    accountid=self.account.account.name,
-                                    domainid=self.account.account.domainid,
+                                    accountid=self.account.name,
+                                    domainid=self.account.domainid,
                                     serviceofferingid=self.service_offering.id,
                                     securitygroupids=[security_group.id]
                                 )
-        self.debug("Deploying VM in account: %s" % self.account.account.name)
+        self.debug("Deploying VM in account: %s" % self.account.name)
 
         # Should be able to SSH VM
         try:
@@ -692,7 +692,7 @@ class TestDefaultGroupEgressAfterDeploy(cloudstackTestCase):
                             cls.services["account"],
                             domainid=cls.domain.id
                             )
-        cls.services["account"] = cls.account.account.name
+        cls.services["account"] = cls.account.name
         cls._cleanup = [
                         cls.account,
                         cls.service_offering
@@ -710,7 +710,7 @@ class TestDefaultGroupEgressAfterDeploy(cloudstackTestCase):
 
         return
 
-    @attr(tags = ["sg", "eip"])
+    @attr(tags = ["sg", "eip", "advancedsg"])
     def test_01_default_group_with_egress(self):
         """ Test default group with egress rule added after vm deploy and ping,
             ssh test
@@ -730,16 +730,16 @@ class TestDefaultGroupEgressAfterDeploy(cloudstackTestCase):
         security_group = SecurityGroup.create(
                                               self.apiclient,
                                               self.services["security_group"],
-                                              account=self.account.account.name,
-                                              domainid=self.account.account.domainid
+                                              account=self.account.name,
+                                              domainid=self.account.domainid
                                               )
         self.debug("Created security group with ID: %s" % security_group.id)
 
         # Default Security group should not have any ingress rule
         sercurity_groups = SecurityGroup.list(
                                               self.apiclient,
-                                              account=self.account.account.name,
-                                              domainid=self.account.account.domainid
+                                              account=self.account.name,
+                                              domainid=self.account.domainid
                                               )
         self.assertEqual(
                          isinstance(sercurity_groups, list),
@@ -758,8 +758,8 @@ class TestDefaultGroupEgressAfterDeploy(cloudstackTestCase):
         ingress_rule = security_group.authorize(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
 
         self.assertEqual(
@@ -773,12 +773,12 @@ class TestDefaultGroupEgressAfterDeploy(cloudstackTestCase):
         self.virtual_machine = VirtualMachine.create(
                                     self.apiclient,
                                     self.services["virtual_machine"],
-                                    accountid=self.account.account.name,
-                                    domainid=self.account.account.domainid,
+                                    accountid=self.account.name,
+                                    domainid=self.account.domainid,
                                     serviceofferingid=self.service_offering.id,
                                     securitygroupids=[security_group.id]
                                 )
-        self.debug("Deploying VM in account: %s" % self.account.account.name)
+        self.debug("Deploying VM in account: %s" % self.account.name)
 
         # Authorize Security group to SSH to VM
         self.debug(
@@ -787,8 +787,8 @@ class TestDefaultGroupEgressAfterDeploy(cloudstackTestCase):
         egress_rule = security_group.authorizeEgress(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
 
         self.assertEqual(
@@ -875,7 +875,7 @@ class TestRevokeEgressRule(cloudstackTestCase):
                             cls.services["account"],
                             domainid=cls.domain.id
                             )
-        cls.services["account"] = cls.account.account.name
+        cls.services["account"] = cls.account.name
         cls._cleanup = [
                         cls.account,
                         cls.service_offering
@@ -893,7 +893,7 @@ class TestRevokeEgressRule(cloudstackTestCase):
 
         return
 
-    @attr(tags = ["sg", "eip"])
+    @attr(tags = ["sg", "eip", "advancedsg"])
     def test_revoke_egress_rule(self):
         """Test revoke security group egress rule
         """
@@ -915,16 +915,16 @@ class TestRevokeEgressRule(cloudstackTestCase):
         security_group = SecurityGroup.create(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
         self.debug("Created security group with ID: %s" % security_group.id)
 
         # Default Security group should not have any ingress rule
         sercurity_groups = SecurityGroup.list(
                                         self.apiclient,
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
         self.assertEqual(
                          isinstance(sercurity_groups, list),
@@ -944,8 +944,8 @@ class TestRevokeEgressRule(cloudstackTestCase):
         ingress_rule = security_group.authorize(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
 
         self.assertEqual(
@@ -963,8 +963,8 @@ class TestRevokeEgressRule(cloudstackTestCase):
         egress_rule = security_group.authorizeEgress(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
 
         self.assertEqual(
@@ -977,12 +977,12 @@ class TestRevokeEgressRule(cloudstackTestCase):
         self.virtual_machine = VirtualMachine.create(
                                     self.apiclient,
                                     self.services["virtual_machine"],
-                                    accountid=self.account.account.name,
-                                    domainid=self.account.account.domainid,
+                                    accountid=self.account.name,
+                                    domainid=self.account.domainid,
                                     serviceofferingid=self.service_offering.id,
                                     securitygroupids=[security_group.id]
                                 )
-        self.debug("Deploying VM in account: %s" % self.account.account.name)
+        self.debug("Deploying VM in account: %s" % self.account.name)
 
         # Should be able to SSH VM
         try:
@@ -1033,7 +1033,7 @@ class TestRevokeEgressRule(cloudstackTestCase):
             "Revoke Egress Rule for Security Group %s for account: %s" \
                 % (
                     security_group.id,
-                    self.account.account.name
+                    self.account.name
                 ))
 
         result = security_group.revokeEgress(
@@ -1137,7 +1137,7 @@ class TestInvalidAccountAuthroize(cloudstackTestCase):
                             cls.services["account"],
                             domainid=cls.domain.id
                             )
-        cls.services["account"] = cls.account.account.name
+        cls.services["account"] = cls.account.name
         cls._cleanup = [
                         cls.account,
                         cls.service_offering
@@ -1155,7 +1155,7 @@ class TestInvalidAccountAuthroize(cloudstackTestCase):
 
         return
 
-    @attr(tags = ["sg", "eip"])
+    @attr(tags = ["sg", "eip", "advancedsg"])
     def test_invalid_account_authroize(self):
         """Test invalid account authroize
         """
@@ -1173,16 +1173,16 @@ class TestInvalidAccountAuthroize(cloudstackTestCase):
         security_group = SecurityGroup.create(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
         self.debug("Created security group with ID: %s" % security_group.id)
 
         # Default Security group should not have any ingress rule
         sercurity_groups = SecurityGroup.list(
                                         self.apiclient,
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
         self.assertEqual(
                          isinstance(sercurity_groups, list),
@@ -1205,7 +1205,7 @@ class TestInvalidAccountAuthroize(cloudstackTestCase):
                                         self.apiclient,
                                         self.services["security_group"],
                                         account=random_gen(),
-                                        domainid=self.account.account.domainid
+                                        domainid=self.account.domainid
                                         )
         return
 
@@ -1283,7 +1283,7 @@ class TestMultipleAccountsEgressRuleNeg(cloudstackTestCase):
 
         return
 
-    @attr(tags = ["sg", "eip"])
+    @attr(tags = ["sg", "eip", "advancedsg"])
     def test_multiple_account_egress_rule_negative(self):
         """Test multiple account egress rules negative case
         """
@@ -1531,7 +1531,7 @@ class TestMultipleAccountsEgressRule(cloudstackTestCase):
 
         return
 
-    @attr(tags = ["sg", "eip"])
+    @attr(tags = ["sg", "eip", "advancedsg"])
     def test_multiple_account_egress_rule_positive(self):
         """Test multiple account egress rules positive case
         """
@@ -1804,7 +1804,7 @@ class TestStartStopVMWithEgressRule(cloudstackTestCase):
                             cls.services["account"],
                             domainid=cls.domain.id
                             )
-        cls.services["account"] = cls.account.account.name
+        cls.services["account"] = cls.account.name
         cls._cleanup = [
                         cls.account,
                         cls.service_offering
@@ -1822,7 +1822,7 @@ class TestStartStopVMWithEgressRule(cloudstackTestCase):
 
         return
 
-    @attr(tags = ["sg", "eip"])
+    @attr(tags = ["sg", "eip", "advancedsg"])
     def test_start_stop_vm_egress(self):
         """ Test stop start Vm with egress rules
         """
@@ -1842,16 +1842,16 @@ class TestStartStopVMWithEgressRule(cloudstackTestCase):
         security_group = SecurityGroup.create(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
         self.debug("Created security group with ID: %s" % security_group.id)
 
         # Default Security group should not have any ingress rule
         sercurity_groups = SecurityGroup.list(
                                         self.apiclient,
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
         self.assertEqual(
                          isinstance(sercurity_groups, list),
@@ -1871,8 +1871,8 @@ class TestStartStopVMWithEgressRule(cloudstackTestCase):
         ingress_rule = security_group.authorize(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
 
         self.assertEqual(
@@ -1886,12 +1886,12 @@ class TestStartStopVMWithEgressRule(cloudstackTestCase):
         self.virtual_machine = VirtualMachine.create(
                                     self.apiclient,
                                     self.services["virtual_machine"],
-                                    accountid=self.account.account.name,
-                                    domainid=self.account.account.domainid,
+                                    accountid=self.account.name,
+                                    domainid=self.account.domainid,
                                     serviceofferingid=self.service_offering.id,
                                     securitygroupids=[security_group.id]
                                 )
-        self.debug("Deploying VM in account: %s" % self.account.account.name)
+        self.debug("Deploying VM in account: %s" % self.account.name)
 
         # Authorize Security group to SSH to VM
         self.debug(
@@ -1900,8 +1900,8 @@ class TestStartStopVMWithEgressRule(cloudstackTestCase):
         egress_rule = security_group.authorizeEgress(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
 
         self.assertEqual(
@@ -2016,7 +2016,7 @@ class TestInvalidParametersForEgress(cloudstackTestCase):
                             cls.services["account"],
                             domainid=cls.domain.id
                             )
-        cls.services["account"] = cls.account.account.name
+        cls.services["account"] = cls.account.name
         cls._cleanup = [
                         cls.account,
                         cls.service_offering
@@ -2034,7 +2034,7 @@ class TestInvalidParametersForEgress(cloudstackTestCase):
 
         return
 
-    @attr(tags = ["sg", "eip"])
+    @attr(tags = ["sg", "eip", "advancedsg"])
     def test_invalid_parameters(self):
         """ Test invalid parameters for egress rules
         """
@@ -2054,16 +2054,16 @@ class TestInvalidParametersForEgress(cloudstackTestCase):
         security_group = SecurityGroup.create(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
         self.debug("Created security group with ID: %s" % security_group.id)
 
         # Default Security group should not have any ingress rule
         sercurity_groups = SecurityGroup.list(
                                         self.apiclient,
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
         self.assertEqual(
                          isinstance(sercurity_groups, list),
@@ -2085,8 +2085,8 @@ class TestInvalidParametersForEgress(cloudstackTestCase):
             egress_rule = security_group.authorizeEgress(
                                     self.apiclient,
                                     self.services["sg_invalid_port"],
-                                    account=self.account.account.name,
-                                    domainid=self.account.account.domainid
+                                    account=self.account.name,
+                                    domainid=self.account.domainid
                                     )
         self.debug(
             "Authorizing egress rule for sec group ID: %s with invalid cidr"
@@ -2095,8 +2095,8 @@ class TestInvalidParametersForEgress(cloudstackTestCase):
             egress_rule = security_group.authorizeEgress(
                                     self.apiclient,
                                     self.services["sg_invalid_cidr"],
-                                    account=self.account.account.name,
-                                    domainid=self.account.account.domainid
+                                    account=self.account.name,
+                                    domainid=self.account.domainid
                                     )
         self.debug(
             "Authorizing egress rule for sec group ID: %s with invalid account"
@@ -2106,7 +2106,7 @@ class TestInvalidParametersForEgress(cloudstackTestCase):
                                     self.apiclient,
                                     self.services["security_group"],
                                     account=random_gen(),
-                                    domainid=self.account.account.domainid
+                                    domainid=self.account.domainid
                                     )
         self.debug(
             "Authorizing egress rule for sec group ID: %s with cidr: anywhere and port: 22"
@@ -2114,8 +2114,8 @@ class TestInvalidParametersForEgress(cloudstackTestCase):
         egress_rule_A = security_group.authorizeEgress(
                                     self.apiclient,
                                     self.services["sg_cidr_anywhere"],
-                                    account=self.account.account.name,
-                                    domainid=self.account.account.domainid
+                                    account=self.account.name,
+                                    domainid=self.account.domainid
                                     )
 
         self.assertEqual(
@@ -2127,8 +2127,8 @@ class TestInvalidParametersForEgress(cloudstackTestCase):
         egress_rule_R = security_group.authorizeEgress(
                                     self.apiclient,
                                     self.services["sg_cidr_restricted"],
-                                    account=self.account.account.name,
-                                    domainid=self.account.account.domainid
+                                    account=self.account.name,
+                                    domainid=self.account.domainid
                                     )
 
         self.assertEqual(
@@ -2144,8 +2144,8 @@ class TestInvalidParametersForEgress(cloudstackTestCase):
             security_group.authorizeEgress(
                                     self.apiclient,
                                     self.services["sg_cidr_restricted"],
-                                    account=self.account.account.name,
-                                    domainid=self.account.account.domainid
+                                    account=self.account.name,
+                                    domainid=self.account.domainid
                                     )
         return
 
@@ -2203,7 +2203,7 @@ class TestEgressAfterHostMaintainance(cloudstackTestCase):
                             cls.services["account"],
                             domainid=cls.domain.id
                             )
-        cls.services["account"] = cls.account.account.name
+        cls.services["account"] = cls.account.name
         cls._cleanup = [
                         cls.account,
                         cls.service_offering
@@ -2241,16 +2241,16 @@ class TestEgressAfterHostMaintainance(cloudstackTestCase):
         security_group = SecurityGroup.create(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                       )
         self.debug("Created security group with ID: %s" % security_group.id)
 
         # Default Security group should not have any ingress rule
         sercurity_groups = SecurityGroup.list(
                                         self.apiclient,
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                       )
         self.assertEqual(
                          isinstance(sercurity_groups, list),
@@ -2270,8 +2270,8 @@ class TestEgressAfterHostMaintainance(cloudstackTestCase):
         ingress_rule = security_group.authorize(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
 
         self.assertEqual(
@@ -2289,8 +2289,8 @@ class TestEgressAfterHostMaintainance(cloudstackTestCase):
         egress_rule = security_group.authorizeEgress(
                                         self.apiclient,
                                         self.services["security_group"],
-                                        account=self.account.account.name,
-                                        domainid=self.account.account.domainid
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
                                         )
 
         self.assertEqual(
@@ -2303,12 +2303,12 @@ class TestEgressAfterHostMaintainance(cloudstackTestCase):
         self.virtual_machine = VirtualMachine.create(
                                     self.apiclient,
                                     self.services["virtual_machine"],
-                                    accountid=self.account.account.name,
-                                    domainid=self.account.account.domainid,
+                                    accountid=self.account.name,
+                                    domainid=self.account.domainid,
                                     serviceofferingid=self.service_offering.id,
                                     securitygroupids=[security_group.id]
                                 )
-        self.debug("Deploying VM in account: %s" % self.account.account.name)
+        self.debug("Deploying VM in account: %s" % self.account.name)
 
         # Should be able to SSH VM
         try:

@@ -173,8 +173,6 @@ ALTER TABLE upload ADD uuid VARCHAR(40);
 ALTER TABLE async_job modify job_cmd VARCHAR(255);
 
 
-ALTER TABLE `cloud`.`alert` ADD INDEX `last_sent` (`last_sent` DESC) ;
-
 ALTER TABLE `cloud`.`network_offerings` ADD COLUMN `is_persistent` int(1) unsigned NOT NULL DEFAULT 0 COMMENT 'true if the network offering provides an ability to create persistent networks';
 
 
@@ -184,6 +182,7 @@ UPDATE `cloud`.`alert` set uuid=id WHERE uuid is NULL;
 UPDATE `cloud`.`async_job` set uuid=id WHERE uuid is NULL;
 UPDATE `cloud`.`cluster` set uuid=id WHERE uuid is NULL;
 UPDATE `cloud`.`data_center` set uuid=id WHERE uuid is NULL;
+UPDATE `cloud`.`dc_storage_network_ip_range` set uuid=id WHERE uuid is NULL;
 UPDATE `cloud`.`disk_offering` set uuid=id WHERE uuid is NULL;
 UPDATE `cloud`.`domain` set uuid=id WHERE uuid is NULL;
 UPDATE `cloud`.`event` set uuid=id WHERE uuid is NULL;
@@ -217,6 +216,7 @@ UPDATE `cloud`.`security_group` set uuid=id WHERE uuid is NULL;
 UPDATE `cloud`.`security_group_rule` set uuid=id WHERE uuid is NULL;
 UPDATE `cloud`.`snapshot_schedule` set uuid=id WHERE uuid is NULL;
 UPDATE `cloud`.`snapshots` set uuid=id WHERE uuid is NULL;
+UPDATE `cloud`.`snapshot_policy` set uuid=id WHERE uuid is NULL;
 UPDATE `cloud`.`static_routes` set uuid=id WHERE uuid is NULL;
 UPDATE `cloud`.`storage_pool` set uuid=id WHERE uuid is NULL;
 UPDATE `cloud`.`swift` set uuid=id WHERE uuid is NULL;
@@ -443,6 +443,10 @@ ALTER TABLE `cloud`.`vlan` ADD COLUMN `ip6_range` varchar(255);
 ALTER TABLE `cloud`.`data_center` ADD COLUMN `ip6_dns1` varchar(255);
 ALTER TABLE `cloud`.`data_center` ADD COLUMN `ip6_dns2` varchar(255);
 
+UPDATE `cloud`.`networks` INNER JOIN `cloud`.`vlan` ON networks.id = vlan.network_id 
+SET networks.gateway = vlan.vlan_gateway, networks.ip6_gateway = vlan.ip6_gateway, networks.ip6_cidr = vlan.ip6_cidr 
+WHERE networks.data_center_id = vlan.data_center_id AND networks.physical_network_id = vlan.physical_network_id;
+
 -- DB views for list api
 
 DROP VIEW IF EXISTS `cloud`.`user_vm_view`;
@@ -640,6 +644,7 @@ CREATE VIEW `cloud`.`domain_router_view` AS
         data_center.id data_center_id,
         data_center.uuid data_center_uuid,
         data_center.name data_center_name,
+        data_center.networktype data_center_type,
         data_center.dns1 dns1,
         data_center.dns2 dns2,
         data_center.ip6_dns1 ip6_dns1,
@@ -680,7 +685,8 @@ CREATE VIEW `cloud`.`domain_router_view` AS
         domain_router.scripts_version scripts_version,
         domain_router.is_redundant_router is_redundant_router,
         domain_router.redundant_state redundant_state,
-        domain_router.stop_pending stop_pending
+        domain_router.stop_pending stop_pending,
+        domain_router.role role
     from
         `cloud`.`domain_router`
             inner join
@@ -1633,3 +1639,19 @@ INSERT IGNORE INTO `cloud`.`configuration` VALUES ('Usage', 'DEFAULT', 'manageme
 
 INSERT IGNORE INTO `cloud`.`guest_os` (id, uuid, category_id, display_name) VALUES (163, UUID(), 10, 'Ubuntu 12.04 (32-bit)');
 INSERT IGNORE INTO `cloud`.`guest_os` (id, uuid, category_id, display_name) VALUES (164, UUID(), 10, 'Ubuntu 12.04 (64-bit)');
+
+DROP TABLE IF EXISTS `cloud`.`netscaler_pod_ref`;
+CREATE TABLE  `cloud`.`netscaler_pod_ref` (
+  `id` bigint unsigned NOT NULL auto_increment COMMENT 'id',
+  `external_load_balancer_device_id` bigint unsigned NOT NULL COMMENT 'id of external load balancer device',
+  `pod_id` bigint unsigned NOT NULL COMMENT 'pod id',
+  PRIMARY KEY  (`id`),
+  CONSTRAINT `fk_ns_pod_ref__pod_id` FOREIGN KEY (`pod_id`) REFERENCES `cloud`.`host_pod_ref`(`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_ns_pod_ref__device_id` FOREIGN KEY (`external_load_balancer_device_id`) REFERENCES `external_load_balancer_devices`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+INSERT IGNORE INTO `cloud`.`configuration` VALUES ('Advanced', 'DEFAULT', 'management-server', 'eip.use.multiple.netscalers' , 'false', 'Should be set to true, if there will be multiple NetScaler devices providing EIP service in a zone');
+
+UPDATE `cloud`.`configuration` set category='Advanced' where category='Advanced ';
+UPDATE `cloud`.`configuration` set category='Hidden' where category='Hidden ';
+

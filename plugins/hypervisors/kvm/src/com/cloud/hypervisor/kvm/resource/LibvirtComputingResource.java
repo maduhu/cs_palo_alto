@@ -63,6 +63,7 @@ import org.apache.cloudstack.utils.qemu.QemuImgFile;
 import org.apache.cloudstack.utils.qemu.QemuImgException;
 import org.libvirt.Connect;
 import org.libvirt.Domain;
+import org.libvirt.DomainBlockStats;
 import org.libvirt.DomainInfo;
 import org.libvirt.DomainInterfaceStats;
 import org.libvirt.DomainSnapshot;
@@ -99,6 +100,8 @@ import com.cloud.agent.api.GetHostStatsAnswer;
 import com.cloud.agent.api.GetHostStatsCommand;
 import com.cloud.agent.api.GetStorageStatsAnswer;
 import com.cloud.agent.api.GetStorageStatsCommand;
+import com.cloud.agent.api.GetVmDiskStatsAnswer;
+import com.cloud.agent.api.GetVmDiskStatsCommand;
 import com.cloud.agent.api.GetVmStatsAnswer;
 import com.cloud.agent.api.GetVmStatsCommand;
 import com.cloud.agent.api.GetVncPortAnswer;
@@ -125,6 +128,7 @@ import com.cloud.agent.api.PlugNicAnswer;
 import com.cloud.agent.api.PlugNicCommand;
 import com.cloud.agent.api.PrepareForMigrationAnswer;
 import com.cloud.agent.api.PrepareForMigrationCommand;
+import com.cloud.agent.api.PvlanSetupCommand;
 import com.cloud.agent.api.ReadyAnswer;
 import com.cloud.agent.api.ReadyCommand;
 import com.cloud.agent.api.RebootAnswer;
@@ -144,6 +148,7 @@ import com.cloud.agent.api.StopCommand;
 import com.cloud.agent.api.UnPlugNicAnswer;
 import com.cloud.agent.api.UnPlugNicCommand;
 import com.cloud.agent.api.UpgradeSnapshotCommand;
+import com.cloud.agent.api.VmDiskStatsEntry;
 import com.cloud.agent.api.VmStatsEntry;
 import com.cloud.agent.api.check.CheckSshAnswer;
 import com.cloud.agent.api.check.CheckSshCommand;
@@ -267,6 +272,8 @@ ServerResource {
     private String _createTmplPath;
     private String _heartBeatPath;
     private String _securityGroupPath;
+    private String _ovsPvlanDhcpHostPath;
+    private String _ovsPvlanVmPath;
     private String _routerProxyPath;
     private String _host;
     private String _dcId;
@@ -587,6 +594,18 @@ ServerResource {
                     "Unable to find the router_proxy.sh");
         }
 
+        _ovsPvlanDhcpHostPath = Script.findScript(networkScriptsDir, "ovs-pvlan-dhcp-host.sh");
+        if ( _ovsPvlanDhcpHostPath == null) {
+            throw new ConfigurationException(
+                    "Unable to find the ovs-pvlan-dhcp-host.sh");
+        }
+        
+        _ovsPvlanVmPath = Script.findScript(networkScriptsDir, "ovs-pvlan-vm.sh");
+        if ( _ovsPvlanVmPath == null) {
+            throw new ConfigurationException(
+                    "Unable to find the ovs-pvlan-vm.sh");
+        }
+        
         String value = (String) params.get("developer");
         boolean isDeveloper = Boolean.parseBoolean(value);
 
@@ -1102,6 +1121,8 @@ ServerResource {
                 return execute((StopCommand) cmd);
             } else if (cmd instanceof GetVmStatsCommand) {
                 return execute((GetVmStatsCommand) cmd);
+            } else if (cmd instanceof GetVmDiskStatsCommand) {
+                return execute((GetVmDiskStatsCommand) cmd);
             } else if (cmd instanceof RebootRouterCommand) {
                 return execute((RebootRouterCommand) cmd);
             } else if (cmd instanceof RebootCommand) {
@@ -1202,6 +1223,8 @@ ServerResource {
                 return execute((CheckNetworkCommand) cmd);
             } else if (cmd instanceof NetworkRulesVmSecondaryIpCommand) {
                 return execute((NetworkRulesVmSecondaryIpCommand) cmd);
+            } else if (cmd instanceof PvlanSetupCommand) {
+                return execute((PvlanSetupCommand) cmd);
             } else {
                 s_logger.warn("Unsupported command ");
                 return Answer.createUnsupportedCommandAnswer(cmd);
@@ -1236,6 +1259,13 @@ ServerResource {
     }
 
     private CopyVolumeAnswer execute(CopyVolumeCommand cmd) {
+       /**
+            This method is only used for copying files from Primary Storage TO Secondary Storage
+
+            It COULD also do it the other way around, but the code in the ManagementServerImpl shows
+            that it always sets copyToSecondary to true
+
+         */
         boolean copyToSecondary = cmd.toSecondaryStorage();
         String volumePath = cmd.getVolumePath();
         StorageFilerTO pool = cmd.getPool();
@@ -1517,6 +1547,65 @@ ServerResource {
         }
     }
 
+    private Answer execute(PvlanSetupCommand cmd) {
+    	String primaryPvlan = cmd.getPrimary();
+    	String isolatedPvlan = cmd.getIsolated();
+    	String op = cmd.getOp();
+    	String dhcpName = cmd.getDhcpName();
+    	String dhcpMac = cmd.getDhcpMac();
+    	String dhcpIp = cmd.getDhcpIp();
+    	String vmMac = cmd.getVmMac();
+    	boolean add = true;
+    	
+    	String opr = "-A";
+    	if (op.equals("delete"))  {
+    		opr = "-D";
+    		add = false;
+    	}
+    	
+    	String result = null;
+        Connect conn;
+		try {
+			if (cmd.getType() == PvlanSetupCommand.Type.DHCP) {
+				Script script = new Script(_ovsPvlanDhcpHostPath, _timeout, s_logger);
+				if (add) {
+					conn = LibvirtConnection.getConnectionByVmName(dhcpName);
+					List<InterfaceDef> ifaces = getInterfaces(conn, dhcpName);
+					InterfaceDef guestNic = ifaces.get(0);
+					script.add(opr, "-b", _guestBridgeName,
+						"-p", primaryPvlan, "-i", isolatedPvlan, "-n", dhcpName,
+						"-d", dhcpIp, "-m", dhcpMac, "-I", guestNic.getDevName());
+				} else {
+					script.add(opr, "-b", _guestBridgeName,
+						"-p", primaryPvlan, "-i", isolatedPvlan, "-n", dhcpName,
+						"-d", dhcpIp, "-m", dhcpMac);
+				}
+				result = script.execute();
+				if (result != null) {
+					s_logger.warn("Failed to program pvlan for dhcp server with mac " + dhcpMac);
+					return new Answer(cmd, false, result);
+				} else {
+					s_logger.info("Programmed pvlan for dhcp server with mac " + dhcpMac);
+				}
+			} else if (cmd.getType() == PvlanSetupCommand.Type.VM) {
+				Script script = new Script(_ovsPvlanVmPath, _timeout, s_logger);
+				script.add(opr, "-b", _guestBridgeName,
+						"-p", primaryPvlan, "-i", isolatedPvlan, "-v", vmMac);
+				result = script.execute();
+				if (result != null) {
+					s_logger.warn("Failed to program pvlan for vm with mac " + vmMac);
+					return new Answer(cmd, false, result);
+				} else {
+					s_logger.info("Programmed pvlan for vm with mac " + vmMac);
+				}
+			}
+		} catch (LibvirtException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+    	return new Answer(cmd, true, result);
+    }
+
     private void VifHotPlug(Connect conn, String vmName, String vlanId,
             String macAddr) throws InternalErrorException, LibvirtException {
         NicTO nicTO = new NicTO();
@@ -1643,6 +1732,7 @@ ServerResource {
         Connect conn;
         String routerName = cmd.getAccessDetail(NetworkElementCommand.ROUTER_NAME);
         String routerIp = cmd.getAccessDetail(NetworkElementCommand.ROUTER_IP);
+        String privateGw = cmd.getAccessDetail(NetworkElementCommand.VPC_PRIVATE_GATEWAY);
 
         try {
             conn = LibvirtConnection.getConnectionByVmName(routerName);
@@ -1660,7 +1750,7 @@ ServerResource {
 
             String rule =  sb.toString();
             String result = _virtRouterResource.assignNetworkACL(routerIp,
-                    dev, nic.getIp(), netmask, rule);
+                    dev, nic.getIp(), netmask, rule, privateGw);
 
             if (result != null) {
                 for (int i=0; i < results.length; i++) {
@@ -1756,7 +1846,7 @@ ServerResource {
                 String netmask = Long.toString(NetUtils.getCidrSize(ip.getVlanNetmask()));
                 String subnet = NetUtils.getSubNet(ip.getPublicIp(), ip.getVlanNetmask());
                 _virtRouterResource.assignVpcIpToRouter(routerIP, ip.isAdd(), ip.getPublicIp(),
-                        nicName, ip.getVlanGateway(), netmask, subnet);
+                        nicName, ip.getVlanGateway(), netmask, subnet, ip.isSourceNat());
                 results[i++] = ip.getPublicIp() + " - success";
             }
 
@@ -2542,8 +2632,7 @@ ServerResource {
         Domain vms = null;
         while (retry-- > 0) {
             try {
-                vms = conn.domainLookupByUUID(UUID.nameUUIDFromBytes(vmName
-                        .getBytes()));
+                vms = conn.domainLookupByName(vmName);
                 State s = convertToState(vms.getInfo().state);
                 return s;
             } catch (final LibvirtException e) {
@@ -2635,8 +2724,7 @@ ServerResource {
         try {
             conn = LibvirtConnection.getConnectionByVmName(cmd.getVmName());
             ifaces = getInterfaces(conn, vmName);
-            dm = conn.domainLookupByUUID(UUID.nameUUIDFromBytes(vmName
-                    .getBytes()));
+            dm = conn.domainLookupByName(vmName);
             dconn = new Connect("qemu+tcp://" + cmd.getDestinationIp()
                     + "/system");
             /*
@@ -2651,6 +2739,9 @@ ServerResource {
         } finally {
             try {
                 if (dm != null) {
+                    if (dm.isPersistent() == 1) {
+                        dm.undefine();
+                    }
                     dm.free();
                 }
                 if (dconn != null) {
@@ -2765,7 +2856,7 @@ ServerResource {
         Pair<Double, Double> nicStats = getNicStats(_publicBridgeName);
 
         HostStatsEntry hostStats = new HostStatsEntry(cmd.getHostId(), cpuUtil,
-                nicStats.first() / 1000, nicStats.second() / 1000, "host",
+                nicStats.first() / 1024, nicStats.second() / 1024, "host",
                 totMem, freeMem, 0, 0);
         return new GetHostStatsAnswer(cmd, hostStats);
     }
@@ -2919,6 +3010,26 @@ ServerResource {
             return answer;
         } else {
             return new Answer(cmd, false, result);
+        }
+    }
+
+    protected GetVmDiskStatsAnswer execute(GetVmDiskStatsCommand cmd) {
+        List<String> vmNames = cmd.getVmNames();
+        try {
+            HashMap<String, List<VmDiskStatsEntry>> vmDiskStatsNameMap = new HashMap<String, List<VmDiskStatsEntry>>();
+            Connect conn = LibvirtConnection.getConnection();
+            for (String vmName : vmNames) {
+                List<VmDiskStatsEntry> statEntry = getVmDiskStat(conn, vmName);
+                if (statEntry == null) {
+                    continue;
+                }
+
+                vmDiskStatsNameMap.put(vmName, statEntry);
+            }
+            return new GetVmDiskStatsAnswer(cmd, "", cmd.getHostName(), vmDiskStatsNameMap);
+        } catch (LibvirtException e) {
+            s_logger.debug("Can't get vm disk stats: " + e.toString());
+            return new GetVmDiskStatsAnswer(cmd, null, null, null);
         }
     }
 
@@ -3082,8 +3193,7 @@ ServerResource {
     protected LibvirtVMDef createVMFromSpec(VirtualMachineTO vmTO) {
         LibvirtVMDef vm = new LibvirtVMDef();
         vm.setDomainName(vmTO.getName());
-        vm.setDomUUID(UUID.nameUUIDFromBytes(vmTO.getName().getBytes())
-                .toString());
+        vm.setDomUUID(vmTO.getUuid());
         vm.setDomDescription(vmTO.getOs());
 
         GuestDef guest = new GuestDef();
@@ -3151,6 +3261,8 @@ ServerResource {
         if (vmTO.getOs().startsWith("Windows")) {
             clock.setClockOffset(ClockDef.ClockOffset.LOCALTIME);
             clock.setTimer("rtc", "catchup", null);
+        } else if (vmTO.getType() != VirtualMachine.Type.User) {
+            clock.setTimer("kvmclock", "catchup", null);
         }
 
         vm.addComp(clock);
@@ -3502,10 +3614,10 @@ ServerResource {
         List<DiskDef> disks = null;
         Domain dm = null;
         DiskDef diskdef = null;
+        KVMStoragePool attachingPool = attachingDisk.getPool();
         try {
             if (!attach) {
-                dm = conn.domainLookupByUUID(UUID.nameUUIDFromBytes(vmName
-                        .getBytes()));
+                dm = conn.domainLookupByName(vmName);
                 LibvirtDomainXMLParser parser = new LibvirtDomainXMLParser();
                 String xml = dm.getXMLDesc(0);
                 parser.parseDomainXML(xml);
@@ -3526,7 +3638,12 @@ ServerResource {
                 }
             } else {
                 diskdef = new DiskDef();
-                if (attachingDisk.getFormat() == PhysicalDiskFormat.QCOW2) {
+                if (attachingPool.getType() == StoragePoolType.RBD) {
+                    diskdef.defNetworkBasedDisk(attachingDisk.getPath(),
+                            attachingPool.getSourceHost(), attachingPool.getSourcePort(),
+                            attachingPool.getAuthUserName(), attachingPool.getUuid(), devId,
+                            DiskDef.diskBus.VIRTIO, diskProtocol.RBD);
+                } else if (attachingDisk.getFormat() == PhysicalDiskFormat.QCOW2) {
                     diskdef.defFileBasedDisk(attachingDisk.getPath(), devId,
                             DiskDef.diskBus.VIRTIO, DiskDef.diskFmtType.QCOW2);
                 } else if (attachingDisk.getFormat() == PhysicalDiskFormat.RAW) {
@@ -3549,9 +3666,7 @@ ServerResource {
             InternalErrorException {
         Domain dm = null;
         try {
-            dm = conn.domainLookupByUUID(UUID.nameUUIDFromBytes((vmName
-                    .getBytes())));
-
+            dm = conn.domainLookupByName(vmName);
             if (attach) {
                 s_logger.debug("Attaching device: " + xml);
                 dm.attachDevice(xml);
@@ -3782,8 +3897,7 @@ ServerResource {
         for (; i < 5; i++) {
             try {
                 Connect conn = LibvirtConnection.getConnectionByVmName(vm);
-                dm = conn.domainLookupByUUID(UUID.nameUUIDFromBytes(vm
-                        .getBytes()));
+                dm = conn.domainLookupByName(vm);
                 DomainInfo.DomainState vps = dm.getInfo().state;
                 if (vps != null
                         && vps != DomainInfo.DomainState.VIR_DOMAIN_SHUTOFF
@@ -3855,18 +3969,22 @@ ServerResource {
         final HashMap<String, State> vmStates = new HashMap<String, State>();
         Connect conn = null;
 
-        try {
-            conn = LibvirtConnection.getConnectionByType(HypervisorType.LXC.toString());
-            vmStates.putAll(getAllVms(conn));
-        } catch (LibvirtException e) {
-            s_logger.debug("Failed to get connection: " + e.getMessage());
+        if (_hypervisorType == HypervisorType.LXC) {
+            try {
+                conn = LibvirtConnection.getConnectionByType(HypervisorType.LXC.toString());
+                vmStates.putAll(getAllVms(conn));
+            } catch (LibvirtException e) {
+                s_logger.debug("Failed to get connection: " + e.getMessage());
+            }
         }
 
-        try {
-            conn = LibvirtConnection.getConnectionByType(HypervisorType.KVM.toString());
-            vmStates.putAll(getAllVms(conn));
-        } catch (LibvirtException e) {
-            s_logger.debug("Failed to get connection: " + e.getMessage());
+        if (_hypervisorType == HypervisorType.KVM) {
+            try {
+                conn = LibvirtConnection.getConnectionByType(HypervisorType.KVM.toString());
+                vmStates.putAll(getAllVms(conn));
+            } catch (LibvirtException e) {
+                s_logger.debug("Failed to get connection: " + e.getMessage());
+            }
         }
 
         return vmStates;
@@ -3920,8 +4038,7 @@ ServerResource {
         for (int i = 0; i < vms.length; i++) {
             try {
 
-                dm = conn.domainLookupByUUID(UUID.nameUUIDFromBytes(vms[i]
-                        .getBytes()));
+                dm = conn.domainLookupByName(vms[i]);
 
                 DomainInfo.DomainState ps = dm.getInfo().state;
                 final State state = convertToState(ps);
@@ -4026,8 +4143,7 @@ ServerResource {
         Domain dm = null;
         String msg = null;
         try {
-            dm = conn.domainLookupByUUID(UUID.nameUUIDFromBytes(vmName
-                    .getBytes()));
+            dm = conn.domainLookupByName(vmName);
             String vmDef = dm.getXMLDesc(0);
             s_logger.debug(vmDef);
             msg = stopVM(conn, vmName);
@@ -4069,8 +4185,7 @@ ServerResource {
             /* Retry 3 times, to make sure we can get the vm's status */
             for (int i = 0; i < 3; i++) {
                 try {
-                    dm = conn.domainLookupByUUID(UUID.nameUUIDFromBytes(vmName
-                            .getBytes()));
+                    dm = conn.domainLookupByName(vmName);
                     state = dm.getInfo().state;
                     break;
                 } catch (LibvirtException e) {
@@ -4106,8 +4221,7 @@ ServerResource {
     protected String stopVM(Connect conn, String vmName, boolean force) {
         Domain dm = null;
         try {
-            dm = conn.domainLookupByUUID(UUID.nameUUIDFromBytes(vmName
-                    .getBytes()));
+            dm = conn.domainLookupByName(vmName);
             int persist = dm.isPersistent();
             if (force) {
                 if (dm.isActive() == 1) {
@@ -4194,8 +4308,7 @@ ServerResource {
         LibvirtDomainXMLParser parser = new LibvirtDomainXMLParser();
         Domain dm = null;
         try {
-            dm = conn.domainLookupByUUID(UUID.nameUUIDFromBytes(vmName
-                    .getBytes()));
+            dm = conn.domainLookupByName(vmName);
             String xmlDesc = dm.getXMLDesc(0);
             parser.parseDomainXML(xmlDesc);
             return parser.getVncPort();
@@ -4240,8 +4353,7 @@ ServerResource {
         LibvirtDomainXMLParser parser = new LibvirtDomainXMLParser();
         Domain dm = null;
         try {
-            dm = conn.domainLookupByUUID(UUID.nameUUIDFromBytes(vmName
-                    .getBytes()));
+            dm = conn.domainLookupByName(vmName);
             String xmlDesc = dm.getXMLDesc(0);
             parser.parseDomainXML(xmlDesc);
             return parser.getDescription();
@@ -4339,15 +4451,14 @@ ServerResource {
     private Domain getDomain(Connect conn, String vmName)
             throws LibvirtException {
         return conn
-                .domainLookupByUUID(UUID.nameUUIDFromBytes(vmName.getBytes()));
+                .domainLookupByName(vmName);
     }
 
     protected List<InterfaceDef> getInterfaces(Connect conn, String vmName) {
         LibvirtDomainXMLParser parser = new LibvirtDomainXMLParser();
         Domain dm = null;
         try {
-            dm = conn.domainLookupByUUID(UUID.nameUUIDFromBytes(vmName
-                    .getBytes()));
+            dm = conn.domainLookupByName(vmName);
             parser.parseDomainXML(dm.getXMLDesc(0));
             return parser.getInterfaces();
 
@@ -4369,8 +4480,7 @@ ServerResource {
         LibvirtDomainXMLParser parser = new LibvirtDomainXMLParser();
         Domain dm = null;
         try {
-            dm = conn.domainLookupByUUID(UUID.nameUUIDFromBytes(vmName
-                    .getBytes()));
+            dm = conn.domainLookupByName(vmName);
             parser.parseDomainXML(dm.getXMLDesc(0));
             return parser.getDisks();
 
@@ -4428,10 +4538,46 @@ ServerResource {
         }
     }
 
+    private List<VmDiskStatsEntry> getVmDiskStat(Connect conn, String vmName)
+            throws LibvirtException {
+        Domain dm = null;
+        try {
+            dm = getDomain(conn, vmName);
+
+            List<VmDiskStatsEntry> stats = new ArrayList<VmDiskStatsEntry>();
+
+            List<DiskDef> disks = getDisks(conn, vmName);
+
+            for (DiskDef disk : disks) {
+                DomainBlockStats blockStats = dm.blockStats(disk.getDiskLabel());
+                String path = disk.getDiskPath(); // for example, path = /mnt/pool_uuid/disk_path/
+                String diskPath = null;
+                if (path != null) {
+                    String[] token = path.split("/");
+                    if (token.length > 3) {
+                        diskPath = token[3];
+                        VmDiskStatsEntry stat = new VmDiskStatsEntry(vmName, diskPath, blockStats.wr_req, blockStats.rd_req, blockStats.wr_bytes, blockStats.rd_bytes);
+                        stats.add(stat);
+                    }
+                }
+            }
+
+            return stats;
+        } finally {
+            if (dm != null) {
+                dm.free();
+            }
+        }
+    }
+
     private class vmStats {
         long _usedTime;
         long _tx;
         long _rx;
+        long _io_rd;
+        long _io_wr;
+        long _bytes_rd;
+        long _bytes_wr;
         Calendar _timestamp;
     }
 
@@ -4482,16 +4628,50 @@ ServerResource {
             if (oldStats != null) {
                 long deltarx = rx - oldStats._rx;
                 if (deltarx > 0)
-                    stats.setNetworkReadKBs(deltarx / 1000);
+                    stats.setNetworkReadKBs(deltarx / 1024);
                 long deltatx = tx - oldStats._tx;
                 if (deltatx > 0)
-                    stats.setNetworkWriteKBs(deltatx / 1000);
+                    stats.setNetworkWriteKBs(deltatx / 1024);
             }
 
+            /* get disk stats */
+            List<DiskDef> disks = getDisks(conn, vmName);
+            long io_rd = 0;
+            long io_wr = 0;
+            long bytes_rd = 0;
+            long bytes_wr = 0;
+            for (DiskDef disk : disks) {
+                DomainBlockStats blockStats = dm.blockStats(disk.getDiskLabel());
+                io_rd += blockStats.rd_req;
+                io_wr += blockStats.wr_req;
+                bytes_rd += blockStats.rd_bytes;
+                bytes_wr += blockStats.wr_bytes;
+            }
+            
+            if (oldStats != null) {
+                long deltaiord = io_rd - oldStats._io_rd;
+                if (deltaiord > 0)
+                    stats.setDiskReadIOs(deltaiord);
+                long deltaiowr = io_wr - oldStats._io_wr;
+                if (deltaiowr > 0)
+                    stats.setDiskWriteIOs(deltaiowr);
+                long deltabytesrd = bytes_rd - oldStats._bytes_rd;
+                if (deltabytesrd > 0)
+                    stats.setDiskReadKBs(deltabytesrd / 1024);
+                long deltabyteswr = bytes_wr - oldStats._bytes_wr;
+                if (deltabyteswr > 0)
+                    stats.setDiskWriteKBs(deltabyteswr / 1024);
+            }
+            
+            /* save to Hashmap */
             vmStats newStat = new vmStats();
             newStat._usedTime = info.cpuTime;
             newStat._rx = rx;
             newStat._tx = tx;
+            newStat._io_rd = io_rd;
+            newStat._io_wr = io_wr;
+            newStat._bytes_rd = bytes_rd;
+            newStat._bytes_wr = bytes_wr;
             newStat._timestamp = now;
             _vmStats.put(vmName, newStat);
             return stats;

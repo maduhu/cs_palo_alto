@@ -24,6 +24,7 @@ import java.net.InetAddress;
 import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.net.URI;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Formatter;
@@ -60,6 +61,8 @@ public class NetUtils {
     public final static String ALL_PROTO = "all";
 
     public final static String ALL_CIDRS = "0.0.0.0/0";
+    public final static int PORT_RANGE_MIN = 0;
+    public final static int PORT_RANGE_MAX = 65535;
 
     public final static int DEFAULT_AUTOSCALE_VM_DESTROY_TIME = 2 * 60; // Grace period before Vm is destroyed
     public final static int DEFAULT_AUTOSCALE_POLICY_INTERVAL_TIME = 30;
@@ -627,7 +630,7 @@ public class NetUtils {
         return result;
     }
 
-    public static Set<Long> getAllIpsFromCidr(String cidr, long size) {
+    public static Set<Long> getAllIpsFromCidr(String cidr, long size, Set<Long> usedIps) {
         assert (size < 32) : "You do know this is not for ipv6 right?  Keep it smaller than 32 but you have " + size;
         Set<Long> result = new TreeSet<Long>();
         long ip = ip2Long(cidr);
@@ -639,8 +642,12 @@ public class NetUtils {
 
         end++;
         end = (end << (32 - size)) - 2;
-        while (start <= end) {
-            result.add(start);
+        int maxIps = 255; // get 255 ips as maximum
+        while (start <= end && maxIps > 0) {
+            if (!usedIps.contains(start)){
+                result.add(start);
+                maxIps--;
+            }
             start++;
         }
 
@@ -1290,4 +1297,42 @@ public class NetUtils {
     	}
 		return resultIp;
 	}
+
+    public static boolean isValidVlan(String vlan) {
+        try {
+            int vnet = Integer.parseInt(vlan);
+            if (vnet < 0 || vnet > 4096) {
+                return false;
+            }
+            return true;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+	public static URI generateUriForPvlan(String primaryVlan, String isolatedPvlan) {
+        return URI.create("pvlan://" + primaryVlan + "-i" + isolatedPvlan);
+	}
+	
+	public static String getPrimaryPvlanFromUri(URI uri) {
+		String[] vlans = uri.getHost().split("-");
+		if (vlans.length < 1) {
+			return null;
+		}
+		return vlans[0];
+	}
+	
+	public static String getIsolatedPvlanFromUri(URI uri) {
+		String[] vlans = uri.getHost().split("-");
+		if (vlans.length < 2) {
+			return null;
+		}
+		for (String vlan : vlans) {
+			if (vlan.startsWith("i")) {
+				return vlan.replace("i", " ").trim();
+			}
+		}
+		return null;
+	}
+
 }

@@ -48,6 +48,7 @@ import com.vmware.vim25.GuestInfo;
 import com.vmware.vim25.HttpNfcLeaseDeviceUrl;
 import com.vmware.vim25.HttpNfcLeaseInfo;
 import com.vmware.vim25.HttpNfcLeaseState;
+import com.vmware.vim25.InvalidStateFaultMsg;
 import com.vmware.vim25.ManagedObjectReference;
 import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.ObjectSpec;
@@ -57,6 +58,7 @@ import com.vmware.vim25.OvfCreateDescriptorResult;
 import com.vmware.vim25.OvfFile;
 import com.vmware.vim25.PropertyFilterSpec;
 import com.vmware.vim25.PropertySpec;
+import com.vmware.vim25.RuntimeFaultFaultMsg;
 import com.vmware.vim25.SelectionSpec;
 import com.vmware.vim25.TraversalSpec;
 import com.vmware.vim25.VirtualCdrom;
@@ -334,6 +336,30 @@ public class VirtualMachineMO extends BaseMO {
 
 		return false;
 	}
+
+    public boolean changeDatastore(VirtualMachineRelocateSpec relocateSpec) throws Exception {
+        ManagedObjectReference morTask = _context.getVimClient().getService().relocateVMTask(_mor, relocateSpec, VirtualMachineMovePriority.DEFAULT_PRIORITY);
+        boolean result = _context.getVimClient().waitForTask(morTask);
+        if(result) {
+            _context.waitForTaskProgressDone(morTask);
+            return true;
+        } else {
+            s_logger.error("VMware RelocateVM_Task to change datastore failed due to " + TaskMO.getTaskFailureInfo(_context, morTask));
+        }
+        return false;
+    }
+
+    public boolean changeHost(VirtualMachineRelocateSpec relocateSpec) throws Exception {
+        ManagedObjectReference morTask = _context.getService().relocateVMTask(_mor, relocateSpec, VirtualMachineMovePriority.DEFAULT_PRIORITY);
+        boolean result = _context.getVimClient().waitForTask(morTask);
+        if (result) {
+            _context.waitForTaskProgressDone(morTask);
+            return true;
+        } else {
+            s_logger.error("VMware RelocateVM_Task to change host failed due to " + TaskMO.getTaskFailureInfo(_context, morTask));
+        }
+        return false;
+    }
 
 	public boolean relocate(ManagedObjectReference morTargetHost) throws Exception {
 	    VirtualMachineRelocateSpec relocateSpec = new VirtualMachineRelocateSpec();
@@ -1281,6 +1307,7 @@ public class VirtualMachineMO extends BaseMO {
 					long totalBytesDownloaded = 0;
 
 					List<HttpNfcLeaseDeviceUrl> deviceUrls = leaseInfo.getDeviceUrl();
+					s_logger.info("volss: copy vmdk and ovf file starts " + System.currentTimeMillis());
 					if(deviceUrls != null) {
 						OvfFile[] ovfFiles = new OvfFile[deviceUrls.size()];
 						for (int i = 0; i < deviceUrls.size(); i++) {
@@ -1328,7 +1355,7 @@ public class VirtualMachineMO extends BaseMO {
 
 						// tar files into OVA
 						if(packToOva) {
-						    // Important! we need to sync file system before we can safely use tar to work around a linux kernal bug(or feature)
+                                                    // Important! we need to sync file system before we can safely use tar to work around a linux kernal bug(or feature)
                             s_logger.info("Sync file system before we package OVA...");
 
 						    Script commandSync = new Script(true, "sync", 0, s_logger);
@@ -1351,8 +1378,11 @@ public class VirtualMachineMO extends BaseMO {
 					        } else {
 					            s_logger.error(exportDir + File.separator + exportName + ".ova is not created as expected");
 					        }
+						} else {
+							success = true;
 						}
 					}
+					s_logger.info("volss: copy vmdk and ovf file finishes " + System.currentTimeMillis());
 				} catch(Throwable e) {
 					s_logger.error("Unexpected exception ", e);
 				} finally {

@@ -348,11 +348,18 @@
           
 	  }													
 										
-          setTimeout(function() {
+      /*    setTimeout(function() {
             if ($form.find('input[name=ispublic]').is(':checked')) {
-              $form.find('[rel=domain]').hide();
+              $form.find('[rel=domain]').show();
+              $form.find('[rel=accountId]').show();
             }
-          });
+ 
+            else{
+
+              $form.find('[rel=domain]').hide();
+              $form.find('[rel=accountId]').hide();
+             }             
+          });*/
         },
         fields: {
           name: {
@@ -401,7 +408,6 @@
 									var nonSupportedHypervisors = {};									
 									if(args.context.zones[0]['network-model']	== "Advanced" && args.context.zones[0]['zone-advanced-sg-enabled'] ==	"on") {
 									  firstOption = "KVM";
-										nonSupportedHypervisors["XenServer"] = 1;  //to developers: comment this line if you need to test Advanced SG-enabled zone with XenServer hypervisor
 										nonSupportedHypervisors["VMware"] = 1;
 										nonSupportedHypervisors["BareMetal"] = 1;
 										nonSupportedHypervisors["Ovm"] = 1;
@@ -542,10 +548,10 @@
             validation: { required: false }
           },
           ispublic: {
-            isReverse: true,
+            //isReverse: true,
             isBoolean: true,
-            label: 'label.public',
-            isChecked: true //checked by default (public zone)
+            label: 'Dedicate',
+            isChecked: false //checked by default (public zone)
           },
           domain: {
             label: 'label.domain',
@@ -571,6 +577,16 @@
               });
             }
           },
+
+           accountId:{
+                     label:'Account',
+                     isHidden:true,
+                     dependsOn:'ispublic',
+                     //docID:'helpAccountForDedication',
+                     validation:{required:false}
+
+                  },
+
           localstorageenabled: {
             label: 'label.local.storage.enabled',
             isBoolean: true,
@@ -664,7 +680,7 @@
 					gslbprovider: {
             label: 'GSLB service',
             isBoolean: true,
-            isChecked: true
+            isChecked: false
           },
 					gslbproviderpublicip: {
             label: 'GSLB service Public IP'
@@ -1588,12 +1604,16 @@
             array1.push("&internaldns2=" + todb(internaldns2));
 
 					if(args.data.pluginFrom == null) { //from zone wizard, not from quick instsaller(args.data.pluginFrom != null && args.data.pluginFrom.name == 'installWizard') who doesn't have public checkbox
-						if(args.data.zone.ispublic == null) //public checkbox in zone wizard is unchecked 
-							array1.push("&domainid=" + args.data.zone.domain);
+					//	if(args.data.zone.ispublic != null){ //public checkbox in zone wizard is unchecked 
+					//		array1.push("&domainid=" + args.data.zone.domain);
+                                                       
+                                              // }
           }
 					
           if(args.data.zone.networkdomain != null && args.data.zone.networkdomain.length > 0)
             array1.push("&domain=" + todb(args.data.zone.networkdomain));
+          
+          var dedicatedZoneId = null;
 
           $.ajax({
             url: createURL("createZone" + array1.join("")),
@@ -1605,6 +1625,35 @@
                   returnedZone: json.createzoneresponse.zone
                 })
               });
+
+               dedicatedZoneId = json.createzoneresponse.zone.id;
+                //EXPLICIT ZONE DEDICATION
+                if(args.data.pluginFrom == null && args.data.zone.ispublic != null){
+                      var array2 = [];
+                      if(args.data.zone.domain != null)
+                        array2.push("&domainid=" + args.data.zone.domain);
+                      if(args.data.zone.accountId != "")
+                        array2.push("&accountId=" +todb(args.data.zone.accountId));
+
+                      if(dedicatedZoneId != null){
+                      $.ajax({
+                         url:createURL("dedicateZone&ZoneId=" +dedicatedZoneId + array2.join("")),
+                         dataType:"json",
+                         success:function(json){
+                             var dedicatedObj = json.dedicatezoneresponse.jobid;
+                             //args.response.success({ data: $.extend(item, dedicatedObj)});
+
+                         },
+
+                         error:function(json){
+
+                           args.response.error(parseXMLHttpResponse(XMLHttpResponse));
+                         }
+                       });
+
+                     }
+                    }
+
             },
             error: function(XMLHttpResponse) {
               var errorMsg = parseXMLHttpResponse(XMLHttpResponse);
@@ -2376,6 +2425,110 @@
                             });
 														// ***** Virtual Router ***** (end) *****
 														
+							// ***** Internal LB ***** (begin) *****
+							var internalLbProviderId;
+							$.ajax({
+								url: createURL("listNetworkServiceProviders&name=Internallbvm&physicalNetworkId=" + thisPhysicalNetwork.id),
+								dataType: "json",
+								async: false,
+								success: function(json) {
+									var items = json.listnetworkserviceprovidersresponse.networkserviceprovider;
+									if(items != null && items.length > 0) {
+										internalLbProviderId = items[0].id;
+									}
+								}
+							});
+							if(internalLbProviderId == null) {
+								alert("error: listNetworkServiceProviders API doesn't return internalLb provider ID");
+								return;
+							}
+
+							var internalLbElementId;
+							$.ajax({
+								url: createURL("listInternalLoadBalancerElements&nspid=" + internalLbProviderId),
+								dataType: "json",
+								async: false,
+								success: function(json) {
+									var items = json.listinternalloadbalancerelementsresponse.internalloadbalancerelement;
+									if(items != null && items.length > 0) {
+										internalLbElementId = items[0].id;
+									}
+								}
+							});
+							if(internalLbElementId == null) {
+								alert("error: listInternalLoadBalancerElements API doesn't return Internal LB Element Id");
+								return;
+							}
+
+							$.ajax({
+								url: createURL("configureInternalLoadBalancerElement&enabled=true&id=" + internalLbElementId),
+								dataType: "json",
+								async: false,
+								success: function(json) {
+									var jobId = json.configureinternalloadbalancerelementresponse.jobid;                                
+									var enableInternalLbElementIntervalID = setInterval(function() { 	
+										$.ajax({
+											url: createURL("queryAsyncJobResult&jobId="+jobId),
+											dataType: "json",
+											success: function(json) {
+												var result = json.queryasyncjobresultresponse;
+												if (result.jobstatus == 0) {
+													return; //Job has not completed
+												}
+												else {                                        
+													clearInterval(enableInternalLbElementIntervalID); 
+													
+													if (result.jobstatus == 1) { //configureVirtualRouterElement succeeded
+														$.ajax({
+															url: createURL("updateNetworkServiceProvider&state=Enabled&id=" + internalLbProviderId),
+															dataType: "json",
+															async: false,
+															success: function(json) {
+																var jobId = json.updatenetworkserviceproviderresponse.jobid;                                             
+																var enableInternalLbProviderIntervalID = setInterval(function() { 	
+																	$.ajax({
+																		url: createURL("queryAsyncJobResult&jobId="+jobId),
+																		dataType: "json",
+																		success: function(json) {
+																			var result = json.queryasyncjobresultresponse;
+																			if (result.jobstatus == 0) {
+																				return; //Job has not completed
+																			}
+																			else {                                                      
+																				clearInterval(enableInternalLbProviderIntervalID); 
+																				
+																				if (result.jobstatus == 1) { //Internal LB has been enabled successfully
+																					//don't need to do anything here
+																				}
+																				else if (result.jobstatus == 2) {
+																					alert("failed to enable Internal LB Provider. Error: " + _s(result.jobresult.errortext));
+																				}
+																			}
+																		},
+																		error: function(XMLHttpResponse) {
+																			var errorMsg = parseXMLHttpResponse(XMLHttpResponse);
+																			alert("failed to enable Internal LB Provider. Error: " + errorMsg);
+																		}
+																	});                                              
+																}, g_queryAsyncJobResultInterval); 	
+															}
+														});
+													}
+													else if (result.jobstatus == 2) {
+														alert("configureVirtualRouterElement failed. Error: " + _s(result.jobresult.errortext));
+													}
+												}
+											},
+											error: function(XMLHttpResponse) {
+												var errorMsg = parseXMLHttpResponse(XMLHttpResponse);
+												alert("configureVirtualRouterElement failed. Error: " + errorMsg);
+											}
+										});                                
+									}, g_queryAsyncJobResultInterval); 	
+								}
+							});
+							// ***** Internal LB ***** (end) *****
+                            
 														if(args.data.zone.sgEnabled != true) { //Advanced SG-disabled zone
 															// ***** VPC Virtual Router ***** (begin) *****
 															var vpcVirtualRouterProviderId;

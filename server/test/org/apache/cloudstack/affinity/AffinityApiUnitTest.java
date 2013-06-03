@@ -16,23 +16,43 @@
 // under the License.
 package org.apache.cloudstack.affinity;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyLong;
-import static org.mockito.Mockito.*;
+import static org.mockito.Matchers.anyObject;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.inject.Inject;
+import javax.naming.ConfigurationException;
+
 import org.apache.cloudstack.affinity.dao.AffinityGroupDao;
 import org.apache.cloudstack.affinity.dao.AffinityGroupVMMapDao;
+import org.apache.cloudstack.test.utils.SpringUtils;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.ComponentScan.Filter;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.FilterType;
+import org.springframework.core.type.classreading.MetadataReader;
+import org.springframework.core.type.classreading.MetadataReaderFactory;
+import org.springframework.core.type.filter.TypeFilter;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.test.context.support.AnnotationConfigContextLoader;
 
+import com.cloud.dc.dao.DedicatedResourceDao;
 import com.cloud.event.EventUtils;
 import com.cloud.event.EventVO;
 import com.cloud.event.dao.EventDao;
@@ -41,23 +61,23 @@ import com.cloud.exception.ResourceInUseException;
 import com.cloud.hypervisor.Hypervisor.HypervisorType;
 import com.cloud.user.Account;
 import com.cloud.user.AccountManager;
+import com.cloud.user.AccountService;
 import com.cloud.user.AccountVO;
 import com.cloud.user.UserContext;
 import com.cloud.user.dao.AccountDao;
 import com.cloud.utils.component.ComponentContext;
+import com.cloud.utils.db.SearchBuilder;
+import com.cloud.utils.db.SearchCriteria;
 import com.cloud.vm.UserVmVO;
 import com.cloud.vm.VirtualMachine;
 import com.cloud.vm.dao.UserVmDao;
 
-import javax.inject.Inject;
-import javax.naming.ConfigurationException;
-
 @RunWith(SpringJUnit4ClassRunner.class)
-@ContextConfiguration(locations = "classpath:/affinityContext.xml")
+@ContextConfiguration(loader = AnnotationConfigContextLoader.class)
 public class AffinityApiUnitTest {
 
     @Inject
-    AffinityGroupServiceImpl _affinityService;
+    AffinityGroupService _affinityService;
 
     @Inject
     AccountManager _acctMgr;
@@ -82,16 +102,19 @@ public class AffinityApiUnitTest {
 
     @Inject
     AccountDao _accountDao;
-    
+
     @Inject
     EventDao _eventDao;
+
+    @Inject
+    DedicatedResourceDao _dedicatedDao;
+
 
     private static long domainId = 5L;
 
 
     @BeforeClass
     public static void setUp() throws ConfigurationException {
-
     }
 
     @Before
@@ -119,6 +142,7 @@ public class AffinityApiUnitTest {
 
     @Test
     public void createAffinityGroupTest() {
+        when(_groupDao.isNameInUse(anyLong(), anyLong(), eq("group1"))).thenReturn(false);
         AffinityGroup group = _affinityService.createAffinityGroup("user", domainId, "group1", "mock",
                 "affinity group one");
         assertNotNull("Affinity group 'group1' of type 'mock' failed to create ", group);
@@ -156,20 +180,6 @@ public class AffinityApiUnitTest {
         _affinityService.deleteAffinityGroup(null, "user", domainId, null);
     }
 
-    @Test(expected = ResourceInUseException.class)
-    public void deleteAffinityGroupInUse() throws ResourceInUseException {
-        List<AffinityGroupVMMapVO> affinityGroupVmMap = new ArrayList<AffinityGroupVMMapVO>();
-        AffinityGroupVMMapVO mapVO = new AffinityGroupVMMapVO(20L, 10L);
-        affinityGroupVmMap.add(mapVO);
-        when(_affinityGroupVMMapDao.listByAffinityGroup(20L)).thenReturn(affinityGroupVmMap);
-
-        AffinityGroupVO groupVO = new AffinityGroupVO();
-        when(_groupDao.findById(20L)).thenReturn(groupVO);
-        when(_groupDao.lockRow(20L, true)).thenReturn(groupVO);
-
-        _affinityService.deleteAffinityGroup(20L, "user", domainId, null);
-    }
-
     @Test(expected = InvalidParameterValueException.class)
     public void updateAffinityGroupVMRunning() throws ResourceInUseException {
 
@@ -184,4 +194,62 @@ public class AffinityApiUnitTest {
         _affinityService.updateVMAffinityGroups(10L, affinityGroupIds);
     }
 
+    @Configuration
+    @ComponentScan(basePackageClasses = {AffinityGroupServiceImpl.class, EventUtils.class}, includeFilters = {@Filter(value = TestConfiguration.Library.class, type = FilterType.CUSTOM)}, useDefaultFilters = false)
+    public static class TestConfiguration extends SpringUtils.CloudStackTestConfiguration {
+
+        @Bean
+        public AccountDao accountDao() {
+            return Mockito.mock(AccountDao.class);
+        }
+
+        @Bean
+        public AccountService accountService() {
+            return Mockito.mock(AccountService.class);
+        }
+
+        @Bean
+        public AffinityGroupProcessor affinityGroupProcessor() {
+            return Mockito.mock(AffinityGroupProcessor.class);
+        }
+
+        @Bean
+        public AffinityGroupDao affinityGroupDao() {
+            return Mockito.mock(AffinityGroupDao.class);
+        }
+
+        @Bean
+        public AffinityGroupVMMapDao affinityGroupVMMapDao() {
+            return Mockito.mock(AffinityGroupVMMapDao.class);
+        }
+
+        @Bean
+        public DedicatedResourceDao dedicatedResourceDao() {
+            return Mockito.mock(DedicatedResourceDao.class);
+        }
+
+        @Bean
+        public AccountManager accountManager() {
+            return Mockito.mock(AccountManager.class);
+        }
+
+        @Bean
+        public EventDao eventDao() {
+            return Mockito.mock(EventDao.class);
+        }
+
+        @Bean
+        public UserVmDao userVMDao() {
+            return Mockito.mock(UserVmDao.class);
+        }
+
+        public static class Library implements TypeFilter {
+
+            @Override
+            public boolean match(MetadataReader mdr, MetadataReaderFactory arg1) throws IOException {
+                ComponentScan cs = TestConfiguration.class.getAnnotation(ComponentScan.class);
+                return SpringUtils.includedInBasePackageClasses(mdr.getClassMetadata().getClassName(), cs);
+            }
+        }
+    }
 }

@@ -30,6 +30,11 @@
       <artifactId>cloud-plugin-acl-static-role-based</artifactId>
       <version>${project.version}</version>
     </dependency>
+     <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-dedicated-resources</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.cloudstack</groupId>
       <artifactId>cloud-plugin-api-limit-account-based</artifactId>
@@ -90,6 +95,11 @@
       <artifactId>cloud-plugin-network-midonet</artifactId>
       <version>${project.version}</version>
     </dependency>
+  <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-network-internallb</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.cloudstack</groupId>
       <artifactId>cloud-plugin-hypervisor-xen</artifactId>
@@ -129,6 +139,16 @@
     <dependency>
       <groupId>org.apache.cloudstack</groupId>
       <artifactId>cloud-plugin-planner-user-concentrated-pod</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-planner-implicit-dedication</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-explicit-dedication</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -242,6 +262,11 @@
     <dependency>
       <groupId>org.apache.cloudstack</groupId>
       <artifactId>cloud-plugin-host-anti-affinity</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-console-proxy</artifactId>
       <version>${project.version}</version>
     </dependency>
   </dependencies>
@@ -455,16 +480,15 @@
             </goals>
             <configuration>
               <target if="${nonoss}">
-                <echo>test</echo>
                 <replaceregexp
                   file="${basedir}/target/generated-webapp/WEB-INF/web.xml"
                   match="classpath:componentContext.xml"
                   replace="classpath:nonossComponentContext.xml" byline="true" />
-                <exec executable="cp">
-                    <arg value="-r" />
-                    <arg value="${basedir}/../plugins/network-elements/cisco-vnmc/scripts" />
-                    <arg value="${basedir}/target/generated-webapp/WEB-INF/classes/" />
-                </exec>
+                <copy overwrite="true" todir="${basedir}/target/generated-webapp/WEB-INF/classes/scripts">
+                    <fileset dir="${basedir}/../plugins/network-elements/cisco-vnmc/scripts">
+                        <include name="**/*" />
+                    </fileset>
+                </copy>
               </target>
             </configuration>
           </execution>
