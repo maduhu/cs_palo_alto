@@ -19,29 +19,18 @@ package com.cloud.network.resource;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
 import java.io.StringReader;
-import java.net.Socket;
-import java.net.SocketTimeoutException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
-
-import org.apache.commons.codec.binary.Base64;
-import java.nio.ByteBuffer;
-import java.util.UUID;
-
-import javax.naming.ConfigurationException;
-import javax.xml.parsers.DocumentBuilderFactory;
-
 import org.apache.log4j.Logger;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
+import javax.naming.ConfigurationException;
+import javax.xml.parsers.DocumentBuilderFactory;
 
 import com.cloud.agent.IAgentControl;
 import com.cloud.agent.api.Answer;
@@ -75,6 +64,7 @@ import com.cloud.utils.exception.ExecutionException;
 import com.cloud.utils.net.NetUtils;
 import com.cloud.utils.script.Script;
 
+// http client handling
 import org.apache.http.client.ResponseHandler;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
@@ -95,7 +85,7 @@ import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpressionException;
 import com.cloud.network.utils.HttpClientWrapper;
 
-
+// for prettyFormat()
 import javax.xml.transform.stream.StreamSource;
 import javax.xml.transform.stream.StreamResult;
 import javax.xml.transform.TransformerFactory;
@@ -113,7 +103,6 @@ public class PaloAltoResource implements ServerResource {
     private String _password;
     private String _guid;
     private String _key;
-    private String _objectNameWordSep;
     private Integer _numRetries;
     private Integer _timeoutInSeconds;
     private String _publicZone;
@@ -331,8 +320,6 @@ public class PaloAltoResource implements ServerResource {
 
             _timeoutInSeconds = NumbersUtil.parseInt((String) params.get("timeout"), 300);
 
-            _objectNameWordSep = "-";
-
             // Open a socket and login
             if (!refreshPaloAltoConnection()) {
                 throw new ConfigurationException("Unable to open a connection to the Palo Alto.");
@@ -365,8 +352,6 @@ public class PaloAltoResource implements ServerResource {
                 throw new ConfigurationException(e.getMessage());
             }
             
-
-//            _publicZoneInputFilterName = _publicZone;
             
 //            _usageFilterVlanInput = new UsageFilter("vlan-input", null, "vlan-input");
 //            _usageFilterVlanOutput = new UsageFilter("vlan-output", null, "vlan-output");
@@ -429,22 +414,6 @@ public class PaloAltoResource implements ServerResource {
         return;
     }
 
-    private Answer execute(ReadyCommand cmd) {
-        return new ReadyAnswer(cmd);
-    }
-
-    private Answer execute(MaintainCommand cmd) {
-        return new MaintainAnswer(cmd);
-    }
-
-    private ExternalNetworkResourceUsageAnswer execute(ExternalNetworkResourceUsageCommand cmd) {
-        try {   
-            return getUsageAnswer(cmd);
-        } catch (ExecutionException e) {
-            return new ExternalNetworkResourceUsageAnswer(cmd, e);
-        }
-    }
-
     /*
      * Login
      */
@@ -496,6 +465,23 @@ public class PaloAltoResource implements ServerResource {
 
 
     // ENTRY POINTS...
+    
+
+    private Answer execute(ReadyCommand cmd) {
+        return new ReadyAnswer(cmd);
+    }
+
+    private Answer execute(MaintainCommand cmd) {
+        return new MaintainAnswer(cmd);
+    }
+
+    private ExternalNetworkResourceUsageAnswer execute(ExternalNetworkResourceUsageCommand cmd) {
+        try {   
+            return getUsageAnswer(cmd);
+        } catch (ExecutionException e) {
+            return new ExternalNetworkResourceUsageAnswer(cmd, e);
+        }
+    }
 
 
     /*
@@ -2130,23 +2116,6 @@ public class PaloAltoResource implements ServerResource {
                 return input;
             }
         }
-    }
-
-    private String uuidToBase64(String str) {
-        Base64 base64 = new Base64();
-        UUID uuid = UUID.fromString(str);
-        ByteBuffer bb = ByteBuffer.wrap(new byte[16]);
-        bb.putLong(uuid.getMostSignificantBits());
-        bb.putLong(uuid.getLeastSignificantBits());
-        return base64.encodeBase64URLSafeString(bb.array());
-    }
-
-    private String uuidFromBase64(String str) {
-        Base64 base64 = new Base64(); 
-        byte[] bytes = base64.decodeBase64(str);
-        ByteBuffer bb = ByteBuffer.wrap(bytes);
-        UUID uuid = new UUID(bb.getLong(), bb.getLong());
-        return uuid.toString();
     }
 
     //@Override
