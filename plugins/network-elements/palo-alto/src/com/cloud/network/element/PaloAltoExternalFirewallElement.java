@@ -127,7 +127,7 @@ PortForwardingServiceProvider, IpDeployer, PaloAltoFirewallElementService, Stati
 
     private boolean canHandle(Network network, Service service) {
         DataCenter zone = _configMgr.getZone(network.getDataCenterId());
-        if ((zone.getNetworkType() == NetworkType.Advanced && network.getGuestType() != Network.GuestType.Isolated) || (zone.getNetworkType() == NetworkType.Basic && network.getGuestType() != Network.GuestType.Shared)) {
+        if (zone.getNetworkType() == NetworkType.Advanced && network.getGuestType() != Network.GuestType.Isolated) {
             s_logger.trace("Element " + getProvider().getName() + "is not handling network type = " + network.getGuestType());
             return false;
         }

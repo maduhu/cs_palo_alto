@@ -112,20 +112,14 @@ public class PaloAltoResource implements ServerResource {
     private String _publicInterfaceType;
     private String _privateInterfaceType;
     private String _virtualRouter;
-    private String _usageInterface;
     private String _pingManagementProfile;
-//    private UsageFilter _usageFilterVlanInput;
-//    private UsageFilter _usageFilterVlanOutput;
-//    private UsageFilter _usageFilterIPInput;
-//    private UsageFilter _usageFilterIPOutput;
     private final Logger s_logger = Logger.getLogger(PaloAltoResource.class);
 
     private static String _apiUri = "/api";
     private static HttpClient _httpclient;
 
     private enum PaloAltoMethod {
-        GET,
-        POST;
+        GET, POST;
     }
 
     private enum PaloAltoXml {
@@ -170,35 +164,6 @@ public class PaloAltoResource implements ServerResource {
             }
         }
     }   
-
-//    public class UsageFilter {
-//        private String name;
-//        private String counterIdentifier;
-//        private String addressType;
-//
-//        private UsageFilter(String name, String addressType, String counterIdentifier) {
-//            this.name = name;           
-//            this.addressType = addressType;
-//
-//            if (_usageInterface != null) {
-//                counterIdentifier = _usageInterface + counterIdentifier;
-//            }
-//
-//            this.counterIdentifier = counterIdentifier;
-//        }
-//
-//        public String getName() {
-//            return name;
-//        }
-//
-//        public String getCounterIdentifier() {
-//            return counterIdentifier;
-//        }
-//
-//        public String getAddressType() {
-//            return addressType;
-//        }
-//    }   
 
     private enum PaloAltoPrimative {
         CHECK_IF_EXISTS, ADD, DELETE;
@@ -351,12 +316,6 @@ public class PaloAltoResource implements ServerResource {
             } catch (ExecutionException e) {
                 throw new ConfigurationException(e.getMessage());
             }
-            
-            
-//            _usageFilterVlanInput = new UsageFilter("vlan-input", null, "vlan-input");
-//            _usageFilterVlanOutput = new UsageFilter("vlan-output", null, "vlan-output");
-//            _usageFilterIPInput = new UsageFilter(_publicZone, "destination-address", "-i");
-//            _usageFilterIPOutput = new UsageFilter(_privateZone, "source-address", "-o");
 
             return true;
         } catch (Exception e) {
@@ -476,11 +435,7 @@ public class PaloAltoResource implements ServerResource {
     }
 
     private ExternalNetworkResourceUsageAnswer execute(ExternalNetworkResourceUsageCommand cmd) {
-        try {   
-            return getUsageAnswer(cmd);
-        } catch (ExecutionException e) {
-            return new ExternalNetworkResourceUsageAnswer(cmd, e);
-        }
+        return new ExternalNetworkResourceUsageAnswer(cmd);
     }
 
 
@@ -571,12 +526,8 @@ public class PaloAltoResource implements ServerResource {
 
         if (type.equals(GuestNetworkType.SOURCE_NAT)) {
             managePublicInterface(cmdList, PaloAltoPrimative.ADD, publicVlanTag, publicIp+"/32", privateVlanTag);
-            manageSrcNatRule(cmdList, PaloAltoPrimative.ADD, type, publicVlanTag, publicIp+"/32", privateVlanTag, privateGateway);         
-            //--manageUsageFilter(PaloAltoPrimative.ADD, _usageFilterIPOutput, privateSubnet, null, genIpFilterTermName(publicIp));
-            //--manageUsageFilter(PaloAltoPrimative.ADD, _usageFilterIPInput, publicIp, null, genIpFilterTermName(publicIp));
-        } else if (type.equals(GuestNetworkType.INTERFACE_NAT)){            
-            //--manageUsageFilter(PaloAltoPrimative.ADD, _usageFilterVlanOutput, null, privateVlanTag, null);          
-            //--manageUsageFilter(PaloAltoPrimative.ADD, _usageFilterVlanInput, null, privateVlanTag, null);
+            manageSrcNatRule(cmdList, PaloAltoPrimative.ADD, type, publicVlanTag, publicIp+"/32", privateVlanTag, privateGateway);
+        } else if (type.equals(GuestNetworkType.INTERFACE_NAT)){
         }
 
         String msg = "Implemented guest network with type " + type + ". Guest VLAN tag: " + privateVlanTag + ", guest gateway: " + privateGateway;
@@ -585,20 +536,13 @@ public class PaloAltoResource implements ServerResource {
     }
 
     private void shutdownGuestNetwork(ArrayList<IPaloAltoCommand> cmdList, GuestNetworkType type, Long publicVlanTag, String sourceNatIpAddress, long privateVlanTag, String privateGateway, String privateSubnet, long privateCidrSize) throws ExecutionException {     
-        // Remove static and destination NAT rules for the guest network
-        //removeStaticAndDestNatRulesInPrivateVlan(privateVlanTag, privateGateway, privateCidrSize);
-
         privateGateway = privateGateway + "/" + privateCidrSize;
         privateSubnet = privateSubnet + "/" + privateCidrSize;
 
         if (type.equals(GuestNetworkType.SOURCE_NAT)) {
             manageSrcNatRule(cmdList, PaloAltoPrimative.DELETE, type, publicVlanTag, sourceNatIpAddress+"/32", privateVlanTag, privateGateway);
-            managePublicInterface(cmdList, PaloAltoPrimative.DELETE, publicVlanTag, sourceNatIpAddress+"/32", privateVlanTag);  
-            //--manageUsageFilter(PaloAltoPrimative.DELETE, _usageFilterIPOutput, privateSubnet, null, genIpFilterTermName(sourceNatIpAddress));
-            //--manageUsageFilter(PaloAltoPrimative.DELETE, _usageFilterIPInput, sourceNatIpAddress, null, genIpFilterTermName(sourceNatIpAddress));                                                                  
-        } else if (type.equals(GuestNetworkType.INTERFACE_NAT)) {
-            //--manageUsageFilter(PaloAltoPrimative.DELETE, _usageFilterVlanOutput, null, privateVlanTag, null);         
-            //--manageUsageFilter(PaloAltoPrimative.DELETE, _usageFilterVlanInput, null, privateVlanTag, null);                        
+            managePublicInterface(cmdList, PaloAltoPrimative.DELETE, publicVlanTag, sourceNatIpAddress+"/32", privateVlanTag);                                                             
+        } else if (type.equals(GuestNetworkType.INTERFACE_NAT)) {                  
         }      
 
         managePrivateInterface(cmdList, PaloAltoPrimative.DELETE, privateVlanTag, privateGateway);       
@@ -1371,142 +1315,6 @@ public class PaloAltoResource implements ServerResource {
      * Usage    
      */
 
-    private ExternalNetworkResourceUsageAnswer getUsageAnswer(ExternalNetworkResourceUsageCommand cmd) throws ExecutionException {
-        try {   
-            String socOpenException = "Failed to open a connection for Usage data.";
-            String socCloseException = "Unable to close connection for Usage data.";
-//            if (!openUsageSocket()) {
-//                throw new ExecutionException(socOpenException);
-//            }
- 
-            ExternalNetworkResourceUsageAnswer answer = new ExternalNetworkResourceUsageAnswer(cmd);
-
-//            String xml = PaloAltoXml.FIREWALL_FILTER_BYTES_GETALL.getXml();
-//            //String rawUsageData = sendUsageRequest(xml);        
-//            Document doc = getDocument(rawUsageData);
-//
-//            NodeList counters = doc.getElementsByTagName("counter");
-//            for (int i = 0; i < counters.getLength(); i++) {
-//                Node n = counters.item(i);
-//                if (n.getNodeName().equals("counter")) {
-//                    NodeList counterInfoList = n.getChildNodes();
-//                    String counterName = null;
-//                    long byteCount = 0;
-//
-//                    for (int j = 0; j < counterInfoList.getLength(); j++) {
-//                        Node counterInfo = counterInfoList.item(j);
-//                        if (counterInfo.getNodeName().equals("counter-name")) {
-//                            counterName = counterInfo.getFirstChild().getNodeValue();
-//                        } else if (counterInfo.getNodeName().equals("byte-count")) {
-//                            try {
-//                                byteCount = Long.parseLong(counterInfo.getFirstChild().getNodeValue());
-//                            } catch (Exception e) {
-//                                s_logger.debug(e);
-//                                byteCount = 0;
-//                            }
-//                        }                       
-//                    }
-//
-//                    if (byteCount >= 0) {
-//                        updateUsageAnswer(answer, counterName, byteCount);     
-//                    }
-//                } 
-//            }
-//            if (!closeUsageSocket()) {
-//                throw new ExecutionException(socCloseException);
-//            }
-            return answer;
-        } catch (Exception e) {
-            //closeUsageSocket();
-            throw new ExecutionException(e.getMessage());
-        }
-
-    }       
-
-//    private void updateBytesMap(Map<String, long[]> bytesMap, UsageFilter filter, String usageAnswerKey, long additionalBytes) {
-//        long[] bytesSentAndReceived = bytesMap.get(usageAnswerKey);     
-//        if (bytesSentAndReceived == null) {
-//            bytesSentAndReceived = new long[]{0,0};
-//        }
-//
-//        int index = 0;
-//        if (filter.equals(_usageFilterVlanOutput) || filter.equals(_usageFilterIPInput)) {
-//            index = 1;
-//        }
-//
-//        bytesSentAndReceived[index] += additionalBytes;
-//        bytesMap.put(usageAnswerKey, bytesSentAndReceived);
-//    }
-
-//    private String getIpAddress(String counterName) {
-//        String[] counterNameArray = counterName.split("-");
-//
-//        if (counterNameArray.length < 4) {
-//            return null;
-//        } else {
-//            return counterNameArray[0] + "." + counterNameArray[1] + "." + counterNameArray[2] + "." + counterNameArray[3];
-//        }
-//    }
-
-//    private String getGuestVlanTag(String counterName) {
-//        String[] counterNameArray = counterName.split("-");
-//
-//        if (counterNameArray.length != 3) {
-//            return null;
-//        } else {
-//            return counterNameArray[2];
-//        }
-//    }
-
-//    private UsageFilter getUsageFilter(String counterName) {
-//
-//        if (counterName.contains(_usageFilterVlanInput.getCounterIdentifier())) {
-//            return _usageFilterVlanInput;
-//        } else if (counterName.contains(_usageFilterVlanOutput.getCounterIdentifier())) {
-//            return _usageFilterVlanOutput;
-//        } else if (counterName.contains(_usageFilterIPInput.getCounterIdentifier())) {
-//            return _usageFilterIPInput;
-//        } else if (counterName.contains(_usageFilterIPOutput.getCounterIdentifier())) {
-//            return _usageFilterIPOutput;
-//        } 
-// 
-//        return null;
-//    }
-
-//    private String getUsageAnswerKey(UsageFilter filter, String counterName) {
-//        if (filter.equals(_usageFilterVlanInput) || filter.equals(_usageFilterVlanOutput)) {
-//            return getGuestVlanTag(counterName);
-//        } else if (filter.equals(_usageFilterIPInput) || filter.equals(_usageFilterIPOutput)) {
-//            return getIpAddress(counterName);
-//        } else {
-//            return null;
-//        } 
-//    }
-
-//    private Map<String, long[]> getBytesMap(ExternalNetworkResourceUsageAnswer answer, UsageFilter filter, String usageAnswerKey) {
-//        if (filter.equals(_usageFilterVlanInput) || filter.equals(_usageFilterVlanOutput)) {
-//            return answer.guestVlanBytes;
-//        } else if (filter.equals(_usageFilterIPInput) || filter.equals(_usageFilterIPOutput)) {
-//            return answer.ipBytes;
-//        } else {
-//            return null;
-//        } 
-//    }
-
-//    private void updateUsageAnswer(ExternalNetworkResourceUsageAnswer answer, String counterName, long byteCount) {
-//        if (counterName == null || byteCount <= 0) {
-//            return;                   
-//        }               
-//
-//        //UsageFilter filter = getUsageFilter(counterName);       
-//        if (filter == null) {
-//            s_logger.debug("Failed to parse counter name in usage answer: " + counterName);
-//            return;
-//        }
-//        //String usageAnswerKey = getUsageAnswerKey(filter, counterName);     
-//        //Map<String, long[]> bytesMap = getBytesMap(answer, filter, usageAnswerKey);
-//        //updateBytesMap(bytesMap, filter, usageAnswerKey, byteCount);          
-//    }
 
 
     /*
@@ -1731,7 +1539,7 @@ public class PaloAltoResource implements ServerResource {
         }
 
         debug_msg = debug_msg + prettyFormat(responseBody);
-        s_logger.debug(debug_msg);
+        s_logger.debug(debug_msg); // this can be commented if we don't want to show each request in the log.
         
         return responseBody;
     }
