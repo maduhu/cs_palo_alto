@@ -70,7 +70,7 @@
 								listAll: true
 							},
 							success: function(json) {
-								var zones = json.listzonesresponse.zone;
+								var zones = json.listzonesresponse.zone ? json.listzonesresponse.zone : [];
 
 								args.response.success({
 									data: $.map(zones, function(zone) {
@@ -640,9 +640,14 @@
                       name: { label: 'label.name' },
                       type: { label: 'label.type' }
                     },
-                    dataProvider: function(args) {										  
+                    dataProvider: function(args) {				
+                      var data = {
+                        domainid: args.context.instances[0].domainid,
+                        account: args.context.instances[0].account
+                      };                    
 											$.ajax({
 												url: createURL('listAffinityGroups'),
+												data: data,
 												async: false, //make it sync to avoid dataProvider() being called twice which produces duplicate data
 												success: function(json) {	
                           var items = [];												
@@ -1513,6 +1518,7 @@
                       args.response.success({
                         _custom: { jobId: json.updatedefaultnicforvirtualmachineresponse.jobid }
                       });
+                      cloudStack.dialog.notice({message:_l('Please manually update the default NIC on the VM now.')});
                     }
                   });
                 },
@@ -1576,6 +1582,7 @@
             viewAll: {
               path: 'network.secondaryNicIps',
               attachTo: 'ipaddress',
+              label: 'label.view.secondary.ips',
               title: function(args) {
                 var title = _l('label.menu.ipaddresses') + ' - ' + args.context.nics[0].name;
                 
@@ -1669,8 +1676,8 @@
                   networkkbswrite: (jsonObj.networkkbswrite == null)? "N/A": cloudStack.converters.convertBytes(jsonObj.networkkbswrite * 1024),
                   diskkbsread: (jsonObj.diskkbsread == null)? "N/A": cloudStack.converters.convertBytes(jsonObj.diskkbsread * 1024),
                   diskkbswrite: (jsonObj.diskkbswrite == null)? "N/A": cloudStack.converters.convertBytes(jsonObj.diskkbswrite * 1024),
-                  diskioread: (jsonObj.diskioread == null)? "N/A": cloudStack.converters.convertBytes(jsonObj.diskioread * 1024),
-                  diskiowrite: (jsonObj.diskiowrite == null)? "N/A": cloudStack.converters.convertBytes(jsonObj.diskiowrite * 1024)
+                  diskioread: (jsonObj.diskioread == null)? "N/A": jsonObj.diskioread,
+                  diskiowrite: (jsonObj.diskiowrite == null)? "N/A": jsonObj.diskiowrite
                   }
                 });
               }

@@ -1110,8 +1110,8 @@
                   { //updatePhysicalNetwork API
                     state: { label: 'label.state' },
                     vlan: {
-                      label: 'VLAN Range(s)',
-                      isEditable: true
+                      label: 'VLAN Range(s)'
+                     // isEditable: true
                     },
                   /*  endVlan: {
                       label: 'label.end.vlan',
@@ -1340,7 +1340,7 @@
                             docID: 'helpGuestNetworkZoneVLANID'
                           },
                           isolatedpvlanId: {
-                            label: 'Private VLAN ID'                           
+                            label: 'Secondary Isolated VLAN ID'                           
                           },
                           
                           scope: {
@@ -2155,7 +2155,7 @@
                         fields: {
                           vlanrange: { 
                             label: 'VLAN Range', 
-                            select: function(args) {
+                          /*  select: function(args) {
                               var items = [];                             
                               if(args.context.physicalNetworks[0].vlan != null && args.context.physicalNetworks[0].vlan.length > 0) {
                                 var vlanranges = args.context.physicalNetworks[0].vlan.split(";");
@@ -2164,7 +2164,7 @@
                                 }                                
                               }
                               args.response.success({data: items});
-                            },
+                            },*/
                             validation: { required: true } 
                           },                          
                           account: { label: 'label.account', validation: { required: true } },
@@ -5638,7 +5638,103 @@
 
               detailView: {
                 isMaximized: true,
-                actions: {
+                actions: {                  
+                  addVmwareDc: {
+                    label: 'Add VMware datacenter',
+                    messages: {                      
+                      notification: function(args) {
+                        return 'Add VMware datacenter';
+                      }
+                    },
+                    createForm: {
+                      title: 'Add VMware datacenter',
+                      fields: {
+                        name: { 
+                          label: 'label.name',
+                          validation: { required: true }
+                        },
+                        vcenter: { 
+                          label: 'vcenter',
+                          validation: { required: true }
+                        },
+                        username: {
+                          label: 'label.username',
+                          validation: { required: false }
+                        },
+                        password: {
+                          label: 'label.password',
+                          isPassword: true,
+                          validation: { required: false }
+                        },
+                      }
+                    },                    
+                    action: function(args) {
+                      var data = {
+                        zoneid: args.context.physicalResources[0].id,
+                        name: args.data.name,
+                        vcenter: args.data.vcenter 
+                      };                                          
+                      
+                      if(args.data.username != null && args.data.username.length > 0) {
+                        $.extend(data, {
+                          username: args.data.username 
+                        })
+                      }
+                      if(args.data.password != null && args.data.password.length > 0) {
+                        $.extend(data, {
+                          password: args.data.password 
+                        })
+                      }
+                      
+                      $.ajax({
+                        url: createURL('addVmwareDc'),  
+                        data: data,                       
+                        success: function(json) {
+                          //var item = json.addvmwaredcresponse.vmwaredc;
+                          args.response.success();
+                        }
+                      });
+                    },
+                    notification: {
+                      poll: function(args) {
+                        args.complete();
+                      }
+                    }
+                  },
+                                    
+                  removeVmwareDc: {
+                    label: 'Remove VMware datacenter',
+                    messages: {
+                      confirm: function(args) {
+                        return 'Please confirm you want to remove VMware datacenter';
+                      },
+                      notification: function(args) {
+                        return 'Remove VMware datacenter';
+                      }
+                    },
+                    action: function(args) {
+                      var data = {
+                        zoneid: args.context.physicalResources[0].id
+                      };                      
+                      $.ajax({
+                        url: createURL('removeVmwareDc'),  
+                        data: data,
+                        success: function(json) {
+                          var item = json.updatezoneresponse.zone;
+                          args.response.success({
+                            actionFilter: zoneActionfilter,
+                            data:item
+                          });
+                        }
+                      });
+                    },
+                    notification: {
+                      poll: function(args) {
+                        args.complete();
+                      }
+                    }
+                  },                  
+                  
                   enable: {
                     label: 'label.action.enable.zone',
                     messages: {
@@ -5701,7 +5797,7 @@
                     }
                   },
 
-                   dedicate:{
+                  dedicateZone:{
                    label: 'Dedicate Zone',
                 messages: {
                   confirm: function(args) {
@@ -5753,7 +5849,7 @@
                      //EXPLICIT DEDICATION
                       var array2 = [];
                       if(args.data.accountId != "")
-                        array2.push("&accountId=" +todb(args.data.accountId));
+                        array2.push("&account=" +todb(args.data.accountId));
 
                     $.ajax({
                     url: createURL("dedicateZone&zoneId=" + args.context.physicalResources[0].id + "&domainId=" +args.data.domainId + array2.join("") ),
@@ -5776,7 +5872,7 @@
 
               },
 
-              release:{
+              releaseDedicatedZone:{
                 label:'Release Dedicated Zone',
                 messages:{
                    confirm: function(args) {
@@ -8068,7 +8164,13 @@
                     lbdevicededicated: {
                       label: 'label.dedicated',
                       converter: cloudStack.converters.toBooleanText
-                    }
+                    },
+                    gslbprovider: {
+                      label: 'GSLB service',
+                      converter: cloudStack.converters.toBooleanText
+                    },
+                    gslbproviderpublicip: { label: 'GSLB service Public IP' },
+                    gslbproviderprivateip: { label: 'GSLB service Private IP' }
                   }
                 ],
                 dataProvider: function(args) {								  
@@ -9083,7 +9185,7 @@
                         url: createURL('listZones'),
                         data: data,
                         success: function(json) {
-                          var zones = json.listzonesresponse.zone;
+                          var zones = json.listzonesresponse.zone ? json.listzonesresponse.zone : [];
 
                           args.response.success({
                             data: $.map(zones, function(zone) {
@@ -9198,7 +9300,7 @@
                 if(args.$form.find('.form-item[rel=isDedicated]').find('input[type=checkbox]').is(':Checked')== true){
                       var array2 = [];
                       if(args.data.accountId != "")
-                        array2.push("&accountId=" +todb(args.data.accountId));
+                        array2.push("&account=" +todb(args.data.accountId));
 
                       if(podId != null){
                       $.ajax({
@@ -9383,7 +9485,7 @@
                     //EXPLICIT DEDICATION
                       var array2 = [];
                       if(args.data.accountId != "")
-                        array2.push("&accountId=" +todb(args.data.accountId));
+                        array2.push("&account=" +todb(args.data.accountId));
 
                     $.ajax({
                     url: createURL("dedicatePod&podId=" + args.context.pods[0].id + "&domainId=" +args.data.domainId + array2.join("")),
@@ -9678,7 +9780,7 @@
                         url: createURL('listZones'),
                         data: data,
                         success: function(json) {
-                          var zones = json.listzonesresponse.zone;
+                          var zones = json.listzonesresponse.zone ? json.listzonesresponse.zone : [];
 
                           args.response.success({
                             data: $.map(zones, function(zone) {
@@ -9905,7 +10007,7 @@
                   vCenterHost: {
                     label: 'label.vcenter.host',
                     docID: 'helpClustervCenterHost',
-                    validation: { required: true }
+                    validation: { required: false } //legacy zone - validation not required for new VMware dc model
                   },
                   vCenterUsername: {
                     label: 'label.vcenter.username',
@@ -9921,7 +10023,7 @@
                   vCenterDatacenter: {
                     label: 'label.vcenter.datacenter',
                     docID: 'helpClustervCenterDatacenter',
-                    validation: { required: true }
+                    validation: { required: false } //legacy zone - validation not required for new VMware dc model
                   },
 
                     overridepublictraffic:{
@@ -10143,7 +10245,7 @@
                 if(args.$form.find('.form-item[rel=isDedicated]').find('input[type=checkbox]').is(':Checked')== true){
                       var array2 = [];
                       if(args.data.accountId != "")
-                        array2.push("&accountId=" +todb(args.data.accountId));
+                        array2.push("&account=" +todb(args.data.accountId));
                     }
 
                     if(clusterId != null){
@@ -10364,7 +10466,7 @@
 
                       var array2 = [];
                       if(args.data.accountId != "")
-                        array2.push("&accountId=" +todb(args.data.accountId));
+                        array2.push("&account=" +todb(args.data.accountId));
 
                     $.ajax({
                     url: createURL("dedicateCluster&clusterId=" + args.context.clusters[0].id + "&domainId=" +args.data.domainId + array2.join("") ),
@@ -10879,7 +10981,7 @@
                         url: createURL('listZones'),
                         data: data,
                         success: function(json) {
-                          var zones = json.listzonesresponse.zone;
+                          var zones = json.listzonesresponse.zone ? json.listzonesresponse.zone : [];
 
                           args.response.success({
                             data: $.map(zones, function(zone) {
@@ -11245,7 +11347,7 @@
                 if(args.$form.find('.form-item[rel=isDedicated]').find('input[type=checkbox]').is(':Checked')== true){
                       var array2 = [];
                       if(args.data.accountId != "")
-                        array2.push("&accountId=" +todb(args.data.accountId));
+                        array2.push("&account=" +todb(args.data.accountId));
                     }
 
                     if(hostId != null){
@@ -11381,7 +11483,7 @@
                      //EXPLICIT DEDICATION
                       var array2 = [];
                       if(args.data.accountId != "")
-                        array2.push("&accountId=" +todb(args.data.accountId));
+                        array2.push("&account=" +todb(args.data.accountId));
 
                     $.ajax({
                     url: createURL("dedicateHost&hostId=" + args.context.hosts[0].id + "&domainId=" +args.data.domainId + array2.join("") ),
@@ -11804,8 +11906,8 @@
                     label: 'label.scope',
                     select: function(args) {
                       var scope = [
-                        { id: 'zone', description: _l('label.zone.wide') },
-                        { id: 'cluster', description: _l('label.cluster') }
+                        { id: 'cluster', description: _l('label.cluster') },
+                        { id: 'zone', description: _l('label.zone.wide') }
                        // { id: 'host', description: _l('label.host') }
                       ];
 
@@ -11878,7 +11980,7 @@
                         url: createURL('listZones'),
                         data: data,
                         success: function(json) {
-                          var zones = json.listzonesresponse.zone;
+                          var zones = json.listzonesresponse.zone ? json.listzonesresponse.zone : [];
 
                           args.response.success({
                             data: $.map(zones, function(zone) {
@@ -12792,7 +12894,7 @@
                         url: createURL('listZones'),
                         data: data,
                         success: function(json) {
-                          var zones = json.listzonesresponse.zone;
+                          var zones = json.listzonesresponse.zone ? json.listzonesresponse.zone : [];
 
                           args.response.success({
                             data: $.map(zones, function(zone) {
@@ -13691,10 +13793,13 @@
     var jsonObj = args.context.item;
     var allowedActions = ['enableSwift'];
 
+    allowedActions.push('addVmwareDc');
+    allowedActions.push('removeVmwareDc');
+    
      if(jsonObj.domainid != null)
-      allowedActions.push("release");
+      allowedActions.push("releaseDedicatedZone");
     else
-    allowedActions.push("dedicate");
+    allowedActions.push("dedicateZone");
 
     allowedActions.push("edit");
     if(jsonObj.allocationstate == "Disabled")

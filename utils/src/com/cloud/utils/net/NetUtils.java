@@ -795,6 +795,37 @@ public class NetUtils {
         return new Pair<String, Integer>(tokens[0], Integer.parseInt(tokens[1]));
     }
 
+    public static int isNetowrkASubsetOrSupersetOfNetworkB (String cidrA, String cidrB) {
+        Long[] cidrALong = cidrToLong(cidrA);
+        Long[] cidrBLong = cidrToLong(cidrB);
+        long shift =0;
+        if (cidrALong == null || cidrBLong == null) {
+            //implies error in the cidr format
+            return -1;
+        }
+        if (cidrALong[1] >= cidrBLong[1]) {
+            shift = 32 - cidrBLong[1];
+        }
+        else {
+            shift = 32 - cidrALong[1];
+        }
+        long result = (cidrALong[0] >> shift) - (cidrBLong[0] >> shift);
+        if (result == 0) {
+            if (cidrALong[1] < cidrBLong[1]) {
+                //this implies cidrA is super set of cidrB
+                return 1;
+            }
+            else if (cidrALong[1] == cidrBLong[1]) {
+             //this implies both the cidrs are equal
+                return 3;
+            }
+            // implies cidrA is subset of cidrB
+            return 2;
+        }
+        //this implies no overlap.
+        return 0;
+    }
+
     public static boolean isNetworkAWithinNetworkB(String cidrA, String cidrB) {
         Long[] cidrALong = cidrToLong(cidrA);
         Long[] cidrBLong = cidrToLong(cidrB);
@@ -1023,6 +1054,34 @@ public class NetUtils {
         return NetUtils.getIpRangeStartIpFromCidr(splitResult[0], size);
     }
 
+    // Check if 2 CIDRs have exactly same IP Range
+    public static boolean isSameIpRange (String cidrA, String cidrB) {
+
+        if(!NetUtils.isValidCIDR(cidrA)) {
+            s_logger.info("Invalid value of cidr " + cidrA);
+            return false;
+        }
+         if (!NetUtils.isValidCIDR(cidrB)) {
+            s_logger.info("Invalid value of cidr " + cidrB);
+            return false;
+        }
+        String[] cidrPairFirst = cidrA.split("\\/");
+        String[] cidrPairSecond = cidrB.split("\\/");
+
+        Long networkSizeFirst = Long.valueOf(cidrPairFirst[1]);
+        Long networkSizeSecond = Long.valueOf(cidrPairSecond[1]);
+        String ipRangeFirst [] = NetUtils.getIpRangeFromCidr(cidrPairFirst[0], networkSizeFirst);
+        String ipRangeSecond [] = NetUtils.getIpRangeFromCidr(cidrPairFirst[0], networkSizeSecond);
+
+        long startIpFirst = NetUtils.ip2Long(ipRangeFirst[0]);
+        long endIpFirst = NetUtils.ip2Long(ipRangeFirst[1]);
+        long startIpSecond = NetUtils.ip2Long(ipRangeSecond[0]);
+        long endIpSecond = NetUtils.ip2Long(ipRangeSecond[1]);
+        if(startIpFirst == startIpSecond && endIpFirst == endIpSecond) {
+            return true;
+        }
+        return false;
+    }
     public static boolean validateGuestCidr(String cidr) {
         // RFC 1918 - The Internet Assigned Numbers Authority (IANA) has reserved the
         // following three blocks of the IP address space for private internets:
@@ -1335,4 +1394,13 @@ public class NetUtils {
 		return null;
 	}
 
+	public static String generateMacOnIncrease(String baseMac, long l) {
+		long mac = mac2Long(baseMac);
+		if (l > 0xFFFFl) {
+			return null;
+		}
+		mac = mac + (l << 24);
+		mac = mac & 0x06FFFFFFFFFFl;
+		return long2Mac(mac);
+	}
 }

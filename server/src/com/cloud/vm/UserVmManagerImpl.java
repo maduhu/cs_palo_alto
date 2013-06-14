@@ -755,6 +755,7 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Use
         }
 
         if (vm.getState() == State.Running && vm.getHostId() != null) {
+            collectVmDiskStatistics(vm);
             return _itMgr.reboot(vm, null, caller, owner);
         } else {
             s_logger.error("Vm id=" + vmId
@@ -3379,9 +3380,6 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Use
         boolean status;
         State vmState = vm.getState();
 
-        // Collect vm disk statistics from host before stopping Vm
-         collectVmDiskStatistics(vm);
-
         try {
             VirtualMachineEntity vmEntity = _orchSrvc.getVirtualMachine(vm.getUuid());
             status = vmEntity.destroy(new Long(userId).toString());
@@ -3423,6 +3421,10 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Use
 
     @Override
     public void collectVmDiskStatistics (UserVmVO userVm) {
+        // support KVM and XenServer only
+        if (!userVm.getHypervisorType().equals(HypervisorType.XenServer)
+                && !userVm.getHypervisorType().equals(HypervisorType.KVM))
+            return;        
     	// Collect vm disk statistics from host before stopping Vm
     	long hostId = userVm.getHostId();
     	List<String> vmNames = new ArrayList<String>();
@@ -3830,7 +3832,7 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Use
                     "No permission to migrate VM, Only Root Admin can migrate a VM!");
         }
 
-        VMInstanceVO vm = _vmInstanceDao.findById(vmId);
+        UserVmVO vm = _vmDao.findById(vmId);
         if (vm == null) {
             throw new InvalidParameterValueException(
                     "Unable to find the VM by id=" + vmId);
@@ -3921,6 +3923,7 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Use
                             + " already has max Running VMs(count includes system VMs), cannot migrate to this host");
         }
 
+        collectVmDiskStatistics(vm);
         VMInstanceVO migratedVm = _itMgr.migrate(vm, srcHostId, dest);
         return migratedVm;
     }
@@ -4710,6 +4713,9 @@ public class UserVmManagerImpl extends ManagerBase implements UserVmManager, Use
 
     @Override
     public void prepareStop(VirtualMachineProfile<UserVmVO> profile) {
+        UserVmVO vm = _vmDao.findById(profile.getId());
+        if (vm.getState() == State.Running)
+            collectVmDiskStatistics(vm);
     }
 
 }

@@ -22,8 +22,9 @@ import java.util.List;
 import javax.ejb.Local;
 import javax.inject.Inject;
 
-import org.apache.cloudstack.api.response.StoragePoolForMigrationResponse;
+import com.cloud.capacity.Capacity;
 import org.apache.cloudstack.api.response.StoragePoolResponse;
+import org.apache.cloudstack.engine.subsystem.api.storage.ScopeType;
 import org.apache.log4j.Logger;
 import org.springframework.stereotype.Component;
 
@@ -130,8 +131,8 @@ public class StoragePoolJoinDaoImpl extends GenericDaoBase<StoragePoolJoinVO, Lo
     }
 
     @Override
-    public StoragePoolForMigrationResponse newStoragePoolForMigrationResponse(StoragePoolJoinVO pool) {
-        StoragePoolForMigrationResponse poolResponse = new StoragePoolForMigrationResponse();
+    public StoragePoolResponse newStoragePoolForMigrationResponse(StoragePoolJoinVO pool) {
+        StoragePoolResponse poolResponse = new StoragePoolResponse();
         poolResponse.setId(pool.getUuid());
         poolResponse.setName(pool.getName());
         poolResponse.setState(pool.getStatus());
@@ -151,7 +152,8 @@ public class StoragePoolJoinDaoImpl extends GenericDaoBase<StoragePoolJoinVO, Lo
         }
 
 
-        long allocatedSize = pool.getUsedCapacity() +  pool.getReservedCapacity();
+        short capacityType = pool.getScope() == ScopeType.HOST ? Capacity.CAPACITY_TYPE_LOCAL_STORAGE : Capacity.CAPACITY_TYPE_STORAGE_ALLOCATED;
+        long allocatedSize = ApiDBUtils.getStorageCapacitybyPool(pool.getId(), capacityType);
         poolResponse.setDiskSizeTotal(pool.getCapacityBytes());
         poolResponse.setDiskSizeAllocated(allocatedSize);
 
@@ -175,7 +177,7 @@ public class StoragePoolJoinDaoImpl extends GenericDaoBase<StoragePoolJoinVO, Lo
     }
 
     @Override
-    public StoragePoolForMigrationResponse setStoragePoolForMigrationResponse(StoragePoolForMigrationResponse response,
+    public StoragePoolResponse setStoragePoolForMigrationResponse(StoragePoolResponse response,
             StoragePoolJoinVO sp) {
         String tag = sp.getTag();
         if (tag != null) {

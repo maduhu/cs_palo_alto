@@ -1233,26 +1233,21 @@
               if(selectedHypervisorObj == null) {
                 return;
               }
-
-                // ZWPS is supported only for KVM as the hypervisor
-             if(selectedHypervisorObj.hypervisortype != "KVM"){
-                       var scope=[];
-                       scope.push({ id: 'cluster', description: _l('label.cluster') });
-                       //scope.push({ id: 'host', description: _l('label.host') });
-                       args.response.success({data: scope});
-                    }
-
-              else {
-                       var scope=[];
-                       scope.push({ id: 'zone', description: _l('label.zone.wide') });
-                       scope.push({ id: 'cluster', description: _l('label.cluster') });
-                      // scope.push({ id: 'host', description: _l('label.host') });
-                       args.response.success({data: scope});
-                    }
-
-                }
-
-              },
+                 
+              //zone-wide-primary-storage is supported only for KVM and VMWare
+              if(selectedHypervisorObj.hypervisortype == "KVM" || selectedHypervisorObj.hypervisortype == "VMware"){
+                var scope=[];
+                scope.push({ id: 'zone', description: _l('label.zone.wide') });
+                scope.push({ id: 'cluster', description: _l('label.cluster') });                      
+                args.response.success({data: scope});
+              }
+              else {     
+                var scope=[];
+                scope.push({ id: 'cluster', description: _l('label.cluster') });                       
+                args.response.success({data: scope});                       
+              }
+            }
+          },
 
           protocol: {
             label: 'label.protocol',
@@ -1633,7 +1628,7 @@
                       if(args.data.zone.domain != null)
                         array2.push("&domainid=" + args.data.zone.domain);
                       if(args.data.zone.accountId != "")
-                        array2.push("&accountId=" +todb(args.data.zone.accountId));
+                        array2.push("&account=" +todb(args.data.zone.accountId));
 
                       if(dedicatedZoneId != null){
                       $.ajax({
@@ -3287,6 +3282,8 @@
                             }
                             else if(result.jobstatus == 2){
                               alert("error: " + _s(result.jobresult.errortext));
+                              error('configureGuestTraffic', result.jobresult.errortext, { fn: 'configureGuestTraffic', args: args });
+
                             }
                           }
                         },
@@ -3366,31 +3363,58 @@
           }
           array1.push("&clustername=" + todb(clusterName));
 
+          if(args.data.cluster.hypervisor == "VMware"){
+            var vmwareData = {
+              zoneId: args.data.returnedZone.id,
+              username: args.data.cluster.vCenterUsername,
+              password: args.data.cluster.vCenterPassword,
+              name: args.data.cluster.vCenterDatacenter,
+              vcenter: args.data.cluster.vCenterHost
+            };
+            $.ajax({
+              url: createURL('addVmwareDc'),
+              data: vmwareData,
+              success: function(json) {
+                var item = json.addvmwaredcresponse.vmwaredc;
+                if(item.id != null){
+                $.ajax({
+                  url: createURL("addCluster" + array1.join("")),
+                  dataType: "json",
+                  async: true,
+                  success: function(json) {
+                    stepFns.addPrimaryStorage({ //skip "add host step" when hypervisor is VMware
+                      data: $.extend(args.data, {
+                      returnedCluster: json.addclusterresponse.cluster[0]
+                    })
+                    });
+                  },
+                  error: function(XMLHttpResponse) {
+                    var errorMsg = parseXMLHttpResponse(XMLHttpResponse);
+                    error('addCluster', errorMsg, { fn: 'addCluster', args: args });
+                  }
+                });
+              }
+            }
+          });
+         }
+         else{
           $.ajax({
             url: createURL("addCluster" + array1.join("")),
             dataType: "json",
             async: true,
             success: function(json) {
-              if(args.data.cluster.hypervisor != "VMware") {
-                stepFns.addHost({
-                  data: $.extend(args.data, {
-                    returnedCluster: json.addclusterresponse.cluster[0]
-                  })
-                });
-              }
-              else { 
-                stepFns.addPrimaryStorage({
-                  data: $.extend(args.data, {
-                    returnedCluster: json.addclusterresponse.cluster[0]
-                  })
-                });
-              }
+              stepFns.addHost({
+                data: $.extend(args.data, {
+                  returnedCluster: json.addclusterresponse.cluster[0]
+                })
+              });                            
             },
             error: function(XMLHttpResponse) {
               var errorMsg = parseXMLHttpResponse(XMLHttpResponse);
               error('addCluster', errorMsg, { fn: 'addCluster', args: args });
             }
           });
+         }
         },
 
         addHost: function(args) {
@@ -3469,6 +3493,11 @@
           array1.push("&name=" + todb(args.data.primaryStorage.name));
           array1.push("&scope=" + todb(args.data.primaryStorage.scope));
 
+          //zone-wide-primary-storage is supported only for KVM and VMWare
+          if(args.data.primaryStorage.scope == "zone") {
+            array1.push("&hypervisor=" + todb(args.data.cluster.hypervisor)); //hypervisor type of the hosts in zone that will be attached to this storage pool. KVM, VMware supported as of now.
+          }
+          
 					var server = args.data.primaryStorage.server;
           var url = null;
           if (args.data.primaryStorage.protocol == "nfs") {
