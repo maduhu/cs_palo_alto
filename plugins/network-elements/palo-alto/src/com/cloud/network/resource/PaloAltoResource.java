@@ -959,7 +959,7 @@ public class PaloAltoResource implements ServerResource {
         if (publicVlanTag == null || publicVlanTag.equals("untagged")) {
             publicInterfaceName = genPublicInterfaceName(new Long("9999"));
         } else {
-            publicInterfaceName = genPublicInterfaceName(Long.getLong(publicVlanTag));
+            publicInterfaceName = genPublicInterfaceName(new Long(publicVlanTag));
         }
 
         switch (prim) {
@@ -1101,7 +1101,7 @@ public class PaloAltoResource implements ServerResource {
         if (publicVlanTag == null || publicVlanTag.equals("untagged")) {
             publicInterfaceName = genPublicInterfaceName(new Long("9999"));
         } else {
-            publicInterfaceName = genPublicInterfaceName(Long.getLong(publicVlanTag));
+            publicInterfaceName = genPublicInterfaceName(new Long(publicVlanTag));
         }
 
         switch (prim) {
