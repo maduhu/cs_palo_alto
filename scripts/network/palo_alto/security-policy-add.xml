@@ -16,4 +16,6 @@
 <service>
 	%service_members%
 </service>
-<action>allow</action>
+<action>%action%</action>
+<negate-source>%negate_src%</negate-source>
+<negate-destination>%negate_dst%</negate-destination>

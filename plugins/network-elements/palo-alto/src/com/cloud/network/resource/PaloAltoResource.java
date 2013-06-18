@@ -491,13 +491,10 @@ public class PaloAltoResource implements ServerResource {
 
             // Remove the guest network:
             shutdownGuestNetwork(commandList, type, publicVlanTag, sourceNatIpAddress, guestVlanTag, guestVlanGateway, guestVlanSubnet, cidrSize);
-            s_logger.debug("Shutdown Command List: "+commandList.size());
 
             if (ip.isAdd()) {                                 
                 // Implement the guest network for this VLAN
                 implementGuestNetwork(commandList, type, publicVlanTag, sourceNatIpAddress, guestVlanTag, guestVlanGateway, guestVlanSubnet, cidrSize);
-                s_logger.debug("Implement Command List: "+commandList.size());
-                
             }
 
             boolean status = requestWithCommit(commandList);
@@ -519,35 +516,33 @@ public class PaloAltoResource implements ServerResource {
     }
 
     private void implementGuestNetwork(ArrayList<IPaloAltoCommand> cmdList, GuestNetworkType type, Long publicVlanTag, String publicIp, long privateVlanTag, String privateGateway, String privateSubnet, long privateCidrNumber) throws ExecutionException {
-        privateGateway = privateGateway + "/" + privateCidrNumber;
-        privateSubnet = privateSubnet + "/" + privateCidrNumber;
+        privateSubnet = privateSubnet+"/"+privateCidrNumber;
 
-        managePrivateInterface(cmdList, PaloAltoPrimative.ADD, privateVlanTag, privateGateway);
+        managePrivateInterface(cmdList, PaloAltoPrimative.ADD, privateVlanTag, privateGateway+"/"+privateCidrNumber);
 
         if (type.equals(GuestNetworkType.SOURCE_NAT)) {
             managePublicInterface(cmdList, PaloAltoPrimative.ADD, publicVlanTag, publicIp+"/32", privateVlanTag);
-            manageSrcNatRule(cmdList, PaloAltoPrimative.ADD, type, publicVlanTag, publicIp+"/32", privateVlanTag, privateGateway);
-        } else if (type.equals(GuestNetworkType.INTERFACE_NAT)){
+            manageSrcNatRule(cmdList, PaloAltoPrimative.ADD, type, publicVlanTag, publicIp+"/32", privateVlanTag, privateGateway+"/"+privateCidrNumber);
+            manageNetworkIsolation(cmdList, PaloAltoPrimative.ADD, privateVlanTag, privateSubnet, privateGateway);
         }
 
-        String msg = "Implemented guest network with type " + type + ". Guest VLAN tag: " + privateVlanTag + ", guest gateway: " + privateGateway;
+        String msg = "Implemented guest network with type " + type + ". Guest VLAN tag: " + privateVlanTag + ", guest gateway: " + privateGateway+"/"+privateCidrNumber;
         msg += type.equals(GuestNetworkType.SOURCE_NAT) ? ", source NAT IP: " + publicIp : "";
         s_logger.debug(msg);
     }
 
     private void shutdownGuestNetwork(ArrayList<IPaloAltoCommand> cmdList, GuestNetworkType type, Long publicVlanTag, String sourceNatIpAddress, long privateVlanTag, String privateGateway, String privateSubnet, long privateCidrSize) throws ExecutionException {     
-        privateGateway = privateGateway + "/" + privateCidrSize;
-        privateSubnet = privateSubnet + "/" + privateCidrSize;
+        privateSubnet = privateSubnet+"/"+privateCidrSize;
 
         if (type.equals(GuestNetworkType.SOURCE_NAT)) {
-            manageSrcNatRule(cmdList, PaloAltoPrimative.DELETE, type, publicVlanTag, sourceNatIpAddress+"/32", privateVlanTag, privateGateway);
+            manageNetworkIsolation(cmdList, PaloAltoPrimative.DELETE, privateVlanTag, privateSubnet, privateGateway);
+            manageSrcNatRule(cmdList, PaloAltoPrimative.DELETE, type, publicVlanTag, sourceNatIpAddress+"/32", privateVlanTag, privateGateway+"/"+privateCidrSize);
             managePublicInterface(cmdList, PaloAltoPrimative.DELETE, publicVlanTag, sourceNatIpAddress+"/32", privateVlanTag);                                                             
-        } else if (type.equals(GuestNetworkType.INTERFACE_NAT)) {                  
-        }      
+        }
 
-        managePrivateInterface(cmdList, PaloAltoPrimative.DELETE, privateVlanTag, privateGateway);       
+        managePrivateInterface(cmdList, PaloAltoPrimative.DELETE, privateVlanTag, privateGateway+"/"+privateCidrSize);       
 
-        String msg = "Shut down guest network with type " + type +". Guest VLAN tag: " + privateVlanTag + ", guest gateway: " + privateGateway;
+        String msg = "Shut down guest network with type " + type +". Guest VLAN tag: " + privateVlanTag + ", guest gateway: " + privateGateway+"/"+privateCidrSize;
         msg += type.equals(GuestNetworkType.SOURCE_NAT) ? ", source NAT IP: " + sourceNatIpAddress : "";
         s_logger.debug(msg);
     }
@@ -1280,6 +1275,9 @@ public class PaloAltoResource implements ServerResource {
             xml = replaceXmlValue(xml, "dst_members", dstAddressXML);
             xml = replaceXmlValue(xml, "app_members", appXML);
             xml = replaceXmlValue(xml, "service_members", serviceXML);
+            xml = replaceXmlValue(xml, "action", "allow");
+            xml = replaceXmlValue(xml, "negate_src", "no");
+            xml = replaceXmlValue(xml, "negate_dst", "no");
 
             Map<String, String> a_params = new HashMap<String, String>();
             a_params.put("type", "config");
@@ -1320,6 +1318,74 @@ public class PaloAltoResource implements ServerResource {
     /*
      * Helper config functions
      */
+
+    // ensure guest network isolation
+    private String genNetworkIsolationName(long privateVlanTag) {
+        return "isolate_"+Long.toString(privateVlanTag);
+    }
+
+    public boolean manageNetworkIsolation(ArrayList<IPaloAltoCommand> cmdList, PaloAltoPrimative prim, long privateVlanTag, String privateSubnet, String privateGateway) throws ExecutionException {
+        String ruleName = genNetworkIsolationName(privateVlanTag);
+
+        switch (prim) {
+
+        case CHECK_IF_EXISTS:
+            // check if one exists already
+            Map<String, String> params = new HashMap<String, String>();
+            params.put("type", "config");
+            params.put("action", "get");
+            params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/security/rules/entry[@name='"+ruleName+"']");
+            String response = request(PaloAltoMethod.GET, params);
+            boolean result = (validResponse(response) && responseNotEmpty(response));
+            s_logger.debug("Firewall policy exists: "+ruleName+", "+result);
+            return result;
+
+        case ADD:
+            if (manageNetworkIsolation(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS, privateVlanTag, privateSubnet, privateGateway)) {
+                return true;
+            }
+
+            String xml = PaloAltoXml.SECURITY_POLICY_ADD.getXml();                              
+            xml = replaceXmlValue(xml, "from_zone", _privateZone);
+            xml = replaceXmlValue(xml, "to_zone", _privateZone);
+            xml = replaceXmlValue(xml, "src_members", "<member>"+privateSubnet+"</member>");
+            xml = replaceXmlValue(xml, "dst_members", "<member>"+privateGateway+"</member>");
+            xml = replaceXmlValue(xml, "app_members", "<member>any</member>");
+            xml = replaceXmlValue(xml, "service_members", "<member>any</member>");
+            xml = replaceXmlValue(xml, "action", "deny");
+            xml = replaceXmlValue(xml, "negate_src", "no");
+            xml = replaceXmlValue(xml, "negate_dst", "yes");
+
+            Map<String, String> a_params = new HashMap<String, String>();
+            a_params.put("type", "config");
+            a_params.put("action", "set");
+            a_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/security/rules/entry[@name='"+ruleName+"']");
+            a_params.put("element", xml);
+            cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.POST, a_params));
+
+            return true;
+
+        case DELETE:
+            if (!manageNetworkIsolation(cmdList, PaloAltoPrimative.CHECK_IF_EXISTS, privateVlanTag, privateSubnet, privateGateway)) {
+                return true;
+            }
+
+            Map<String, String> d_params = new HashMap<String, String>();
+            d_params.put("type", "config");
+            d_params.put("action", "delete");
+            d_params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/rulebase/security/rules/entry[@name='"+ruleName+"']");
+            cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.POST, d_params));
+
+            return true;
+
+        default:
+            s_logger.debug("Unrecognized command.");
+            return false;
+        }
+    }
+
+
+    // make the interfaces pingable for basic network troubleshooting
     public boolean managePingProfile(ArrayList<IPaloAltoCommand> cmdList, PaloAltoPrimative prim) throws ExecutionException {
         switch (prim) {
 
