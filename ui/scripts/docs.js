@@ -722,6 +722,14 @@ cloudStack.docs = {
   desc: 'The name of the virtual router on the Palo Alto.',
   externalLink: ''
   },
+  helpPaloAltoThreatProfile: {
+  desc: 'The threat profile name/group to associate with allow firewall policies.',
+  externalLink: ''
+  },
+  helpPaloAltoLogProfile: {
+  desc: 'The log profile name/group to associate with allow firewall policies.',
+  externalLink: ''
+  },
   helpPaloAltoDedicated: {
   desc: 'Check this box to dedicate the device to a single account. The value in the Capacity field will be ignored.',
   externalLink: ''

@@ -112,58 +112,17 @@ public class PaloAltoResource implements ServerResource {
     private String _publicInterfaceType;
     private String _privateInterfaceType;
     private String _virtualRouter;
+    private String _threatProfile;
+    private String _logProfile;
     private String _pingManagementProfile;
     private final Logger s_logger = Logger.getLogger(PaloAltoResource.class);
 
     private static String _apiUri = "/api";
     private static HttpClient _httpclient;
 
-    private enum PaloAltoMethod {
+    protected enum PaloAltoMethod {
         GET, POST;
     }
-
-    private enum PaloAltoXml {
-        SECURITY_POLICY_ADD("security-policy-add.xml"),
-        SRC_NAT_ADD("src-nat-add.xml"),
-        DST_NAT_ADD("dst-nat-add.xml"),
-        STC_NAT_ADD("stc-nat-add.xml");
-
-        private String scriptsDir = "scripts/network/palo_alto";
-        private String xml;
-        private final Logger s_logger = Logger.getLogger(PaloAltoResource.class);
-
-        private PaloAltoXml(String filename) {
-            this.xml = getXml(filename);
-        }
-
-        public String getXml() {
-            return xml;
-        }
-
-        private String getXml(String filename) {
-            try {
-                String xmlFilePath = Script.findScript(scriptsDir, filename);
-
-                if (xmlFilePath == null) {
-                    throw new Exception("Failed to find Palo Alto XML file: " + filename);
-                }
-
-                FileReader fr = new FileReader(xmlFilePath);
-                BufferedReader br = new BufferedReader(fr);
-
-                String xml = "";
-                String line;
-                while ((line = br.readLine()) != null) {
-                    xml += line.trim();
-                }
-
-                return xml;
-            } catch (Exception e) {
-                s_logger.debug(e);
-                return null;
-            }
-        }
-    }   
 
     private enum PaloAltoPrimative {
         CHECK_IF_EXISTS, ADD, DELETE;
@@ -271,18 +230,20 @@ public class PaloAltoResource implements ServerResource {
                 throw new ConfigurationException("Unable to find private zone");
             }
 
-            _virtualRouter = (String) params.get("externalvirtualrouter");
+            _virtualRouter = (String) params.get("pavr");
             if (_virtualRouter == null) {
                 throw new ConfigurationException("Unable to find virtual router");
             }
 
-            _guid = (String)params.get("guid");
+            _threatProfile = (String) params.get("patp");
+            _logProfile = (String) params.get("palp");
+
+            _guid = (String) params.get("guid");
             if (_guid == null) {
                 throw new ConfigurationException("Unable to find the guid");
             }
 
             _numRetries = NumbersUtil.parseInt((String) params.get("numretries"), 1);
-
             _timeoutInSeconds = NumbersUtil.parseInt((String) params.get("timeout"), 300);
 
             // Open a socket and login
@@ -290,19 +251,45 @@ public class PaloAltoResource implements ServerResource {
                 throw new ConfigurationException("Unable to open a connection to the Palo Alto.");
             }
 
+            // check that the threat profile exists if one was specified
+            if (_threatProfile != null) {
+                try {
+                    boolean has_profile = getThreatProfile(_threatProfile);
+                    if (!has_profile) {
+                        throw new ConfigurationException("The specified threat profile group does not exist.");
+                    }
+                } catch (ExecutionException e) {
+                    throw new ConfigurationException(e.getMessage());
+                }
+            }
+
+            // check that the log profile exists if one was specified
+            if (_logProfile != null) {
+                try {
+                    boolean has_profile = getLogProfile(_logProfile);
+                    if (!has_profile) {
+                        throw new ConfigurationException("The specified log profile does not exist.");
+                    }
+                } catch (ExecutionException e) {
+                    throw new ConfigurationException(e.getMessage());
+                }
+            }
+
+            // get public interface type
             try {
                 _publicInterfaceType = getInterfaceType(_publicInterface);
                 if (_publicInterfaceType.equals("")) {
-                    throw new ConfigurationException("The configured public interface is not configured on the Palo Alto.");
+                    throw new ConfigurationException("The specified public interface is not configured on the Palo Alto.");
                 }
             } catch (ExecutionException e) {
                 throw new ConfigurationException(e.getMessage());
             }
 
+            // get private interface type
             try {
                 _privateInterfaceType = getInterfaceType(_privateInterface);
                 if (_privateInterfaceType.equals("")) {
-                    throw new ConfigurationException("The configured private interface is not configured on the Palo Alto.");
+                    throw new ConfigurationException("The specified private interface is not configured on the Palo Alto.");
                 }
             } catch (ExecutionException e) {
                 throw new ConfigurationException(e.getMessage());
@@ -489,12 +476,12 @@ public class PaloAltoResource implements ServerResource {
 
             ArrayList<IPaloAltoCommand> commandList = new ArrayList<IPaloAltoCommand>();
 
-            // Remove the guest network:
-            shutdownGuestNetwork(commandList, type, publicVlanTag, sourceNatIpAddress, guestVlanTag, guestVlanGateway, guestVlanSubnet, cidrSize);
-
             if (ip.isAdd()) {                                 
                 // Implement the guest network for this VLAN
                 implementGuestNetwork(commandList, type, publicVlanTag, sourceNatIpAddress, guestVlanTag, guestVlanGateway, guestVlanSubnet, cidrSize);
+            } else {
+                // Remove the guest network:
+                shutdownGuestNetwork(commandList, type, publicVlanTag, sourceNatIpAddress, guestVlanTag, guestVlanGateway, guestVlanSubnet, cidrSize);
             }
 
             boolean status = requestWithCommit(commandList);
@@ -900,14 +887,18 @@ public class PaloAltoResource implements ServerResource {
                 return true;
             }
 
-            String xml = PaloAltoXml.SRC_NAT_ADD.getXml();                              
-            xml = replaceXmlValue(xml, "from", _privateZone);
-            xml = replaceXmlValue(xml, "to", _publicZone);
-            xml = replaceXmlValue(xml, "source", privateGateway);
-            xml = replaceXmlValue(xml, "destination", "any");
-            xml = replaceXmlValue(xml, "to_interface", publicInterfaceName);
-            xml = replaceXmlValue(xml, "src_trans_ip", publicIp);
-            xml = replaceXmlValue(xml, "src_trans_interface", publicInterfaceName);
+            String xml = ""; 
+            xml += "<from><member>"+_privateZone+"</member></from>";
+            xml += "<to><member>"+_publicZone+"</member></to>";
+            xml += "<source><member>"+privateGateway+"</member></source>";
+            xml += "<destination><member>any</member></destination>";
+            xml += "<service>any</service>";
+            xml += "<nat-type>ipv4</nat-type>";
+            xml += "<to-interface>"+publicInterfaceName+"</to-interface>";
+            xml += "<source-translation><dynamic-ip-and-port><interface-address>";
+                xml += "<ip>"+publicIp+"</ip>";
+                xml += "<interface>"+publicInterfaceName+"</interface>";
+            xml += "</interface-address></dynamic-ip-and-port></source-translation>";
 
             Map<String, String> a_params = new HashMap<String, String>();
             a_params.put("type", "config");
@@ -1009,15 +1000,15 @@ public class PaloAltoResource implements ServerResource {
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_sub_params));
 
             // add the destination nat rule for the public IP
-            String xml = PaloAltoXml.DST_NAT_ADD.getXml();                              
-            xml = replaceXmlValue(xml, "from", _publicZone);
-            xml = replaceXmlValue(xml, "to", _publicZone);
-            xml = replaceXmlValue(xml, "src_members", "<member>any</member>"); // specifying this is depreciated
-            xml = replaceXmlValue(xml, "dst_members", "<member>"+publicIp+"</member>");
-            xml = replaceXmlValue(xml, "service", srcService);
-            xml = replaceXmlValue(xml, "to_interface", publicInterfaceName);
-            xml = replaceXmlValue(xml, "dst_trans_ip", rule.getDstIp());
-            xml = replaceXmlValue(xml, "dst_trans_port_xml", dstPortXML);
+            String xml = ""; 
+            xml += "<from><member>"+_publicZone+"</member></from>";
+            xml += "<to><member>"+_publicZone+"</member></to>";
+            xml += "<source><member>any</member></source>";
+            xml += "<destination><member>"+publicIp+"</member></destination>";
+            xml += "<service>"+srcService+"</service>";
+            xml += "<nat-type>ipv4</nat-type>";
+            xml += "<to-interface>"+publicInterfaceName+"</to-interface>";
+            xml += "<destination-translation><translated-address>"+rule.getDstIp()+"</translated-address>"+dstPortXML+"</destination-translation>";
 
             Map<String, String> a_params = new HashMap<String, String>();
             a_params.put("type", "config");
@@ -1126,12 +1117,16 @@ public class PaloAltoResource implements ServerResource {
             cmdList.add(new DefaultPaloAltoCommand(PaloAltoMethod.GET, a_sub_params));
 
             // add the static nat rule for the public IP
-            String xml = PaloAltoXml.STC_NAT_ADD.getXml();                              
-            xml = replaceXmlValue(xml, "from", _publicZone);
-            xml = replaceXmlValue(xml, "to", _publicZone);
-            xml = replaceXmlValue(xml, "dst_members", "<member>"+publicIp+"</member>");
-            xml = replaceXmlValue(xml, "to_interface", publicInterfaceName);
-            xml = replaceXmlValue(xml, "dst_trans_ip", rule.getDstIp());
+            String xml = ""; 
+            xml += "<from><member>"+_publicZone+"</member></from>";
+            xml += "<to><member>"+_publicZone+"</member></to>";
+            xml += "<source><member>any</member></source>";
+            xml += "<destination><member>"+publicIp+"</member></destination>";
+            xml += "<service>any</service>";
+            xml += "<nat-type>ipv4</nat-type>";
+            xml += "<to-interface>"+publicInterfaceName+"</to-interface>";
+            xml += "<destination-translation><translated-address>"+rule.getDstIp()+"</translated-address></destination-translation>";
+
 
             Map<String, String> a_params = new HashMap<String, String>();
             a_params.put("type", "config");
@@ -1268,16 +1263,22 @@ public class PaloAltoResource implements ServerResource {
                 }
             }
 
-            String xml = PaloAltoXml.SECURITY_POLICY_ADD.getXml();                              
-            xml = replaceXmlValue(xml, "from_zone", srcZone);
-            xml = replaceXmlValue(xml, "to_zone", dstZone);
-            xml = replaceXmlValue(xml, "src_members", srcCidrXML);
-            xml = replaceXmlValue(xml, "dst_members", dstAddressXML);
-            xml = replaceXmlValue(xml, "app_members", appXML);
-            xml = replaceXmlValue(xml, "service_members", serviceXML);
-            xml = replaceXmlValue(xml, "action", "allow");
-            xml = replaceXmlValue(xml, "negate_src", "no");
-            xml = replaceXmlValue(xml, "negate_dst", "no");
+            String xml = "";
+            xml += "<from><member>"+srcZone+"</member></from>";
+            xml += "<to><member>"+dstZone+"</member></to>";
+            xml += "<source>"+srcCidrXML+"</source>";
+            xml += "<destination>"+dstAddressXML+"</destination>";
+            xml += "<application>"+appXML+"</application>";
+            xml += "<service>"+serviceXML+"</service>";
+            xml += "<action>allow</action>";
+            xml += "<negate-source>no</negate-source>";
+            xml += "<negate-destination>no</negate-destination>";
+            if (_threatProfile != null) { // add the threat profile if it exists
+                xml += "<profile-setting><group><member>"+_threatProfile+"</member></group></profile-setting>";
+            }
+            if (_logProfile != null) { // add the log profile if it exists
+                xml += "<log-setting>"+_logProfile+"</log-setting>";
+            }
 
             Map<String, String> a_params = new HashMap<String, String>();
             a_params.put("type", "config");
@@ -1345,16 +1346,16 @@ public class PaloAltoResource implements ServerResource {
                 return true;
             }
 
-            String xml = PaloAltoXml.SECURITY_POLICY_ADD.getXml();                              
-            xml = replaceXmlValue(xml, "from_zone", _privateZone);
-            xml = replaceXmlValue(xml, "to_zone", _privateZone);
-            xml = replaceXmlValue(xml, "src_members", "<member>"+privateSubnet+"</member>");
-            xml = replaceXmlValue(xml, "dst_members", "<member>"+privateGateway+"</member>");
-            xml = replaceXmlValue(xml, "app_members", "<member>any</member>");
-            xml = replaceXmlValue(xml, "service_members", "<member>any</member>");
-            xml = replaceXmlValue(xml, "action", "deny");
-            xml = replaceXmlValue(xml, "negate_src", "no");
-            xml = replaceXmlValue(xml, "negate_dst", "yes");
+            String xml = "";
+            xml += "<from><member>"+_privateZone+"</member></from>";
+            xml += "<to><member>"+_privateZone+"</member></to>";
+            xml += "<source><member>"+privateSubnet+"</member></source>";
+            xml += "<destination><member>"+privateGateway+"</member></destination>";
+            xml += "<application><member>any</member></application>";
+            xml += "<service><member>any</member></service>";
+            xml += "<action>deny</action>";
+            xml += "<negate-source>no</negate-source>";
+            xml += "<negate-destination>yes</negate-destination>";
 
             Map<String, String> a_params = new HashMap<String, String>();
             a_params.put("type", "config");
@@ -1534,7 +1535,7 @@ public class PaloAltoResource implements ServerResource {
 
     /* Function to make calls to the Palo Alto API. */
     /* All API calls will end up going through this function. */
-    private String request(PaloAltoMethod method, Map<String, String> params) throws ExecutionException {
+    protected String request(PaloAltoMethod method, Map<String, String> params) throws ExecutionException {
         if (method != PaloAltoMethod.GET && method != PaloAltoMethod.POST) {
             throw new ExecutionException("Invalid http method used to access the Palo Alto API.");
         }
@@ -1605,6 +1606,7 @@ public class PaloAltoResource implements ServerResource {
         }
 
         debug_msg = debug_msg + prettyFormat(responseBody);
+        debug_msg = debug_msg + "\n" + responseBody.replace("\"", "\\\"") + "\n\n"; // test cases
         s_logger.debug(debug_msg); // this can be commented if we don't want to show each request in the log.
         
         return responseBody;
@@ -1876,6 +1878,25 @@ public class PaloAltoResource implements ServerResource {
         return "";
     }
 
+    /* Get the threat profile from the server if it exists. */
+    private boolean getThreatProfile(String profile) throws ExecutionException {
+        Map<String, String> params = new HashMap<String, String>();
+        params.put("type", "config");
+        params.put("action", "get");
+        params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/profile-group/entry[@name='"+profile+"']");
+        String response = request(PaloAltoMethod.GET, params);
+        return (validResponse(response) && responseNotEmpty(response));
+    }
+
+    /* Get the log profile from the server if it exists. */
+    private boolean getLogProfile(String profile) throws ExecutionException {
+        Map<String, String> params = new HashMap<String, String>();
+        params.put("type", "config");
+        params.put("action", "get");
+        params.put("xpath", "/config/devices/entry/vsys/entry[@name='vsys1']/log-settings/profiles/entry[@name='"+profile+"']");
+        String response = request(PaloAltoMethod.GET, params);
+        return (validResponse(response) && responseNotEmpty(response));
+    }
 
     /* Command Interface */
     public interface IPaloAltoCommand {
@@ -1895,7 +1916,7 @@ public class PaloAltoResource implements ServerResource {
         }
 
         public boolean execute() throws ExecutionException {
-            String response = request(method, params); 
+            String response = request(method, params);
             return validResponse(response);
         }
     }
@@ -1905,22 +1926,6 @@ public class PaloAltoResource implements ServerResource {
         public DefaultPaloAltoCommand(PaloAltoMethod method, Map<String, String> params) {
             super(method, params);
         }
-    }
-
-
-
-    /*
-     * XML utils
-     */
-
-    private String replaceXmlValue(String xml, String marker, String value) {
-        marker = "\\s*%" + marker + "%\\s*";
-
-        if (value == null) {
-            value = "";
-        }
-
-        return xml.replaceAll(marker, value);
     }
 
 

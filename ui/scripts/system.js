@@ -4631,9 +4631,17 @@
                       defaultValue: 'trust',
                       docID: 'helpPaloAltoPrivateNetwork'
                     },
-                    externalvirtualrouter: {
+                    pavr: {
                       label: 'label.virtual.router',
                       docID: 'helpPaloAltoVirtualRouter'
+                    },
+                    patp: {
+                      label: 'label.PA.threat.profile',
+                      docID: 'helpPaloAltoThreatProfile'
+                    },
+                    palp: {
+                      label: 'label.PA.log.profile',
+                      docID: 'helpPaloAltoLogProfile'
                     },
                     capacity: {
                       label: 'label.capacity',
@@ -8670,8 +8678,14 @@
                     label: 'label.private.network',
                     defaultValue: 'trust'
                   },
-                  externalvirtualrouter: {
+                  pavr: {
                     label: 'label.virtual.router'
+                  },
+                  patp: {
+                    label: 'label.PA.threat.profile'
+                  },
+                  palp: {
+                    label: 'label.PA.log.profile'
                   },
                   capacity: {
                     label: 'label.capacity',
@@ -13376,7 +13390,7 @@
         url.push("privatenetwork=" + privateNetwork);
     }
 
-    var externalVirtualRouter = args.data.externalvirtualrouter;
+    var externalVirtualRouter = args.data.pavr;
     if(externalVirtualRouter != null && externalVirtualRouter.length > 0) {
         if(isQuestionMarkAdded == false) {
             url.push("?");
@@ -13385,7 +13399,31 @@
         else {
             url.push("&");
         }
-        url.push("externalvirtualrouter=" + externalVirtualRouter);
+        url.push("pavr=" + encodeURIComponent(externalVirtualRouter));
+    }
+
+    var externalThreatProfile = args.data.patp;
+    if(externalThreatProfile != null && externalThreatProfile.length > 0) {
+        if(isQuestionMarkAdded == false) {
+            url.push("?");
+            isQuestionMarkAdded = true;
+        }
+        else {
+            url.push("&");
+        }
+        url.push("patp=" + encodeURIComponent(externalThreatProfile));
+    }
+
+    var externalLogProfile = args.data.palp;
+    if(externalLogProfile != null && externalLogProfile.length > 0) {
+        if(isQuestionMarkAdded == false) {
+            url.push("?");
+            isQuestionMarkAdded = true;
+        }
+        else {
+            url.push("&");
+        }
+        url.push("palp=" + encodeURIComponent(externalLogProfile));
     }
 
     var capacity = args.data.capacity;
