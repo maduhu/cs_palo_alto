@@ -5,7 +5,7 @@
 // to you under the Apache License, Version 2.0 (the
 // "License"); you may not use this file except in compliance
 // with the License.  You may obtain a copy of the License at
-// 
+//
 //   http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing,
@@ -18,6 +18,7 @@ package org.apache.cloudstack.network.lb;
 
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -25,27 +26,25 @@ import javax.ejb.Local;
 import javax.inject.Inject;
 import javax.naming.ConfigurationException;
 
+import org.apache.log4j.Logger;
+
+import org.apache.cloudstack.engine.orchestration.service.NetworkOrchestrationService;
+import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
 import org.apache.cloudstack.lb.ApplicationLoadBalancerRuleVO;
 import org.apache.cloudstack.lb.dao.ApplicationLoadBalancerRuleDao;
-import org.apache.log4j.Logger;
-import org.springframework.stereotype.Component;
 
 import com.cloud.agent.AgentManager;
-import com.cloud.agent.AgentManager.OnError;
 import com.cloud.agent.api.Answer;
+import com.cloud.agent.api.Command;
 import com.cloud.agent.api.GetDomRVersionAnswer;
 import com.cloud.agent.api.GetDomRVersionCmd;
-import com.cloud.agent.api.StopAnswer;
 import com.cloud.agent.api.check.CheckSshAnswer;
 import com.cloud.agent.api.check.CheckSshCommand;
 import com.cloud.agent.api.routing.LoadBalancerConfigCommand;
 import com.cloud.agent.api.routing.NetworkElementCommand;
 import com.cloud.agent.api.to.LoadBalancerTO;
-import com.cloud.agent.api.to.NicTO;
-import com.cloud.agent.api.to.VirtualMachineTO;
 import com.cloud.agent.manager.Commands;
 import com.cloud.configuration.Config;
-import com.cloud.configuration.dao.ConfigurationDao;
 import com.cloud.dc.DataCenter;
 import com.cloud.dc.DataCenterVO;
 import com.cloud.dc.dao.DataCenterDao;
@@ -62,17 +61,16 @@ import com.cloud.exception.OperationTimedoutException;
 import com.cloud.exception.ResourceUnavailableException;
 import com.cloud.exception.StorageUnavailableException;
 import com.cloud.hypervisor.Hypervisor.HypervisorType;
+import com.cloud.network.IpAddressManager;
 import com.cloud.network.Network;
 import com.cloud.network.Network.Provider;
 import com.cloud.network.Network.Service;
-import com.cloud.network.NetworkManager;
 import com.cloud.network.NetworkModel;
 import com.cloud.network.Networks.TrafficType;
 import com.cloud.network.PhysicalNetworkServiceProvider;
 import com.cloud.network.VirtualRouterProvider;
-import com.cloud.network.VirtualRouterProvider.VirtualRouterProviderType;
+import com.cloud.network.VirtualRouterProvider.Type;
 import com.cloud.network.dao.NetworkDao;
-import com.cloud.network.dao.NetworkVO;
 import com.cloud.network.dao.PhysicalNetworkServiceProviderDao;
 import com.cloud.network.dao.VirtualRouterProviderDao;
 import com.cloud.network.lb.LoadBalancingRule;
@@ -80,6 +78,7 @@ import com.cloud.network.lb.LoadBalancingRule.LbDestination;
 import com.cloud.network.lb.LoadBalancingRule.LbHealthCheckPolicy;
 import com.cloud.network.lb.LoadBalancingRule.LbStickinessPolicy;
 import com.cloud.network.lb.LoadBalancingRulesManager;
+import com.cloud.network.router.VirtualNetworkApplianceManager;
 import com.cloud.network.router.VirtualRouter;
 import com.cloud.network.router.VirtualRouter.RedundantState;
 import com.cloud.network.router.VirtualRouter.Role;
@@ -88,7 +87,6 @@ import com.cloud.offering.NetworkOffering;
 import com.cloud.offering.ServiceOffering;
 import com.cloud.offerings.dao.NetworkOfferingDao;
 import com.cloud.resource.ResourceManager;
-import com.cloud.server.ConfigurationServer;
 import com.cloud.service.ServiceOfferingVO;
 import com.cloud.service.dao.ServiceOfferingDao;
 import com.cloud.storage.VMTemplateVO;
@@ -118,19 +116,18 @@ import com.cloud.vm.dao.DomainRouterDao;
 import com.cloud.vm.dao.NicDao;
 
 
-@Component
 @Local(value = { InternalLoadBalancerVMManager.class, InternalLoadBalancerVMService.class})
-public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
-    InternalLoadBalancerVMManager, VirtualMachineGuru<DomainRouterVO> {
-    private static final Logger s_logger = Logger
-            .getLogger(InternalLoadBalancerVMManagerImpl.class);
+public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements InternalLoadBalancerVMManager, InternalLoadBalancerVMService, VirtualMachineGuru {
+    private static final Logger s_logger = Logger.getLogger(InternalLoadBalancerVMManagerImpl.class);
     static final private String _internalLbVmNamePrefix = "b";
     
     private String _instance;
     private String _mgmtHost;
     private String _mgmtCidr;
-    private long _internalLbVmOfferingId;
+    private long _internalLbVmOfferingId = 0L;
     
+    @Inject
+    IpAddressManager _ipAddrMgr;
     @Inject VirtualMachineManager _itMgr;
     @Inject DomainRouterDao _internalLbVmDao;
     @Inject ConfigurationDao _configDao;
@@ -143,36 +140,15 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
     @Inject NicDao _nicDao;
     @Inject AccountManager _accountMgr;
     @Inject NetworkDao _networkDao;
-    @Inject NetworkManager _ntwkMgr;
+    @Inject NetworkOrchestrationService _ntwkMgr;
     @Inject ServiceOfferingDao _serviceOfferingDao;
     @Inject PhysicalNetworkServiceProviderDao _physicalProviderDao;
     @Inject NetworkOfferingDao _networkOfferingDao;
     @Inject VMTemplateDao _templateDao;
     @Inject ResourceManager _resourceMgr;
-    @Inject ConfigurationServer _configServer;
 
     @Override
-    public DomainRouterVO findByName(String name) {
-        if (!VirtualMachineName.isValidSystemVmName(name, _instance, _internalLbVmNamePrefix)) {
-            return null;
-        }
-
-        return _internalLbVmDao.findById(VirtualMachineName.getRouterId(name));
-    }
-
-    @Override
-    public DomainRouterVO findById(long id) {
-        return _internalLbVmDao.findById(id);
-    }
-
-    @Override
-    public DomainRouterVO persist(DomainRouterVO vm) {
-        DomainRouterVO virtualRouter =  _internalLbVmDao.persist(vm);
-        return virtualRouter;
-    }
-
-    @Override
-    public boolean finalizeVirtualMachineProfile(VirtualMachineProfile<DomainRouterVO> profile,
+    public boolean finalizeVirtualMachineProfile(VirtualMachineProfile profile,
             DeployDestination dest, ReservationContext context) {
 
         //Internal LB vm starts up with 2 Nics
@@ -209,7 +185,7 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
                 // Internal LB control command is sent over management server in VMware
                 if (dest.getHost().getHypervisorType() == HypervisorType.VMware) {
                     if (s_logger.isInfoEnabled()) {
-                        s_logger.info("Check if we need to add management server explicit route to Internal LB. pod cidr: " 
+                        s_logger.info("Check if we need to add management server explicit route to Internal LB. pod cidr: "
                                 + dest.getPod().getCidrAddress() + "/" + dest.getPod().getCidrSize()
                                 + ", pod gateway: " + dest.getPod().getGateway() + ", management host: " + _mgmtHost);
                     }
@@ -247,8 +223,9 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
     }
 
     @Override
-    public boolean finalizeDeployment(Commands cmds, VirtualMachineProfile<DomainRouterVO> profile, DeployDestination dest, ReservationContext context) throws ResourceUnavailableException {
-        DomainRouterVO internalLbVm = profile.getVirtualMachine();
+    public boolean finalizeDeployment(Commands cmds, VirtualMachineProfile profile, DeployDestination dest, ReservationContext context) throws ResourceUnavailableException {
+
+        DomainRouterVO internalLbVm = _internalLbVmDao.findById(profile.getId());
 
         List<NicProfile> nics = profile.getNics();
         for (NicProfile nic : nics) {
@@ -264,8 +241,8 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
     }
 
     @Override
-    public boolean finalizeStart(VirtualMachineProfile<DomainRouterVO> profile, long hostId, Commands cmds, ReservationContext context) {
-        DomainRouterVO internalLbVm = profile.getVirtualMachine();
+    public boolean finalizeStart(VirtualMachineProfile profile, long hostId, Commands cmds, ReservationContext context) {
+        DomainRouterVO internalLbVm = _internalLbVmDao.findById(profile.getId());
         
         boolean result = true;
 
@@ -313,8 +290,8 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
     }
 
     @Override
-    public boolean finalizeCommandsOnStart(Commands cmds, VirtualMachineProfile<DomainRouterVO> profile) {
-        DomainRouterVO internalLbVm = profile.getVirtualMachine();
+    public boolean finalizeCommandsOnStart(Commands cmds, VirtualMachineProfile profile) {
+        DomainRouterVO internalLbVm = _internalLbVmDao.findById(profile.getId());
         NicProfile controlNic = getNicProfileByTrafficType(profile, TrafficType.Control);
 
         if (controlNic == null) {
@@ -326,14 +303,14 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
 
         // restart network if restartNetwork = false is not specified in profile parameters
         boolean reprogramGuestNtwk = true;
-        if (profile.getParameter(Param.ReProgramGuestNetworks) != null 
+        if (profile.getParameter(Param.ReProgramGuestNetworks) != null
                 && (Boolean) profile.getParameter(Param.ReProgramGuestNetworks) == false) {
             reprogramGuestNtwk = false;
         }
 
         VirtualRouterProvider lbProvider = _vrProviderDao.findById(internalLbVm.getElementId());
         if (lbProvider == null) {
-            throw new CloudRuntimeException("Cannot find related element " + VirtualRouterProviderType.InternalLbVm + " of vm: " + internalLbVm.getHostName());
+            throw new CloudRuntimeException("Cannot find related element " + Type.InternalLbVm + " of vm: " + internalLbVm.getHostName());
         }
         
         Provider provider = Network.Provider.getProvider(lbProvider.getType().toString());
@@ -350,37 +327,15 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
     }
 
     @Override
-    public void finalizeStop(VirtualMachineProfile<DomainRouterVO> profile, StopAnswer answer) {
+    public void finalizeStop(VirtualMachineProfile profile, Answer answer) {
     }
 
     @Override
-    public void finalizeExpunge(DomainRouterVO vm) {
+    public void finalizeExpunge(VirtualMachine vm) {
     }
 
     @Override
-    public Long convertToId(String vmName) {
-        if (!VirtualMachineName.isValidSystemVmName(vmName, _instance, _internalLbVmNamePrefix)) {
-            return null;
-        }
-
-        return VirtualMachineName.getRouterId(vmName);
-    }
-
-    @Override
-    public boolean plugNic(Network network, NicTO nic, VirtualMachineTO vm, ReservationContext context, DeployDestination dest) throws ConcurrentOperationException, ResourceUnavailableException,
-            InsufficientCapacityException {        
-        //not supported
-        throw new UnsupportedOperationException("Plug nic is not supported for vm of type " + vm.getType());
-    }
-
-    @Override
-    public boolean unplugNic(Network network, NicTO nic, VirtualMachineTO vm, ReservationContext context, DeployDestination dest) throws ConcurrentOperationException, ResourceUnavailableException {
-        //not supported
-        throw new UnsupportedOperationException("Unplug nic is not supported for vm of type " + vm.getType());
-    }
-
-    @Override
-    public void prepareStop(VirtualMachineProfile<DomainRouterVO> profile) {
+    public void prepareStop(VirtualMachineProfile profile) {
     }
     
     @Override
@@ -394,10 +349,19 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
         _mgmtHost = configs.get("host");
         _mgmtCidr = _configDao.getValue(Config.ManagementNetwork.key());
         
-        String offIdStr = configs.get(Config.InternalLbVmServiceOfferingId.key());
-        if (offIdStr != null && !offIdStr.isEmpty()) {
-            _internalLbVmOfferingId = Long.parseLong(offIdStr);
-        } else {
+        String offUUID = configs.get(Config.InternalLbVmServiceOfferingId.key());
+        if (offUUID != null && !offUUID.isEmpty()) {
+            //get the id by offering UUID
+            ServiceOfferingVO off = _serviceOfferingDao.findByUuid(offUUID);
+            if (off != null) {
+                _internalLbVmOfferingId = off.getId();
+            } else {
+                s_logger.warn("Invalid offering UUID is passed in " + Config.InternalLbVmServiceOfferingId.key() + "; the default offering will be used instead");
+            }
+        }
+        
+        //if offering wasn't set, try to get the default one
+        if (_internalLbVmOfferingId == 0L) {
             boolean useLocalStorage = Boolean.parseBoolean(configs.get(Config.SystemVMUseLocalStorage.key()));
             ServiceOfferingVO newOff = new ServiceOfferingVO("System Offering For Internal LB VM", 1, InternalLoadBalancerVMManager.DEFAULT_INTERNALLB_VM_RAMSIZE, InternalLoadBalancerVMManager.DEFAULT_INTERNALLB_VM_CPU_MHZ, null,
                     null, true, null, useLocalStorage, true, null, true, VirtualMachine.Type.InternalLoadBalancerVm, true);
@@ -420,7 +384,7 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
         return _name;
     }
     
-    protected NicProfile getNicProfileByTrafficType(VirtualMachineProfile<DomainRouterVO> profile, TrafficType trafficType) {
+    protected NicProfile getNicProfileByTrafficType(VirtualMachineProfile profile, TrafficType trafficType) {
         for (NicProfile nic : profile.getNics()) {
             if (nic.getTrafficType() == trafficType && nic.getIp4Address() != null) {
                 return nic;
@@ -429,7 +393,7 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
         return null;
      }
     
-    protected void finalizeSshAndVersionOnStart(Commands cmds, VirtualMachineProfile<DomainRouterVO> profile, DomainRouterVO router, NicProfile controlNic) {
+    protected void finalizeSshAndVersionOnStart(Commands cmds, VirtualMachineProfile profile, DomainRouterVO router, NicProfile controlNic) {
         cmds.addCommand("checkSsh", new CheckSshCommand(profile.getInstanceName(), controlNic.getIp4Address(), 3922));
 
         // Update internal lb vm template/scripts version
@@ -482,14 +446,22 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
         
         Network guestNetwork = _ntwkModel.getNetwork(guestNetworkId);
         Nic guestNic = _nicDao.findByNtwkIdAndInstanceId(guestNetwork.getId(), internalLbVm.getId());
-        NicProfile guestNicProfile = new NicProfile(guestNic, guestNetwork, guestNic.getBroadcastUri(), guestNic.getIsolationUri(), 
-                _ntwkModel.getNetworkRate(guestNetwork.getId(), internalLbVm.getId()), 
-                _ntwkModel.isSecurityGroupSupportedInNetwork(guestNetwork), 
+        NicProfile guestNicProfile = new NicProfile(guestNic, guestNetwork, guestNic.getBroadcastUri(), guestNic.getIsolationUri(),
+                _ntwkModel.getNetworkRate(guestNetwork.getId(), internalLbVm.getId()),
+                _ntwkModel.isSecurityGroupSupportedInNetwork(guestNetwork),
                 _ntwkModel.getNetworkTag(internalLbVm.getHypervisorType(), guestNetwork));
 
-        LoadBalancerConfigCommand cmd = new LoadBalancerConfigCommand(lbs, guestNic.getIp4Address(), 
-                guestNic.getIp4Address(), internalLbVm.getPrivateIpAddress(), 
-                _itMgr.toNicTO(guestNicProfile, internalLbVm.getHypervisorType()), internalLbVm.getVpcId());
+        NetworkOffering offering = _networkOfferingDao.findById(guestNetwork.getNetworkOfferingId());
+        String maxconn= null;
+        if (offering.getConcurrentConnections() == null) {
+            maxconn =  _configDao.getValue(Config.NetworkLBHaproxyMaxConn.key());
+        }
+        else {
+            maxconn = offering.getConcurrentConnections().toString();
+        }
+        LoadBalancerConfigCommand cmd = new LoadBalancerConfigCommand(lbs, guestNic.getIp4Address(),
+                guestNic.getIp4Address(), internalLbVm.getPrivateIpAddress(),
+                _itMgr.toNicTO(guestNicProfile, internalLbVm.getHypervisorType()), internalLbVm.getVpcId(), maxconn);
 
         cmd.lbStatsVisibility = _configDao.getValue(Config.NetworkLBHaproxyStatsVisbility.key());
         cmd.lbStatsUri = _configDao.getValue(Config.NetworkLBHaproxyStatsUri.key());
@@ -538,7 +510,9 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
 
         _accountMgr.checkAccess(caller, null, true, internalLbVm);
 
-        return _itMgr.expunge(internalLbVm, _accountMgr.getActiveUser(callerUserId), caller); 
+        _itMgr.expunge(internalLbVm.getUuid());
+        _internalLbVmDao.remove(internalLbVm.getId());
+        return true;
     }
 
     
@@ -559,11 +533,8 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
     protected VirtualRouter stopInternalLbVm(DomainRouterVO internalLbVm, boolean forced, Account caller, long callerUserId) throws ResourceUnavailableException, ConcurrentOperationException {
         s_logger.debug("Stopping internal lb vm " + internalLbVm);
         try {
-            if (_itMgr.advanceStop((DomainRouterVO) internalLbVm, forced, _accountMgr.getActiveUser(callerUserId), caller)) {
-                return _internalLbVmDao.findById(internalLbVm.getId());
-            } else {
-                return null;
-            }
+            _itMgr.advanceStop(internalLbVm.getUuid(), forced);
+            return _internalLbVmDao.findById(internalLbVm.getId());
         } catch (OperationTimedoutException e) {
             throw new CloudRuntimeException("Unable to stop " + internalLbVm, e);
         }
@@ -571,7 +542,7 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
     
     
     @Override
-    public List<DomainRouterVO> deployInternalLbVm(Network guestNetwork, Ip requestedGuestIp, DeployDestination dest, 
+    public List<DomainRouterVO> deployInternalLbVm(Network guestNetwork, Ip requestedGuestIp, DeployDestination dest,
             Account owner, Map<Param, Object> params) throws InsufficientCapacityException,
             ConcurrentOperationException, ResourceUnavailableException {
 
@@ -580,7 +551,7 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
         return startInternalLbVms(params, internalLbVms);
     }
     
-    protected List<DomainRouterVO> startInternalLbVms(Map<Param, Object> params, List<DomainRouterVO> internalLbVms) 
+    protected List<DomainRouterVO> startInternalLbVms(Map<Param, Object> params, List<DomainRouterVO> internalLbVms)
             throws StorageUnavailableException, InsufficientCapacityException, ConcurrentOperationException, ResourceUnavailableException {
         List<DomainRouterVO> runningInternalLbVms = null;
 
@@ -606,12 +577,12 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
     
     
     @DB
-    protected List<DomainRouterVO> findOrDeployInternalLbVm(Network guestNetwork, Ip requestedGuestIp, DeployDestination dest, 
-            Account owner, Map<Param, Object> params) throws ConcurrentOperationException, 
+    protected List<DomainRouterVO> findOrDeployInternalLbVm(Network guestNetwork, Ip requestedGuestIp, DeployDestination dest,
+            Account owner, Map<Param, Object> params) throws ConcurrentOperationException,
             InsufficientCapacityException, ResourceUnavailableException {
 
         List<DomainRouterVO> internalLbVms = new ArrayList<DomainRouterVO>();
-        Network lock = _networkDao.acquireInLockTable(guestNetwork.getId(), _ntwkMgr.getNetworkLockTimeout());
+        Network lock = _networkDao.acquireInLockTable(guestNetwork.getId(), NetworkOrchestrationService.NetworkLockTimeout.value());
         if (lock == null) {
             throw new ConcurrentOperationException("Unable to lock network " + guestNetwork.getId());
         }
@@ -638,7 +609,7 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
                 return internalLbVms;
             }
 
-            List<Pair<NetworkVO, NicProfile>> networks = createInternalLbVmNetworks(guestNetwork, plan, requestedGuestIp);
+            LinkedHashMap<Network, NicProfile> networks = createInternalLbVmNetworks(guestNetwork, plan, requestedGuestIp);
             //Pass startVm=false as we are holding the network lock that needs to be released at the end of vm allocation
             DomainRouterVO internalLbVm = deployInternalLbVm(owner, dest, plan, params, internalLbProviderId, _internalLbVmOfferingId, guestNetwork.getVpcId(),
                 networks, false);
@@ -658,7 +629,7 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
     }
 
     protected long getInternalLbProviderId(Network guestNetwork) {
-        VirtualRouterProviderType type = VirtualRouterProviderType.InternalLbVm;
+        Type type = Type.InternalLbVm;
         long physicalNetworkId = _ntwkModel.getPhysicalNetworkId(guestNetwork);
         
         PhysicalNetworkServiceProvider provider = _physicalProviderDao.findByServiceProvider(physicalNetworkId, type.toString());
@@ -674,20 +645,20 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
         return internalLbProvider.getId();
     }
     
-    protected List<Pair<NetworkVO, NicProfile>> createInternalLbVmNetworks(Network guestNetwork, DeploymentPlan plan, Ip guestIp) throws ConcurrentOperationException,
+    protected LinkedHashMap<Network, NicProfile> createInternalLbVmNetworks(Network guestNetwork, DeploymentPlan plan, Ip guestIp) throws ConcurrentOperationException,
             InsufficientAddressCapacityException {
 
         //Form networks
-        List<Pair<NetworkVO, NicProfile>> networks = new ArrayList<Pair<NetworkVO, NicProfile>>(3);
+        LinkedHashMap<Network, NicProfile> networks = new LinkedHashMap<Network, NicProfile>(3);
         
         //1) Guest network - default
         if (guestNetwork != null) {
             s_logger.debug("Adding nic for Internal LB in Guest network " + guestNetwork);
             NicProfile guestNic = new NicProfile();
             if (guestIp != null) {
-                guestNic.setIp4Address(guestIp.addr());  
+                guestNic.setIp4Address(guestIp.addr());
             } else {
-                guestNic.setIp4Address(_ntwkMgr.acquireGuestIpAddress(guestNetwork, null));
+                guestNic.setIp4Address(_ipAddrMgr.acquireGuestIpAddress(guestNetwork, null));
             }
             guestNic.setGateway(guestNetwork.getGateway());
             guestNic.setBroadcastUri(guestNetwork.getBroadcastUri());
@@ -697,15 +668,15 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
             String gatewayCidr = guestNetwork.getCidr();
             guestNic.setNetmask(NetUtils.getCidrNetmask(gatewayCidr));
             guestNic.setDefaultNic(true);
-            networks.add(new Pair<NetworkVO, NicProfile>((NetworkVO) guestNetwork, guestNic));
+            networks.put(guestNetwork, guestNic);
         }
 
         //2) Control network
         s_logger.debug("Adding nic for Internal LB vm in Control network ");
         List<? extends NetworkOffering> offerings = _ntwkModel.getSystemAccountNetworkOfferings(NetworkOffering.SystemControlNetwork);
         NetworkOffering controlOffering = offerings.get(0);
-        NetworkVO controlConfig = _ntwkMgr.setupNetwork(_accountMgr.getSystemAccount(), controlOffering, plan, null, null, false).get(0);
-        networks.add(new Pair<NetworkVO, NicProfile>(controlConfig, null));
+        Network controlConfig = _ntwkMgr.setupNetwork(_accountMgr.getSystemAccount(), controlOffering, plan, null, null, false).get(0);
+        networks.put(controlConfig, null);
 
         return networks;
     }
@@ -739,14 +710,12 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
     
     protected DomainRouterVO deployInternalLbVm(Account owner, DeployDestination dest, DeploymentPlan plan, Map<Param, Object> params,
             long internalLbProviderId, long svcOffId, Long vpcId,
-            List<Pair<NetworkVO, NicProfile>> networks, boolean startVm) throws ConcurrentOperationException,
+        LinkedHashMap<Network, NicProfile> networks,
+        boolean startVm) throws ConcurrentOperationException,
             InsufficientAddressCapacityException, InsufficientServerCapacityException, InsufficientCapacityException,
             StorageUnavailableException, ResourceUnavailableException {
         
-        long id = _internalLbVmDao.getNextInSequence(Long.class, "id");
-        if (s_logger.isDebugEnabled()) {
-            s_logger.debug("Creating the internal lb vm " + id + " in datacenter "  + dest.getDataCenter());
-        }
+       
 
         ServiceOfferingVO routerOffering = _serviceOfferingDao.findById(svcOffId);
 
@@ -760,23 +729,25 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
         for (Iterator<HypervisorType> iter = hypervisors.iterator(); iter.hasNext();) {
             HypervisorType hType = iter.next();
             try {
-                s_logger.debug("Allocating the Internal lb with the hypervisor type " + hType);
-                String templateName = null;
+                long id = _internalLbVmDao.getNextInSequence(Long.class, "id");
+                if (s_logger.isDebugEnabled()) {
+                    s_logger.debug("Creating the internal lb vm " + id + " in datacenter "  + dest.getDataCenter() + " with hypervisor type " + hType);
+                }                String templateName = null;
                 switch (hType) {
                     case XenServer:
-                        templateName = _configServer.getConfigValue(Config.RouterTemplateXen.key(), Config.ConfigurationParameterScope.zone.toString(), dest.getDataCenter().getId());
+                        templateName = VirtualNetworkApplianceManager.RouterTemplateXen.valueIn(dest.getDataCenter().getId());
                         break;
                     case KVM:
-                        templateName = _configServer.getConfigValue(Config.RouterTemplateKVM.key(), Config.ConfigurationParameterScope.zone.toString(), dest.getDataCenter().getId());
+                        templateName = VirtualNetworkApplianceManager.RouterTemplateKvm.valueIn(dest.getDataCenter().getId());
                         break;
                     case VMware:
-                        templateName = _configServer.getConfigValue(Config.RouterTemplateVmware.key(), Config.ConfigurationParameterScope.zone.toString(), dest.getDataCenter().getId());
+                        templateName = VirtualNetworkApplianceManager.RouterTemplateVmware.valueIn(dest.getDataCenter().getId());
                         break;
                     case Hyperv:
-                        templateName = _configServer.getConfigValue(Config.RouterTemplateHyperv.key(), Config.ConfigurationParameterScope.zone.toString(), dest.getDataCenter().getId());
+                        templateName = VirtualNetworkApplianceManager.RouterTemplateHyperV.valueIn(dest.getDataCenter().getId());
                         break;
                     case LXC:
-                        templateName = _configServer.getConfigValue(Config.RouterTemplateLXC.key(), Config.ConfigurationParameterScope.zone.toString(), dest.getDataCenter().getId());
+                        templateName = VirtualNetworkApplianceManager.RouterTemplateLxc.valueIn(dest.getDataCenter().getId());
                         break;
                     default: break;
                 }
@@ -787,12 +758,14 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
                     continue;
                 }
 
-                internalLbVm = new DomainRouterVO(id, routerOffering.getId(), internalLbProviderId, 
+                internalLbVm = new DomainRouterVO(id, routerOffering.getId(), internalLbProviderId,
                 VirtualMachineName.getSystemVmName(id, _instance, _internalLbVmNamePrefix), template.getId(), template.getHypervisorType(),
-                template.getGuestOSId(), owner.getDomainId(), owner.getId(), false, 0, false, 
+                template.getGuestOSId(), owner.getDomainId(), owner.getId(), false, 0, false,
                 RedundantState.UNKNOWN, false, false, VirtualMachine.Type.InternalLoadBalancerVm, vpcId);
                 internalLbVm.setRole(Role.INTERNAL_LB_VM);
-                internalLbVm = _itMgr.allocate(internalLbVm, template, routerOffering, networks, plan, null, owner);
+                internalLbVm = _internalLbVmDao.persist(internalLbVm);
+                _itMgr.allocate(internalLbVm.getInstanceName(), template, routerOffering, networks, plan, null);
+                internalLbVm = _internalLbVmDao.findById(internalLbVm.getId());
             } catch (InsufficientCapacityException ex) {
                 if (allocateRetry < 2 && iter.hasNext()) {
                     s_logger.debug("Failed to allocate the Internal lb vm with hypervisor type " + hType + ", retrying one more time");
@@ -831,24 +804,21 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
     
     
 
-    protected DomainRouterVO startInternalLbVm(DomainRouterVO internalLbVm, Account caller, long callerUserId, Map<Param, Object> params) 
+    protected DomainRouterVO startInternalLbVm(DomainRouterVO internalLbVm, Account caller, long callerUserId, Map<Param, Object> params)
             throws StorageUnavailableException, InsufficientCapacityException,
             ConcurrentOperationException, ResourceUnavailableException {
         s_logger.debug("Starting Internal LB VM " + internalLbVm);
-        if (_itMgr.start(internalLbVm, params, _accountMgr.getUserIncludingRemoved(callerUserId), caller, null) != null) {
-            if (internalLbVm.isStopPending()) {
-                s_logger.info("Clear the stop pending flag of Internal LB VM " + internalLbVm.getHostName() + " after start router successfully!");
-                internalLbVm.setStopPending(false);
-                internalLbVm = _internalLbVmDao.persist(internalLbVm);
-            }
-            return _internalLbVmDao.findById(internalLbVm.getId());
-        } else {
-            return null;
+        _itMgr.start(internalLbVm.getUuid(), params, null);
+        if (internalLbVm.isStopPending()) {
+            s_logger.info("Clear the stop pending flag of Internal LB VM " + internalLbVm.getHostName() + " after start router successfully!");
+            internalLbVm.setStopPending(false);
+            internalLbVm = _internalLbVmDao.persist(internalLbVm);
         }
+        return _internalLbVmDao.findById(internalLbVm.getId());
     }
     
     
-    protected List<HypervisorType> getHypervisors(DeployDestination dest, DeploymentPlan plan, 
+    protected List<HypervisorType> getHypervisors(DeployDestination dest, DeploymentPlan plan,
             List<HypervisorType> supportedHypervisors) throws InsufficientServerCapacityException {
         List<HypervisorType> hypervisors = new ArrayList<HypervisorType>();
 
@@ -878,13 +848,13 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
     }
     
     @Override
-    public boolean applyLoadBalancingRules(Network network, final List<LoadBalancingRule> rules, List<? extends VirtualRouter> internalLbVms) 
+    public boolean applyLoadBalancingRules(Network network, final List<LoadBalancingRule> rules, List<? extends VirtualRouter> internalLbVms)
             throws ResourceUnavailableException {
         if (rules == null || rules.isEmpty()) {
             s_logger.debug("No lb rules to be applied for network " + network);
             return true;
         }
-        
+        s_logger.info("lb rules to be applied for network ");
         //only one internal lb vm is supported per ip address at this time
         if (internalLbVms == null || internalLbVms.isEmpty()) {
             throw new CloudRuntimeException("Can't apply the lb rules on network " + network + " as the list of internal lb vms is empty");
@@ -894,7 +864,7 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
         if (lbVm.getState() == State.Running) {
             return sendLBRules(lbVm, rules, network.getId());
         } else if (lbVm.getState() == State.Stopped || lbVm.getState() == State.Stopping) {
-            s_logger.debug("Internal LB VM " + lbVm.getInstanceName() + " is in " + lbVm.getState() + 
+            s_logger.debug("Internal LB VM " + lbVm.getInstanceName() + " is in " + lbVm.getState() +
                     ", so not sending apply lb rules commands to the backend");
             return true;
         } else {
@@ -904,7 +874,7 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
     }
     
     protected boolean sendLBRules(VirtualRouter internalLbVm, List<LoadBalancingRule> rules, long guestNetworkId) throws ResourceUnavailableException {
-        Commands cmds = new Commands(OnError.Continue);
+        Commands cmds = new Commands(Command.OnError.Continue);
         createApplyLoadBalancingRulesCommands(rules, internalLbVm, cmds, guestNetworkId);
         return sendCommandsToInternalLbVm(internalLbVm, cmds);
     }
@@ -941,7 +911,7 @@ public class InternalLoadBalancerVMManagerImpl extends ManagerBase implements
     
     
     @Override
-    public VirtualRouter startInternalLbVm(long internalLbVmId, Account caller, long callerUserId) 
+    public VirtualRouter startInternalLbVm(long internalLbVmId, Account caller, long callerUserId)
             throws StorageUnavailableException, InsufficientCapacityException,
             ConcurrentOperationException, ResourceUnavailableException {
         

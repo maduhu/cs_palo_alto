@@ -42,7 +42,7 @@ public interface ObjectInDataStoreStateMachine extends StateObject<ObjectInDataS
             return _description;
         }
     }
-    
+
     enum Event {
         CreateRequested,
         CreateOnlyRequested,
@@ -53,6 +53,5 @@ public interface ObjectInDataStoreStateMachine extends StateObject<ObjectInDataS
         MigrationRequested,
         ResizeRequested,
         ExpungeRequested
-        
     }
 }

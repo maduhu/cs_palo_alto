@@ -35,6 +35,11 @@ class networkConfig:
             self.method = None 
      
     @staticmethod
+    def listNetworks():
+        devs = os.listdir("/sys/class/net/") 
+        devs = filter(networkConfig.isBridge, devs) 
+        return devs
+    @staticmethod
     def getDefaultNetwork():
         cmd = bash("route -n|awk \'/^0.0.0.0/ {print $2,$8}\'") 
         if not cmd.isSuccess():
@@ -82,7 +87,7 @@ class networkConfig:
         if os.path.exists("/proc/sys/net/bridge"):
             return True
 
-        return bash("modprobe bridge").isSucess()
+        return bash("modprobe -b bridge").isSucess()
 
     @staticmethod
     def isNetworkDev(devName):

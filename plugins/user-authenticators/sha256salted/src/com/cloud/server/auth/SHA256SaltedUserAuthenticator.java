@@ -24,7 +24,6 @@ import java.util.Map;
 
 import javax.ejb.Local;
 import javax.inject.Inject;
-import javax.naming.ConfigurationException;
 
 import org.apache.log4j.Logger;
 import org.bouncycastle.util.encoders.Base64;
@@ -36,20 +35,11 @@ import com.cloud.utils.exception.CloudRuntimeException;
 @Local(value={UserAuthenticator.class})
 public class SHA256SaltedUserAuthenticator extends DefaultUserAuthenticator {
     public static final Logger s_logger = Logger.getLogger(SHA256SaltedUserAuthenticator.class);
-
+    private static final String s_defaultPassword = "000000000000000000000000000=";
+    private static final String s_defaultSalt = "0000000000000000000000000000000=";
     @Inject
     private UserAccountDao _userAccountDao;
-    private static int s_saltlen = 20;
-
-    @Override
-    public boolean configure(String name, Map<String, Object> params)
-            throws ConfigurationException {
-        if (name == null) {
-            name = "SHA256SALT";
-        }
-        super.configure(name, params);
-        return true;
-    }
+    private static final int s_saltlen = 32;
 
     /* (non-Javadoc)
      * @see com.cloud.server.auth.UserAuthenticator#authenticate(java.lang.String, java.lang.String, java.lang.Long, java.util.Map)
@@ -60,21 +50,29 @@ public class SHA256SaltedUserAuthenticator extends DefaultUserAuthenticator {
         if (s_logger.isDebugEnabled()) {
             s_logger.debug("Retrieving user: " + username);
         }
+        boolean realUser = true;
         UserAccount user = _userAccountDao.getUserAccount(username, domainId);
         if (user == null) {
             s_logger.debug("Unable to find user with " + username + " in domain " + domainId);
-            return false;
+            realUser = false;
         }
-
-        try {
+        /* Fake Data */
+        String realPassword = new String(s_defaultPassword);
+        byte[] salt = new String(s_defaultSalt).getBytes();
+        if (realUser) {
             String storedPassword[] = user.getPassword().split(":");
             if (storedPassword.length != 2) {
                 s_logger.warn("The stored password for " + username + " isn't in the right format for this authenticator");
-                return false;
+                realUser = false;
+            } else {
+                realPassword = storedPassword[1];
+                salt = Base64.decode(storedPassword[0]);
             }
-            byte salt[] = Base64.decode(storedPassword[0]);
+        }
+        try {
             String hashedPassword = encode(password, salt);
-            return storedPassword[1].equals(hashedPassword);
+            /* constantTimeEquals comes first in boolean since we need to thwart timing attacks */
+            return constantTimeEquals(realPassword, hashedPassword) && realUser;
         } catch (NoSuchAlgorithmException e) {
             throw new CloudRuntimeException("Unable to hash password", e);
         } catch (UnsupportedEncodingException e) {
@@ -109,9 +107,9 @@ public class SHA256SaltedUserAuthenticator extends DefaultUserAuthenticator {
 
     public String encode(String password, byte[] salt) throws UnsupportedEncodingException, NoSuchAlgorithmException {
         byte[] passwordBytes = password.getBytes("UTF-8");
-        byte[] hashSource = new byte[passwordBytes.length + s_saltlen];
+        byte[] hashSource = new byte[passwordBytes.length + salt.length];
         System.arraycopy(passwordBytes, 0, hashSource, 0, passwordBytes.length);
-        System.arraycopy(salt, 0, hashSource, passwordBytes.length, s_saltlen);
+        System.arraycopy(salt, 0, hashSource, passwordBytes.length, salt.length);
 
         // 2. Hash the password with the salt
         MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -119,5 +117,15 @@ public class SHA256SaltedUserAuthenticator extends DefaultUserAuthenticator {
         byte[] digest = md.digest();
 
         return new String(Base64.encode(digest));
+    }
+
+    private static boolean constantTimeEquals(String a, String b) {
+        byte[] aBytes = a.getBytes();
+        byte[] bBytes = b.getBytes();
+        int result = aBytes.length ^ bBytes.length;
+        for (int i = 0; i < aBytes.length && i < bBytes.length; i++) {
+            result |= aBytes[i] ^ bBytes[i];
+        }
+        return result == 0;
     }
 }

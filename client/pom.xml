@@ -1,14 +1,14 @@
 <!-- Licensed to the Apache Software Foundation (ASF) under one or more contributor 
   license agreements. See the NOTICE file distributed with this work for additional 
-  information regarding copyright ownership. The ASF licenses this file to 
-  you under the Apache License, Version 2.0 (the "License"); you may not use 
-  this file except in compliance with the License. You may obtain a copy of 
-  the License at http://www.apache.org/licenses/LICENSE-2.0 Unless required 
-  by applicable law or agreed to in writing, software distributed under the 
-  License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS 
-  OF ANY KIND, either express or implied. See the License for the specific 
-  language governing permissions and limitations under the License. -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  information regarding copyright ownership. The ASF licenses this file to you under 
+  the Apache License, Version 2.0 (the "License"); you may not use this file except 
+  in compliance with the License. You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 
+  Unless required by applicable law or agreed to in writing, software distributed under 
+  the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS 
+  OF ANY KIND, either express or implied. See the License for the specific language 
+  governing permissions and limitations under the License. -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
   <artifactId>cloud-client-ui</artifactId>
@@ -17,9 +17,14 @@
   <parent>
     <groupId>org.apache.cloudstack</groupId>
     <artifactId>cloudstack</artifactId>
-    <version>4.2.0-SNAPSHOT</version>
+    <version>4.3.0-SNAPSHOT</version>
   </parent>
   <dependencies>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-storage-volume-solidfire</artifactId>
+      <version>${project.version}</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.cloudstack</groupId>
       <artifactId>cloud-server</artifactId>
@@ -30,7 +35,7 @@
       <artifactId>cloud-plugin-acl-static-role-based</artifactId>
       <version>${project.version}</version>
     </dependency>
-     <dependency>
+    <dependency>
       <groupId>org.apache.cloudstack</groupId>
       <artifactId>cloud-plugin-dedicated-resources</artifactId>
       <version>${project.version}</version>
@@ -39,7 +44,7 @@
       <groupId>org.apache.cloudstack</groupId>
       <artifactId>cloud-plugin-api-limit-account-based</artifactId>
       <version>${project.version}</version>
-    </dependency>    
+    </dependency>
     <dependency>
       <groupId>org.apache.cloudstack</groupId>
       <artifactId>cloud-plugin-api-discovery</artifactId>
@@ -95,9 +100,19 @@
       <artifactId>cloud-plugin-network-midonet</artifactId>
       <version>${project.version}</version>
     </dependency>
-  <dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-network-ssp</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
       <groupId>org.apache.cloudstack</groupId>
       <artifactId>cloud-plugin-network-internallb</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-network-vxlan</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -111,9 +126,14 @@
       <version>${project.version}</version>
     </dependency>
     <dependency>
-       <groupId>org.apache.cloudstack</groupId>
-       <artifactId>cloud-plugin-hypervisor-ovm</artifactId>
-       <version>${project.version}</version>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-hypervisor-ucs</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-hypervisor-ovm</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.cloudstack</groupId>
@@ -164,90 +184,92 @@
     <dependency>
       <groupId>mysql</groupId>
       <artifactId>mysql-connector-java</artifactId>
-      <version>${cs.mysql.version}</version>
       <scope>runtime</scope>
     </dependency>
     <dependency>
-    	<groupId>org.apache.cloudstack</groupId>
-    	<artifactId>cloud-framework-ipc</artifactId>
-        <version>${project.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.cloudstack</groupId>
-        <artifactId>cloud-framework-rest</artifactId>
-        <version>${project.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.cloudstack</groupId>
-        <artifactId>cloud-engine-api</artifactId>
-        <version>${project.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.cloudstack</groupId>
-    	<artifactId>cloud-engine-components-api</artifactId>
-    	<version>${project.version}</version>
-    </dependency>
-
-    <dependency>
-        <groupId>org.apache.cloudstack</groupId>
-        <artifactId>cloud-engine-compute</artifactId>
-        <version>${project.version}</version>
-    </dependency>
-
-    <dependency>
-        <groupId>org.apache.cloudstack</groupId>
-        <artifactId>cloud-engine-network</artifactId>
-        <version>${project.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.cloudstack</groupId>
-        <artifactId>cloud-engine-orchestration</artifactId>
-        <version>${project.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.cloudstack</groupId>
-        <artifactId>cloud-engine-schema</artifactId>
-        <version>${project.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.cloudstack</groupId>
-        <artifactId>cloud-engine-storage</artifactId>
-        <version>${project.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.cloudstack</groupId>
-        <artifactId>cloud-engine-storage-backup</artifactId>
-        <version>${project.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.cloudstack</groupId>
-        <artifactId>cloud-engine-storage-image</artifactId>
-        <version>${project.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.cloudstack</groupId>
-        <artifactId>cloud-engine-storage-imagemotion</artifactId>
-        <version>${project.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.cloudstack</groupId>
-        <artifactId>cloud-engine-storage-snapshot</artifactId>
-        <version>${project.version}</version>
-    </dependency>
-    <dependency>
-        <groupId>org.apache.cloudstack</groupId>
-        <artifactId>cloud-engine-storage-volume</artifactId>
-        <version>${project.version}</version>
-    </dependency>
-    <dependency>
       <groupId>org.apache.cloudstack</groupId>
-      <artifactId>cloud-plugin-hypervisor-simulator</artifactId>
+      <artifactId>cloud-framework-ipc</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
-        <groupId>org.apache.cloudstack</groupId>
-        <artifactId>cloud-plugin-storage-volume-default</artifactId>
-        <version>${project.version}</version>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-framework-rest</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-engine-api</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-engine-components-api</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-engine-network</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-engine-orchestration</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-engine-schema</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-engine-storage</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-engine-storage-cache</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-engine-storage-image</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-engine-storage-datamotion</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-engine-storage-snapshot</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-engine-storage-volume</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-storage-volume-default</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-storage-image-default</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-storage-image-s3</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-storage-image-swift</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.cloudstack</groupId>
@@ -264,15 +286,23 @@
       <artifactId>cloud-plugin-host-anti-affinity</artifactId>
       <version>${project.version}</version>
     </dependency>
-    <dependency>
-      <groupId>org.apache.cloudstack</groupId>
-      <artifactId>cloud-console-proxy</artifactId>
-      <version>${project.version}</version>
-    </dependency>
   </dependencies>
   <build>
-    <defaultGoal>install</defaultGoal>
     <plugins>
+      <plugin>
+        <groupId>ru.concerteza.buildnumber</groupId>
+        <artifactId>maven-jgit-buildnumber-plugin</artifactId>
+        <version>1.2.6</version>
+        <executions>
+          <execution>
+            <id>git-buildnumber</id>
+            <goals>
+              <goal>extract-buildnumber</goal>
+            </goals>
+            <phase>prepare-package</phase>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-war-plugin</artifactId>
@@ -280,6 +310,15 @@
         <configuration>
           <webXml>./target/generated-webapp/WEB-INF/web.xml</webXml>
           <warSourceDirectory>./target/generated-webapp</warSourceDirectory>
+          <archive>
+            <manifest>
+              <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+            </manifest>
+            <manifestEntries>
+              <Implementation-Revision>${git.revision}</Implementation-Revision>
+              <Implementation-Branch>${git.branch}</Implementation-Branch>
+            </manifestEntries>
+          </archive>
         </configuration>
       </plugin>
       <plugin>
@@ -287,14 +326,17 @@
         <artifactId>maven-jetty-plugin</artifactId>
         <version>6.1.26</version>
         <configuration>
+          <scanIntervalSeconds>0</scanIntervalSeconds>
+          <stopPort>9966</stopPort>
+          <stopKey>stop-jetty</stopKey>
           <connectors>
             <connector implementation="org.mortbay.jetty.nio.SelectChannelConnector">
               <port>8080</port>
               <maxIdleTime>60000</maxIdleTime>
             </connector>
           </connectors>
-          <webXml>${project.build.directory}/${project.build.finalName}/WEB-INF/web.xml</webXml>
-          <webAppSourceDirectory>${project.build.directory}/${project.build.finalName}</webAppSourceDirectory>
+          <webXml>${project.build.directory}/generated-webapp/WEB-INF/web.xml</webXml>
+          <webAppSourceDirectory>${project.build.directory}/generated-webapp</webAppSourceDirectory>
           <webAppConfig>
             <contextPath>/client</contextPath>
             <extraClasspath>${project.build.directory}/utilities/scripts/db/;${project.build.directory}/utilities/scripts/db/db/</extraClasspath>
@@ -312,28 +354,7 @@
       </plugin>
       <plugin>
         <artifactId>maven-antrun-plugin</artifactId>
-        <version>1.7</version>
         <executions>
-          <!-- Copy the systemvm in the package phase as it is generated 
-               by console-proxy in the package phase. 
-          -->
-          <execution>
-            <id>copy-systemvm</id>
-            <phase>process-resources</phase>
-            <goals>
-              <goal>run</goal>
-            </goals>
-            <configuration>
-              <target>
-                <copy todir="${basedir}/target/generated-webapp/WEB-INF/classes/vms">
-                  <fileset dir="${basedir}/../services/console-proxy/server/dist">
-                    <include name="systemvm.zip" />
-                    <include name="systemvm.iso" />
-                  </fileset>
-                </copy>
-              </target>
-            </configuration>
-          </execution>
           <execution>
             <id>generate-resource</id>
             <phase>generate-resources</phase>
@@ -343,116 +364,111 @@
             <configuration>
               <target>
                 <copy todir="${basedir}/target/generated-webapp/WEB-INF/classes/scripts">
-                  <fileset dir="${basedir}/../scripts" />
+                  <fileset dir="${basedir}/../scripts"/>
                 </copy>
-                <!--  CLOUDSTACK-1304 -->
-                <chmod perm="755" >
-                    <fileset dir="${basedir}/target/generated-webapp/WEB-INF/classes/scripts" />
-                </chmod>
-                <copy
-                  todir="${basedir}/target/generated-webapp/WEB-INF/">
+                <!-- CLOUDSTACK-1304 -->
+                <chmod perm="755"
+                  file="${basedir}/target/generated-webapp/WEB-INF/classes/scripts/**" type="both"/>
+                <copy todir="${basedir}/target/generated-webapp/WEB-INF/">
                   <fileset dir="${basedir}/WEB-INF/">
-                    <include name="web.xml" />
+                    <include name="web.xml"/>
                   </fileset>
                 </copy>
-                <copy
-                  todir="${basedir}/target/generated-webapp/WEB-INF/classes">
+                <copy todir="${basedir}/target/generated-webapp/WEB-INF/classes">
                   <fileset dir="${basedir}/WEB-INF/classes">
-                    <include name="resources/**/*" />
+                    <include name="resources/**/*"/>
                   </fileset>
                 </copy>
                 <copy todir="${basedir}/target/generated-webapp">
-                  <fileset dir="${basedir}/../ui" />
+                  <fileset dir="${basedir}/../ui"/>
                 </copy>
-                <copy overwrite="true"
-                  todir="${basedir}/target/generated-webapp/WEB-INF/classes">
+                <copy overwrite="true" todir="${basedir}/target/generated-webapp/WEB-INF/classes">
                   <fileset dir="${basedir}/tomcatconf">
-                    <include name="*.in" />
+                    <include name="*.in"/>
                   </fileset>
-                  <globmapper from="*.in" to="*" />
+                  <globmapper from="*.in" to="*"/>
                   <filterchain>
-                    <filterreader
-                      classname="org.apache.tools.ant.filters.ReplaceTokens">
-                      <param type="propertiesfile"
-                        value="${cs.replace.properties}" />
+                    <filterreader classname="org.apache.tools.ant.filters.ReplaceTokens">
+                      <param type="propertiesfile" value="${cs.replace.properties}"/>
                     </filterreader>
                   </filterchain>
                 </copy>
                 <copy overwrite="true" todir="${basedir}/target/generated-webapp/WEB-INF/classes">
                   <fileset dir="${basedir}/tomcatconf">
-                    <include name="*.in" />
+                    <include name="*.in"/>
                   </fileset>
-                  <globmapper from="*.in" to="*" />
+                  <globmapper from="*.in" to="*"/>
                   <filterchain>
                     <filterreader classname="org.apache.tools.ant.filters.ReplaceTokens">
-                      <param type="propertiesfile" value="${cs.replace.properties}" />
+                      <param type="propertiesfile" value="${cs.replace.properties}"/>
                     </filterreader>
                   </filterchain>
                 </copy>
                 <copy overwrite="true" todir="${basedir}/target/utilities/bin">
                   <fileset dir="${basedir}/../setup/bindir">
-                    <include name="*.in" />
+                    <include name="*.in"/>
                   </fileset>
-                  <globmapper from="*.in" to="*" />
+                  <globmapper from="*.in" to="*"/>
                   <filterchain>
                     <filterreader classname="org.apache.tools.ant.filters.ReplaceTokens">
-                      <param type="propertiesfile" value="${cs.replace.properties}" />
+                      <param type="propertiesfile" value="${cs.replace.properties}"/>
                     </filterreader>
                   </filterchain>
                 </copy>
                 <copy overwrite="true" todir="${basedir}/target/utilities/bin">
                   <fileset dir="${basedir}/bindir">
-                    <include name="*.in" />
+                    <include name="*.in"/>
                   </fileset>
-                  <globmapper from="*.in" to="*" />
+                  <globmapper from="*.in" to="*"/>
                   <filterchain>
                     <filterreader classname="org.apache.tools.ant.filters.ReplaceTokens">
-                      <param type="propertiesfile" value="${cs.replace.properties}" />
+                      <param type="propertiesfile" value="${cs.replace.properties}"/>
                     </filterreader>
                   </filterchain>
                 </copy>
                 <copy overwrite="true" todir="${basedir}/target/utilities/scripts/db">
                   <fileset dir="${basedir}/../setup/db">
-                    <include name="**/*" />
+                    <include name="**/*"/>
                   </fileset>
                   <filterchain>
                     <filterreader classname="org.apache.tools.ant.filters.ReplaceTokens">
-                      <param type="propertiesfile" value="${cs.replace.properties}" />
+                      <param type="propertiesfile" value="${cs.replace.properties}"/>
                     </filterreader>
                   </filterchain>
                 </copy>
                 <copy overwrite="true" todir="${basedir}/target/conf">
                   <fileset dir="${basedir}/tomcatconf">
-                    <include name="*.in" />
+                    <include name="*.in"/>
                   </fileset>
-                  <globmapper from="*.in" to="*" />
+                  <globmapper from="*.in" to="*"/>
                   <filterchain>
                     <filterreader classname="org.apache.tools.ant.filters.ReplaceTokens">
-                      <param type="propertiesfile" value="${cs.replace.properties}" />
+                      <param type="propertiesfile" value="${cs.replace.properties}"/>
                     </filterreader>
                   </filterchain>
                 </copy>
                 <copy overwrite="true" todir="${basedir}/target/conf">
                   <fileset dir="${basedir}/tomcatconf">
-                    <exclude name="*.in" />
+                    <exclude name="*.in"/>
                   </fileset>
                 </copy>
               </target>
             </configuration>
           </execution>
           <execution>
-            <id>process-nonoss</id>
+            <id>process-noredist</id>
             <phase>process-resources</phase>
             <goals>
               <goal>run</goal>
             </goals>
             <configuration>
-              <target if="${nonoss}">
+              <target if="${noredist}">
                 <echo>test</echo>
                 <replaceregexp
-                    file="${basedir}/target/generated-webapp/WEB-INF/classes/environment.properties"
-                    match="cloud-stack-components-specification=.*"
-                    replace="cloud-stack-components-specification=components-nonoss.xml" byline="true"/>
+                  file="${basedir}/target/generated-webapp/WEB-INF/classes/environment.properties"
+                  match="cloud-stack-components-specification=.*"
+                  replace="cloud-stack-components-specification=components-nonoss.xml" byline="true"
+                />
               </target>
             </configuration>
           </execution>
@@ -465,29 +481,28 @@
             <configuration>
               <target if="${simulator}">
                 <echo>test</echo>
-                <replaceregexp
-                    file="${basedir}/target/generated-webapp/WEB-INF/web.xml"
-                    match="classpath:componentContext.xml"
-                    replace="classpath:simulatorComponentContext.xml" byline="true" />
+                <replaceregexp file="${basedir}/target/generated-webapp/WEB-INF/web.xml"
+                  match="classpath:componentContext.xml"
+                  replace="classpath:simulatorComponentContext.xml" byline="true"/>
               </target>
             </configuration>
           </execution>
           <execution>
-            <id>process-nonoss-spring-context</id>
+            <id>process-noredist-spring-context</id>
             <phase>process-resources</phase>
             <goals>
               <goal>run</goal>
             </goals>
             <configuration>
-              <target if="${nonoss}">
-                <replaceregexp
-                  file="${basedir}/target/generated-webapp/WEB-INF/web.xml"
+              <target if="${noredist}">
+                <replaceregexp file="${basedir}/target/generated-webapp/WEB-INF/web.xml"
                   match="classpath:componentContext.xml"
-                  replace="classpath:nonossComponentContext.xml" byline="true" />
-                <copy overwrite="true" todir="${basedir}/target/generated-webapp/WEB-INF/classes/scripts">
-                    <fileset dir="${basedir}/../plugins/network-elements/cisco-vnmc/scripts">
-                        <include name="**/*" />
-                    </fileset>
+                  replace="classpath:nonossComponentContext.xml" byline="true"/>
+                <copy overwrite="true"
+                  todir="${basedir}/target/generated-webapp/WEB-INF/classes/scripts">
+                  <fileset dir="${basedir}/../plugins/network-elements/cisco-vnmc/scripts">
+                    <include name="**/*"/>
+                  </fileset>
                 </copy>
               </target>
             </configuration>
@@ -502,9 +517,9 @@
               <target if="${quickcloud}">
                 <echo>quickcloud</echo>
                 <replaceregexp
-                    file="${basedir}/target/generated-webapp/WEB-INF/classes/applicationContext.xml"
+                  file="${basedir}/target/generated-webapp/WEB-INF/classes/applicationContext.xml"
                   match="com.cloud.consoleproxy.ConsoleProxyManagerImpl"
-                  replace="com.cloud.consoleproxy.StaticConsoleProxyManager" byline="true" />
+                  replace="com.cloud.consoleproxy.StaticConsoleProxyManager" byline="true"/>
               </target>
             </configuration>
           </execution>
@@ -514,7 +529,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-dependency-plugin</artifactId>
-        <version>2.5.1</version>
         <executions>
           <execution>
             <id>copy</id>
@@ -546,8 +560,8 @@
     </plugins>
     <pluginManagement>
       <plugins>
-        <!--This plugin's configuration is used to store Eclipse m2e settings
-          only. It has no influence on the Maven build itself. -->
+        <!--This plugin's configuration is used to store Eclipse m2e settings only. 
+          It has no influence on the Maven build itself. -->
         <plugin>
           <groupId>org.eclipse.m2e</groupId>
           <artifactId>lifecycle-mapping</artifactId>
@@ -557,19 +571,15 @@
               <pluginExecutions>
                 <pluginExecution>
                   <pluginExecutionFilter>
-                    <groupId>
-                      org.apache.maven.plugins
-                    </groupId>
-                    <artifactId>
-                      maven-antrun-plugin
-                    </artifactId>
+                    <groupId> org.apache.maven.plugins </groupId>
+                    <artifactId> maven-antrun-plugin </artifactId>
                     <versionRange>[1.7,)</versionRange>
                     <goals>
                       <goal>run</goal>
                     </goals>
                   </pluginExecutionFilter>
                   <action>
-                    <ignore />
+                    <ignore/>
                   </action>
                 </pluginExecution>
               </pluginExecutions>
@@ -581,7 +591,52 @@
   </build>
   <profiles>
     <profile>
-      <id>developer</id>
+      <id>systemvm</id>
+      <activation>
+        <property>
+          <name>systemvm</name>
+        </property>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.cloudstack</groupId>
+          <artifactId>cloud-systemvm</artifactId>
+          <version>${project.version}</version>
+          <type>pom</type>
+        </dependency>
+      </dependencies>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>1.7</version>
+            <executions>
+              <!-- Copy the systemvm in the package phase as it is generated by console-proxy 
+            in the package phase. -->
+              <execution>
+                <id>copy-systemvm</id>
+                <phase>process-resources</phase>
+                <goals>
+                  <goal>run</goal>
+                </goals>
+                <configuration>
+                  <target>
+                    <copy todir="${basedir}/target/generated-webapp/WEB-INF/classes/vms">
+                      <fileset dir="${basedir}/../systemvm/dist">
+                        <include name="systemvm.zip"/>
+                        <include name="systemvm.iso"/>
+                      </fileset>
+                    </copy>
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>simulator</id>
       <activation>
         <property>
           <name>simulator</name>
@@ -599,7 +654,7 @@
       <id>netapp</id>
       <activation>
         <property>
-          <name>nonoss</name>
+          <name>noredist</name>
         </property>
       </activation>
       <dependencies>
@@ -614,7 +669,7 @@
       <id>f5</id>
       <activation>
         <property>
-          <name>nonoss</name>
+          <name>noredist</name>
         </property>
       </activation>
       <dependencies>
@@ -629,7 +684,7 @@
       <id>netscaler</id>
       <activation>
         <property>
-          <name>nonoss</name>
+          <name>noredist</name>
         </property>
       </activation>
       <dependencies>
@@ -644,7 +699,7 @@
       <id>srx</id>
       <activation>
         <property>
-          <name>nonoss</name>
+          <name>noredist</name>
         </property>
       </activation>
       <dependencies>
@@ -659,7 +714,7 @@
       <id>vmware</id>
       <activation>
         <property>
-          <name>nonoss</name>
+          <name>noredist</name>
         </property>
       </activation>
       <dependencies>

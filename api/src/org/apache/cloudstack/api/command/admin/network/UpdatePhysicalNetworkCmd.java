@@ -19,13 +19,13 @@ package org.apache.cloudstack.api.command.admin.network;
 import java.util.List;
 
 import org.apache.cloudstack.api.APICommand;
+import org.apache.cloudstack.api.ApiCommandJobType;
 import org.apache.cloudstack.api.ApiConstants;
 import org.apache.cloudstack.api.BaseAsyncCmd;
 import org.apache.cloudstack.api.Parameter;
 import org.apache.cloudstack.api.response.PhysicalNetworkResponse;
 import org.apache.log4j.Logger;
 
-import com.cloud.async.AsyncJob;
 import com.cloud.event.EventTypes;
 import com.cloud.network.PhysicalNetwork;
 import com.cloud.user.Account;
@@ -54,8 +54,6 @@ public class UpdatePhysicalNetworkCmd extends BaseAsyncCmd {
 
     @Parameter(name=ApiConstants.VLAN, type=CommandType.STRING, description="the VLAN for the physical network")
     private String vlan;
-    @Parameter(name=ApiConstants.REMOVE_VLAN, type = CommandType.STRING, description ="The vlan range we want to remove")
-    private String removevlan;
 
     /////////////////////////////////////////////////////
     /////////////////// Accessors ///////////////////////
@@ -81,10 +79,6 @@ public class UpdatePhysicalNetworkCmd extends BaseAsyncCmd {
         return vlan;
     }
 
-    public String getRemoveVlan(){
-        return removevlan;
-    }
-
     /////////////////////////////////////////////////////
     /////////////// API Implementation///////////////////
     /////////////////////////////////////////////////////
@@ -101,7 +95,7 @@ public class UpdatePhysicalNetworkCmd extends BaseAsyncCmd {
 
     @Override
     public void execute(){
-        PhysicalNetwork result = _networkService.updatePhysicalNetwork(getId(),getNetworkSpeed(), getTags(), getVlan(), getState(), getRemoveVlan());
+        PhysicalNetwork result = _networkService.updatePhysicalNetwork(getId(),getNetworkSpeed(), getTags(), getVlan(), getState());
         PhysicalNetworkResponse response = _responseGenerator.createPhysicalNetworkResponse(result);
         response.setResponseName(getCommandName());
         this.setResponseObject(response);
@@ -118,7 +112,7 @@ public class UpdatePhysicalNetworkCmd extends BaseAsyncCmd {
     }
 
     @Override
-    public AsyncJob.Type getInstanceType() {
-        return AsyncJob.Type.PhysicalNetwork;
+    public ApiCommandJobType getInstanceType() {
+        return ApiCommandJobType.PhysicalNetwork;
     }
 }

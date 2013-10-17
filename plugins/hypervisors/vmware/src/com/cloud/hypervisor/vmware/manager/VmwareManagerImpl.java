@@ -36,9 +36,20 @@ import javax.ejb.Local;
 import javax.inject.Inject;
 import javax.naming.ConfigurationException;
 
-import org.apache.cloudstack.api.command.admin.zone.AddVmwareDcCmd;
-import org.apache.cloudstack.api.command.admin.zone.RemoveVmwareDcCmd;
 import org.apache.log4j.Logger;
+
+import com.google.gson.Gson;
+import com.vmware.vim25.AboutInfo;
+import com.vmware.vim25.HostConnectSpec;
+import com.vmware.vim25.ManagedObjectReference;
+
+import org.apache.cloudstack.api.command.admin.zone.AddVmwareDcCmd;
+import org.apache.cloudstack.api.command.admin.zone.ListVmwareDcsCmd;
+import org.apache.cloudstack.api.command.admin.zone.RemoveVmwareDcCmd;
+import org.apache.cloudstack.engine.subsystem.api.storage.DataStore;
+import org.apache.cloudstack.engine.subsystem.api.storage.DataStoreManager;
+import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
+import org.apache.cloudstack.utils.identity.ManagementServerNode;
 
 import com.cloud.agent.AgentManager;
 import com.cloud.agent.Listener;
@@ -49,8 +60,9 @@ import com.cloud.agent.api.Command;
 import com.cloud.agent.api.StartupCommand;
 import com.cloud.agent.api.StartupRoutingCommand;
 import com.cloud.cluster.ClusterManager;
+import com.cloud.cluster.ManagementServerHost;
+import com.cloud.cluster.dao.ManagementServerHostPeerDao;
 import com.cloud.configuration.Config;
-import com.cloud.configuration.dao.ConfigurationDao;
 import com.cloud.dc.ClusterDetailsDao;
 import com.cloud.dc.ClusterVO;
 import com.cloud.dc.ClusterVSMMapVO;
@@ -62,13 +74,14 @@ import com.cloud.exception.DiscoveredWithErrorException;
 import com.cloud.exception.DiscoveryException;
 import com.cloud.exception.InvalidParameterValueException;
 import com.cloud.exception.ResourceInUseException;
-import com.cloud.host.HostVO;
+import com.cloud.host.Host;
 import com.cloud.host.Status;
 import com.cloud.host.dao.HostDao;
 import com.cloud.hypervisor.Hypervisor.HypervisorType;
 import com.cloud.hypervisor.dao.HypervisorCapabilitiesDao;
 import com.cloud.hypervisor.vmware.LegacyZoneVO;
 import com.cloud.hypervisor.vmware.VmwareCleanupMaid;
+import com.cloud.hypervisor.vmware.VmwareDatacenter;
 import com.cloud.hypervisor.vmware.VmwareDatacenterService;
 import com.cloud.hypervisor.vmware.VmwareDatacenterVO;
 import com.cloud.hypervisor.vmware.VmwareDatacenterZoneMapVO;
@@ -90,6 +103,7 @@ import com.cloud.hypervisor.vmware.util.VmwareContext;
 import com.cloud.hypervisor.vmware.util.VmwareHelper;
 import com.cloud.network.CiscoNexusVSMDeviceVO;
 import com.cloud.network.NetworkModel;
+import com.cloud.network.Networks.BroadcastDomainType;
 import com.cloud.network.dao.CiscoNexusVSMDeviceDao;
 import com.cloud.org.Cluster.ClusterType;
 import com.cloud.secstorage.CommandExecLogDao;
@@ -110,10 +124,6 @@ import com.cloud.utils.exception.CloudRuntimeException;
 import com.cloud.utils.script.Script;
 import com.cloud.utils.ssh.SshHelper;
 import com.cloud.vm.DomainRouterVO;
-import com.google.gson.Gson;
-import com.vmware.vim25.AboutInfo;
-import com.vmware.vim25.HostConnectSpec;
-import com.vmware.vim25.ManagedObjectReference;
 
 
 @Local(value = {VmwareManager.class, VmwareDatacenterService.class})
@@ -135,8 +145,8 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
     @Inject ClusterDao _clusterDao;
     @Inject ClusterDetailsDao _clusterDetailsDao;
     @Inject CommandExecLogDao _cmdExecLogDao;
-    @Inject ClusterManager _clusterMgr;
     @Inject SecondaryStorageVmManager _ssvmMgr;
+    @Inject DataStoreManager _dataStoreMgr;
     @Inject CiscoNexusVSMDeviceDao _nexusDao;
     @Inject ClusterVSMMapDao _vsmMapDao;
     @Inject ConfigurationDao _configDao;
@@ -146,6 +156,8 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
     @Inject VmwareDatacenterDao _vmwareDcDao;
     @Inject VmwareDatacenterZoneMapDao _vmwareDcZoneMapDao;
     @Inject LegacyZoneDao _legacyZoneDao;
+    @Inject ManagementServerHostPeerDao _mshostPeerDao;
+    @Inject ClusterManager _clusterMgr;
 
     String _mountParent;
     StorageLayer _storage;
@@ -154,10 +166,12 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
     int _portsPerDvPortGroup = 256;
     boolean _nexusVSwitchActive;
     boolean _fullCloneFlag;
+    boolean _instanceNameFlag;
     String _serviceConsoleName;
     String _managemetPortGroupName;
     String _defaultSystemVmNicAdapterType = VirtualEthernetCardType.E1000.toString();
     String _recycleHungWorker = "false";
+    long _hungWorkerTimeout = 7200000;		// 2 hour
     int _additionalPortRangeStart;
     int _additionalPortRangeSize;
     int _routerExtraPublicNics = 2;
@@ -225,6 +239,15 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
             _fullCloneFlag = Boolean.parseBoolean(value);
         }
 
+        value = _configDao.getValue(Config.SetVmInternalNameUsingDisplayName.key());
+        if (value == null) {
+            _instanceNameFlag = false;
+        } else {
+            _instanceNameFlag = Boolean.parseBoolean(value);
+        }
+
+        _portsPerDvPortGroup = NumbersUtil.parseInt(_configDao.getValue(Config.VmwarePortsPerDVPortGroup.key()), _portsPerDvPortGroup);
+
         _serviceConsoleName = _configDao.getValue(Config.VmwareServiceConsole.key());
         if(_serviceConsoleName == null) {
             _serviceConsoleName = "Service Console";
@@ -236,8 +259,9 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
         }
 
         _defaultSystemVmNicAdapterType = _configDao.getValue(Config.VmwareSystemVmNicDeviceType.key());
-        if(_defaultSystemVmNicAdapterType == null)
+        if(_defaultSystemVmNicAdapterType == null) {
             _defaultSystemVmNicAdapterType = VirtualEthernetCardType.E1000.toString();
+        }
 
         _additionalPortRangeStart = NumbersUtil.parseInt(_configDao.getValue(Config.VmwareAdditionalVncPortRangeStart.key()), 59000);
         if(_additionalPortRangeStart > 65535) {
@@ -254,19 +278,27 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
         _routerExtraPublicNics = NumbersUtil.parseInt(_configDao.getValue(Config.RouterExtraPublicNics.key()), 2);
 
         _reserveCpu = _configDao.getValue(Config.VmwareReserveCpu.key());
-        if(_reserveCpu == null || _reserveCpu.isEmpty())
+        if(_reserveCpu == null || _reserveCpu.isEmpty()) {
             _reserveCpu = "false";
+        }
         _reserveMem = _configDao.getValue(Config.VmwareReserveMem.key());
-        if(_reserveMem == null || _reserveMem.isEmpty())
+        if(_reserveMem == null || _reserveMem.isEmpty()) {
             _reserveMem = "false";
+        }
 
         _recycleHungWorker = _configDao.getValue(Config.VmwareRecycleHungWorker.key());
-        if(_recycleHungWorker == null || _recycleHungWorker.isEmpty())
+        if(_recycleHungWorker == null || _recycleHungWorker.isEmpty()) {
             _recycleHungWorker = "false";
+        }
+        
+        value = _configDao.getValue(Config.VmwareHungWorkerTimeout.key());
+        if(value != null)
+        	_hungWorkerTimeout = Long.parseLong(value) * 1000;
 
         _rootDiskController = _configDao.getValue(Config.VmwareRootDiskControllerType.key());
-        if(_rootDiskController == null || _rootDiskController.isEmpty())
+        if(_rootDiskController == null || _rootDiskController.isEmpty()) {
             _rootDiskController = DiskControllerType.ide.toString();
+        }
 
         s_logger.info("Additional VNC port allocation range is settled at " + _additionalPortRangeStart + " to " + (_additionalPortRangeStart + _additionalPortRangeSize));
 
@@ -332,22 +364,27 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
         // prepare at least one network on the vswitch to enable OVF importing
         String vSwitchName = privateTrafficLabel;
         String vlanId = null;
+        String vlanToken;
         String[] tokens = privateTrafficLabel.split(",");
-        if(tokens.length == 2) {
+        if(tokens.length >= 2) {
             vSwitchName = tokens[0].trim();
-            vlanId = tokens[1].trim();
+            vlanToken = tokens[1].trim();
+            if (!vlanToken.isEmpty()) {
+                vlanId = vlanToken;
+            }
         }
-
         s_logger.info("Preparing network on host " + hostMo.getContext().toString() + " for " + privateTrafficLabel);
-        HypervisorHostHelper.prepareNetwork(vSwitchName, "cloud.private", hostMo, vlanId, null, null, 180000, false);
+        //The management network is probably always going to be a physical network with vlans, so assume BroadcastDomainType VLAN
+        HypervisorHostHelper.prepareNetwork(vSwitchName, "cloud.private", hostMo, vlanId, null, null, 180000, false, BroadcastDomainType.Vlan, null);
     }
 
     @Override
     public List<ManagedObjectReference> addHostToPodCluster(VmwareContext serviceContext, long dcId, Long podId, Long clusterId,
             String hostInventoryPath) throws Exception {
         ManagedObjectReference mor = null;
-        if (serviceContext != null)
+        if (serviceContext != null) {
             mor = serviceContext.getHostMorByPath(hostInventoryPath);
+        }
         String privateTrafficLabel = null;
         privateTrafficLabel = serviceContext.getStockObject("privateTrafficLabel");
         if (privateTrafficLabel == null) {
@@ -446,11 +483,24 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
     @Override
     public String getSecondaryStorageStoreUrl(long dcId) {
 
-        List<HostVO> secStorageHosts = _ssvmMgr.listSecondaryStorageHostsInOneZone(dcId);
-        if(secStorageHosts.size() > 0)
-            return secStorageHosts.get(0).getStorageUrl();
+        String secUrl = null;
+        DataStore secStore = _dataStoreMgr.getImageStore(dcId);
+        if (secStore != null) {
+            secUrl = secStore.getUri();
+        }
 
-        return null;
+        if (secUrl == null) {
+            // we are using non-NFS image store, then use cache storage instead
+            s_logger.info("Secondary storage is not NFS, we need to use staging storage");
+            DataStore cacheStore = _dataStoreMgr.getImageCacheStore(dcId);
+            if (cacheStore != null) {
+                secUrl = cacheStore.getUri();
+            } else {
+                s_logger.warn("No staging storage is found when non-NFS secondary storage is used");
+            }
+        }
+
+        return secUrl;
     }
 
     @Override
@@ -465,14 +515,16 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
 
     @Override
     public String getManagementPortGroupByHost(HostMO hostMo) throws Exception {
-        if(hostMo.getHostType() == VmwareHostType.ESXi)
-            return  this._managemetPortGroupName;
-        return this._serviceConsoleName;
+        if(hostMo.getHostType() == VmwareHostType.ESXi) {
+            return  _managemetPortGroupName;
+        }
+        return _serviceConsoleName;
     }
 
     @Override
     public void setupResourceStartupParams(Map<String, Object> params) {
         params.put("vmware.create.full.clone", _fullCloneFlag);
+        params.put("vm.instancename.flag", _instanceNameFlag);
         params.put("service.console.name", _serviceConsoleName);
         params.put("management.portgroup.name", _managemetPortGroupName);
         params.put("vmware.reserve.cpu", _reserveCpu);
@@ -487,10 +539,53 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
         return _storageMgr;
     }
 
-
     @Override
     public void gcLeftOverVMs(VmwareContext context) {
         VmwareCleanupMaid.gcLeftOverVMs(context);
+    }
+    
+    @Override
+    public boolean needRecycle(String workerTag) {
+    	if(s_logger.isInfoEnabled())
+    		s_logger.info("Check to see if a worker VM with tag " + workerTag + " needs to be recycled");
+    	
+    	if(workerTag == null || workerTag.isEmpty()) {
+    		s_logger.error("Invalid worker VM tag " + workerTag);
+    		return false;
+    	}
+    	
+    	String tokens[] = workerTag.split("-");
+    	if(tokens.length != 3) {
+    		s_logger.error("Invalid worker VM tag " + workerTag);
+    		return false;
+    	}
+    	
+    	long startTick = Long.parseLong(tokens[0]);
+    	long msid = Long.parseLong(tokens[1]);
+    	long runid = Long.parseLong(tokens[2]);
+    	
+        if(_mshostPeerDao.countStateSeenInPeers(msid, runid, ManagementServerHost.State.Down) > 0) {
+        	if(s_logger.isInfoEnabled())
+        		s_logger.info("Worker VM's owner management server node has been detected down from peer nodes, recycle it");
+        	return true;
+        }
+        
+        if(msid == _clusterMgr.getManagementNodeId() && runid != _clusterMgr.getCurrentRunId()) {
+        	if(s_logger.isInfoEnabled())
+        		s_logger.info("Worker VM's owner management server has changed runid, recycle it");
+        	return true;
+        }
+  
+        // disable time-out check until we have found out a VMware API that can check if
+        // there are pending tasks on the subject VM
+/*        
+        if(System.currentTimeMillis() - startTick > _hungWorkerTimeout) {
+        	if(s_logger.isInfoEnabled())
+        		s_logger.info("Worker VM expired, seconds elapsed: " + (System.currentTimeMillis() - startTick) / 1000);
+        	return true;
+        }
+*/        
+    	return false;
     }
 
     @Override
@@ -528,8 +623,9 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
                             throw new CloudRuntimeException(msg);
                         }
                     } else {
-                        if(s_logger.isTraceEnabled())
+                        if(s_logger.isTraceEnabled()) {
                             s_logger.trace("SystemVM ISO file " + destIso.getPath() + " already exists");
+                        }
                     }
                 } finally {
                     lock.unlock();
@@ -549,7 +645,7 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
 
     @Override
     public String getSystemVMDefaultNicAdapterType() {
-        return this._defaultSystemVmNicAdapterType;
+        return _defaultSystemVmNicAdapterType;
     }
 
     private File getSystemVMPatchIsoFile() {
@@ -630,7 +726,7 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
 
     private String setupMountPoint(String parent) {
         String mountPoint = null;
-        long mshostId = _clusterMgr.getManagementNodeId();
+        long mshostId = ManagementServerNode.getManagementServerId();
         for (int i = 0; i < 10; i++) {
             String mntPt = parent + File.separator + String.valueOf(mshostId) + "." + Integer.toHexString(_rand.nextInt(Integer.MAX_VALUE));
             File file = new File(mntPt);
@@ -649,7 +745,7 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
     private void startupCleanup(String parent) {
         s_logger.info("Cleanup mounted NFS mount points used in previous session");
 
-        long mshostId = _clusterMgr.getManagementNodeId();
+        long mshostId = ManagementServerNode.getManagementServerId();
 
         // cleanup left-over NFS mounts from previous session
         String[] mounts = _storage.listFiles(parent + File.separator + String.valueOf(mshostId) + ".*");
@@ -721,17 +817,16 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
 
         // Change permissions for the mountpoint
         script = new Script(true, "chmod", _timeout, s_logger);
-        script.add("777", mountPoint);
+        script.add("-R", "777", mountPoint);
         result = script.execute();
         if (result != null) {
             s_logger.warn("Unable to set permissions for " + mountPoint + " due to " + result);
-            return null;
         }
         return mountPoint;
     }
 
     @DB
-    private void updateClusterNativeHAState(HostVO host, StartupCommand cmd) {
+    private void updateClusterNativeHAState(Host host, StartupCommand cmd) {
         ClusterVO cluster = _clusterDao.findById(host.getClusterId());
         if(cluster.getClusterType() == ClusterType.ExternalManaged) {
             if(cmd instanceof StartupRoutingCommand) {
@@ -779,7 +874,7 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
     }
 
     @Override
-    public void processConnect(HostVO host, StartupCommand cmd, boolean forRebalance) {
+    public void processConnect(Host host, StartupCommand cmd, boolean forRebalance) {
         if(cmd instanceof StartupCommand) {
             if(host.getHypervisorType() == HypervisorType.VMware) {
                 updateClusterNativeHAState(host, cmd);
@@ -852,7 +947,7 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
 
     @Override
     public int getRouterExtraPublicNics() {
-        return this._routerExtraPublicNics;
+        return _routerExtraPublicNics;
     }
 
     @Override
@@ -893,6 +988,7 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
         List<Class<?>> cmdList = new ArrayList<Class<?>>();
         cmdList.add(AddVmwareDcCmd.class);
         cmdList.add(RemoveVmwareDcCmd.class);
+        cmdList.add(ListVmwareDcsCmd.class);
         return cmdList;
     }
 
@@ -905,15 +1001,6 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
         String password = cmd.getPassword();
         String vCenterHost = cmd.getVcenter();
         String vmwareDcName = cmd.getName();
-
-        // Zone validation
-        validateZone(zoneId, "add VMware datacenter to zone");
-
-        VmwareDatacenterZoneMapVO vmwareDcZoneMap = _vmwareDcZoneMapDao.findByZoneId(zoneId);
-        // Check if zone is associated with VMware DC
-        if (vmwareDcZoneMap != null) {
-            throw new CloudRuntimeException("Zone " + zoneId + " is already associated with a VMware datacenter.");
-        }
 
         // Validate username, password, VMware DC name and vCenter
         if (userName == null) {
@@ -932,6 +1019,36 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
             throw new InvalidParameterValueException("Missing or invalid parameter name. " +
                     "Please provide valid VMware vCenter server's IP address or fully qualified domain name.");
         }
+
+        if (zoneId == null) {
+            throw new InvalidParameterValueException("Missing or invalid parameter name. " +
+                    "Please provide valid zone id.");
+        }
+
+        // Zone validation
+        validateZone(zoneId);
+
+        VmwareDatacenterZoneMapVO vmwareDcZoneMap = _vmwareDcZoneMapDao.findByZoneId(zoneId);
+        // Check if zone is associated with VMware DC
+        if (vmwareDcZoneMap != null) {
+            // Check if the associated VMware DC matches the one specified in API params
+            // This check would yield success as the association exists between same entities (zone and VMware DC)
+            // This scenario would result in if the API addVmwareDc is called more than once with same parameters.
+            Long associatedVmwareDcId = vmwareDcZoneMap.getVmwareDcId();
+            VmwareDatacenterVO associatedVmwareDc = _vmwareDcDao.findById(associatedVmwareDcId);
+            if (associatedVmwareDc.getVcenterHost().equalsIgnoreCase(vCenterHost) &&
+                    associatedVmwareDc.getVmwareDatacenterName().equalsIgnoreCase(vmwareDcName)) {
+                s_logger.info("Ignoring API call addVmwareDc, because VMware DC " + vCenterHost + "/" + vmwareDcName +
+                        " is already associated with specified zone with id " + zoneId);
+                return associatedVmwareDc;
+            } else {
+                throw new CloudRuntimeException("Zone " + zoneId + " is already associated with a VMware datacenter. " +
+                        "Only 1 VMware DC can be associated with a zone.");
+            }
+        }
+        // Zone validation to check if the zone already has resources.
+        // Association of VMware DC to zone is not allowed if zone already has resources added.
+        validateZoneWithResources(zoneId, "add VMware datacenter to zone");
 
         // Check if DC is already part of zone
         // In that case vmware_data_center table should have the DC
@@ -1016,8 +1133,9 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
             }
             throw new CloudRuntimeException(msg);
         } finally {
-            if (context != null)
+            if (context != null) {
                 context.close();
+            }
             context = null;
         }
         return vmwareDc;
@@ -1028,7 +1146,10 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
     public boolean removeVmwareDatacenter(RemoveVmwareDcCmd cmd) throws ResourceInUseException {
         Long zoneId = cmd.getZoneId();
         // Validate zone
-        validateZone(zoneId, "remove VMware datacenter from zone");
+        validateZone(zoneId);
+        // Zone validation to check if the zone already has resources.
+        // Association of VMware DC to zone is not allowed if zone already has resources added.
+        validateZoneWithResources(zoneId, "remove VMware datacenter to zone");
 
         // Get DC associated with this zone
         VmwareDatacenterZoneMapVO vmwareDcZoneMap;
@@ -1091,22 +1212,31 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
             s_logger.error(msg);
             throw new CloudRuntimeException(msg);
         } finally {
-            if (context != null)
+            if (context != null) {
                 context.close();
+            }
             context = null;
         }
         return true;
     }
 
-    private void validateZone(Long zoneId, String errStr) throws ResourceInUseException {
+    private void validateZone(Long zoneId) throws InvalidParameterValueException {
         // Check if zone with specified id exists
         DataCenterVO zone = _dcDao.findById(zoneId);
         if (zone == null) {
-            InvalidParameterValueException ex = new InvalidParameterValueException(
-                    "Can't find zone by the id specified.");
-            throw ex;
+            throw new InvalidParameterValueException("Can't find zone by the id specified.");
         }
+        // Check if zone is legacy zone
+        if (isLegacyZone(zoneId)) {
+            throw new InvalidParameterValueException("The specified zone is legacy zone. Adding VMware datacenter to legacy zone is not supported.");
+        } else {
+            if (s_logger.isTraceEnabled()) {
+                s_logger.trace("The specified zone is not legacy zone.");
+            }
+        }
+    }
 
+    private void validateZoneWithResources(Long zoneId, String errStr) throws ResourceInUseException {
         // Check if zone has resources? - For now look for clusters
         List<ClusterVO> clusters = _clusterDao.listByZoneId(zoneId);
         if (clusters != null && clusters.size() > 0) {
@@ -1128,5 +1258,31 @@ public class VmwareManagerImpl extends ManagerBase implements VmwareManager, Vmw
             isLegacyZone = true;
         }
         return isLegacyZone;
+    }
+
+    @Override
+    public List<? extends VmwareDatacenter> listVmwareDatacenters(ListVmwareDcsCmd cmd) throws CloudRuntimeException, InvalidParameterValueException {
+        Long zoneId = cmd.getZoneId();
+        List<VmwareDatacenterVO> vmwareDcList = new ArrayList<VmwareDatacenterVO>();
+        VmwareDatacenterZoneMapVO vmwareDcZoneMap;
+        VmwareDatacenterVO vmwareDatacenter;
+        long vmwareDcId;
+
+        // Validate if zone id parameter passed to API is valid
+        validateZone(zoneId);
+
+        // Check if zone is associated with VMware DC
+        vmwareDcZoneMap = _vmwareDcZoneMapDao.findByZoneId(zoneId);
+        if (vmwareDcZoneMap == null) {
+            return null;
+        }
+        // Retrieve details of VMware DC associated with zone.
+        vmwareDcId = vmwareDcZoneMap.getVmwareDcId();
+        vmwareDatacenter = _vmwareDcDao.findById(vmwareDcId);
+        vmwareDcList.add(vmwareDatacenter);
+
+        // Currently a zone can have only 1 VMware DC associated with.
+        // Returning list of VmwareDatacenterVO objects, in-line with future requirements, if any, like participation of multiple VMware DCs in a zone.
+        return vmwareDcList;
     }
 }

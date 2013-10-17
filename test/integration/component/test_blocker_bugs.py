@@ -25,7 +25,6 @@ from marvin.integration.lib.common import *
 #Import Local Modules
 from marvin.cloudstackTestCase import *
 from marvin.cloudstackAPI import *
-from marvin.remoteSSHClient import remoteSSHClient
 
 
 class Services:
@@ -68,32 +67,21 @@ class Services:
                                     "publicport": 22,
                                     "protocol": 'TCP',
                         },
-                        "volume": {
-                                   "diskname": "APP Data Volume",
-                                   "size": 1,   # in GBs
-                                   "diskdevice": "/dev/xvdb",   # Data Disk
-                        },
-                        "templates": {
+                        "template": {
                                     "displaytext": 'Template from snapshot',
                                     "name": 'Template from snapshot',
                                     "ostype": 'CentOS 5.3 (64-bit)',
                                     "templatefilter": 'self',
-                                    "url": "http://download.cloud.com/releases/2.0.0/UbuntuServer-10-04-64bit.vhd.bz2",
-                                    "hypervisor": 'XenServer',
-                                    "format": 'VHD',
+                                    "url": "",
+                                    "hypervisor": '',
+                                    "format": '',
                                     "isfeatured": True,
                                     "ispublic": True,
                                     "isextractable": True,
                                     "passwordenabled": True,
                         },
-                        "paths": {
-                                    "mount_dir": "/mnt/tmp",
-                                    "sub_dir": "test",
-                                    "sub_lvl_dir1": "test1",
-                                    "sub_lvl_dir2": "test2",
-                                    "random_data": "random.data",
-                        },
-                        "static_nat": {
+                        "firewall_rule": {
+                                    "cidrlist" : "0.0.0.0/0",
                                     "startport": 22,
                                     "endport": 22,
                                     "protocol": "TCP"
@@ -102,297 +90,6 @@ class Services:
                         # Cent OS 5.3 (64 bit)
                         "sleep": 60,
                      }
-
-
-class TestSnapshots(cloudstackTestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        cls.api_client = super(TestSnapshots, cls).getClsTestClient().getApiClient()
-        cls.services = Services().services
-        # Get Zone, Domain and templates
-        cls.domain = get_domain(cls.api_client, cls.services)
-        cls.zone = get_zone(cls.api_client, cls.services)
-        cls.services['mode'] = cls.zone.networktype
-        cls.disk_offering = DiskOffering.create(
-                                    cls.api_client,
-                                    cls.services["disk_offering"]
-                                    )
-        cls.template = get_template(
-                            cls.api_client,
-                            cls.zone.id,
-                            cls.services["ostype"]
-                            )
-        cls.services["virtual_machine"]["zoneid"] = cls.zone.id
-        cls.services["volume"]["zoneid"] = cls.zone.id
-
-        cls.services["template"] = cls.template.id
-        cls.services["zoneid"] = cls.zone.id
-
-        # Create VMs, NAT Rules etc
-        cls.account = Account.create(
-                            cls.api_client,
-                            cls.services["account"],
-                            domainid=cls.domain.id
-                            )
-
-        cls.services["account"] = cls.account.name
-
-        cls.service_offering = ServiceOffering.create(
-                                            cls.api_client,
-                                            cls.services["service_offering"]
-                                            )
-        cls.virtual_machine = VirtualMachine.create(
-                                cls.api_client,
-                                cls.services["virtual_machine"],
-                                templateid=cls.template.id,
-                                accountid=cls.account.name,
-                                domainid=cls.account.domainid,
-                                serviceofferingid=cls.service_offering.id,
-                                mode=cls.services["mode"]
-                                )
-
-        cls._cleanup = [
-                        cls.service_offering,
-                        cls.disk_offering,
-                        cls.account,
-                        ]
-        return
-
-    @classmethod
-    def tearDownClass(cls):
-        try:
-            #Cleanup resources used
-            cleanup_resources(cls.api_client, cls._cleanup)
-        except Exception as e:
-            raise Exception("Warning: Exception during cleanup : %s" % e)
-        return
-
-    def setUp(self):
-        self.apiclient = self.testClient.getApiClient()
-        self.dbclient = self.testClient.getDbConnection()
-        self.cleanup = []
-        return
-
-    def tearDown(self):
-        try:
-            #Clean up, terminate the created instance, volumes and snapshots
-            cleanup_resources(self.apiclient, self.cleanup)
-        except Exception as e:
-            raise Exception("Warning: Exception during cleanup : %s" % e)
-        return
-
-    @attr(tags = ["advanced", "advancedns"])
-    def test_01_volume_from_snapshot(self):
-        """TS_BUG_001-Test Creating snapshot from volume having spaces in name(KVM)
-        """
-
-
-        # Validate the following
-        #1. Create a virtual machine and data volume
-        #2. Attach data volume to VM
-        #3. Login to machine; create temp/test directories on data volume
-        #4. Snapshot the Volume
-        #5. Create another Volume from snapshot
-        #6. Mount/Attach volume to another server
-        #7. Compare data
-
-        random_data_0 = random_gen(100)
-        random_data_1 = random_gen(100)
-
-        volume = Volume.create(
-                               self.apiclient,
-                               self.services["volume"],
-                               zoneid=self.zone.id,
-                               account=self.account.name,
-                               domainid=self.account.domainid,
-                               diskofferingid=self.disk_offering.id
-                               )
-        self.debug("Created volume with ID: %s" % volume.id)
-        self.virtual_machine.attach_volume(
-                                           self.apiclient,
-                                           volume
-                                           )
-        self.debug("Attach volume: %s to VM: %s" %
-                                (volume.id, self.virtual_machine.id))
-        try:
-            ssh_client = self.virtual_machine.get_ssh_client()
-        except Exception as e:
-            self.fail("SSH failed for VM: %s" %
-                      self.virtual_machine.ipaddress)
-
-        self.debug("Formatting volume: %s to ext3" % volume.id)
-        #Format partition using ext3
-        format_volume_to_ext3(
-                              ssh_client,
-                              self.services["volume"]["diskdevice"]
-                              )
-        cmds = [
-                    "mkdir -p %s" % self.services["paths"]["mount_dir"],
-                    "mount %s1 %s" % (
-                                      self.services["volume"]["diskdevice"],
-                                      self.services["paths"]["mount_dir"]
-                                      ),
-                    "mkdir -p %s/%s/{%s,%s} " % (
-                                    self.services["paths"]["mount_dir"],
-                                    self.services["paths"]["sub_dir"],
-                                    self.services["paths"]["sub_lvl_dir1"],
-                                    self.services["paths"]["sub_lvl_dir2"]
-                                    ),
-                    "echo %s > %s/%s/%s/%s" % (
-                                    random_data_0,
-                                    self.services["paths"]["mount_dir"],
-                                    self.services["paths"]["sub_dir"],
-                                    self.services["paths"]["sub_lvl_dir1"],
-                                    self.services["paths"]["random_data"]
-                                    ),
-                    "echo %s > %s/%s/%s/%s" % (
-                                    random_data_1,
-                                    self.services["paths"]["mount_dir"],
-                                    self.services["paths"]["sub_dir"],
-                                    self.services["paths"]["sub_lvl_dir2"],
-                                    self.services["paths"]["random_data"]
-                                    ),
-                ]
-        for c in cmds:
-            self.debug("Command: %s" % c)
-            ssh_client.execute(c)
-
-        # Unmount the Sec Storage
-        cmds = [
-                    "umount %s" % (self.services["paths"]["mount_dir"]),
-                ]
-        for c in cmds:
-            self.debug("Command: %s" % c)
-            ssh_client.execute(c)
-
-        list_volume_response = Volume.list(
-                                    self.apiclient,
-                                    virtualmachineid=self.virtual_machine.id,
-                                    type='DATADISK',
-                                    listall=True
-                                    )
-
-        self.assertEqual(
-                         isinstance(list_volume_response, list),
-                         True,
-                         "Check list volume response for valid data"
-                         )
-        volume_response = list_volume_response[0]
-        #Create snapshot from attached volume
-        snapshot = Snapshot.create(
-                                   self.apiclient,
-                                   volume_response.id,
-                                   account=self.account.name,
-                                   domainid=self.account.domainid
-                                   )
-        self.debug("Created snapshot: %s" % snapshot.id)
-        #Create volume from snapshot
-        volume_from_snapshot = Volume.create_from_snapshot(
-                                        self.apiclient,
-                                        snapshot.id,
-                                        self.services["volume"],
-                                        account=self.account.name,
-                                        domainid=self.account.domainid
-                                        )
-        self.debug("Created Volume: %s from Snapshot: %s" % (
-                                            volume_from_snapshot.id,
-                                            snapshot.id))
-        volumes = Volume.list(
-                                self.apiclient,
-                                id=volume_from_snapshot.id
-                                )
-        self.assertEqual(
-                            isinstance(volumes, list),
-                            True,
-                            "Check list response returns a valid list"
-                        )
-
-        self.assertNotEqual(
-                            len(volumes),
-                            None,
-                            "Check Volume list Length"
-                      )
-        self.assertEqual(
-                        volumes[0].id,
-                        volume_from_snapshot.id,
-                        "Check Volume in the List Volumes"
-                    )
-        #Attaching volume to new VM
-        new_virtual_machine = VirtualMachine.create(
-                                    self.apiclient,
-                                    self.services["virtual_machine"],
-                                    templateid=self.template.id,
-                                    accountid=self.account.name,
-                                    domainid=self.account.domainid,
-                                    serviceofferingid=self.service_offering.id,
-                                    mode=self.services["mode"]
-                                )
-        self.debug("Deployed new VM for account: %s" % self.account.name)
-        self.cleanup.append(new_virtual_machine)
-
-        self.debug("Attaching volume: %s to VM: %s" % (
-                                            volume_from_snapshot.id,
-                                            new_virtual_machine.id
-                                            ))
-
-        cmd = attachVolume.attachVolumeCmd()
-        cmd.id = volume_from_snapshot.id
-        cmd.virtualmachineid = new_virtual_machine.id
-        self.apiclient.attachVolume(cmd)
-
-        try:
-            #Login to VM to verify test directories and files
-            ssh = new_virtual_machine.get_ssh_client()
-
-            cmds = [
-                    "mkdir -p %s" % self.services["paths"]["mount_dir"],
-                    "mount %s1 %s" % (
-                                      self.services["volume"]["diskdevice"],
-                                      self.services["paths"]["mount_dir"]
-                                      ),
-               ]
-
-            for c in cmds:
-                self.debug("Command: %s" % c)
-                ssh.execute(c)
-
-            returned_data_0 = ssh.execute(
-                            "cat %s/%s/%s/%s" % (
-                                    self.services["paths"]["mount_dir"],
-                                    self.services["paths"]["sub_dir"],
-                                    self.services["paths"]["sub_lvl_dir1"],
-                                    self.services["paths"]["random_data"]
-                            ))
-            returned_data_1 = ssh.execute(
-                            "cat %s/%s/%s/%s" % (
-                                    self.services["paths"]["mount_dir"],
-                                    self.services["paths"]["sub_dir"],
-                                    self.services["paths"]["sub_lvl_dir2"],
-                                    self.services["paths"]["random_data"]
-                            ))
-        except Exception as e:
-            self.fail("SSH access failed for VM: %s" %
-                                new_virtual_machine.ipaddress)
-        #Verify returned data
-        self.assertEqual(
-                random_data_0,
-                returned_data_0[0],
-                "Verify newly attached volume contents with existing one"
-                )
-        self.assertEqual(
-                random_data_1,
-                returned_data_1[0],
-                "Verify newly attached volume contents with existing one"
-                )
-        # Unmount the Sec Storage
-        cmds = [
-                    "umount %s" % (self.services["paths"]["mount_dir"]),
-                ]
-        for c in cmds:
-            self.debug("Command: %s" % c)
-            ssh_client.execute(c)
-        return
 
 
 class TestTemplate(cloudstackTestCase):
@@ -406,9 +103,7 @@ class TestTemplate(cloudstackTestCase):
 
     def tearDown(self):
         try:
-            #Clean up, terminate the created templates
             cleanup_resources(self.apiclient, self.cleanup)
-
         except Exception as e:
             raise Exception("Warning: Exception during cleanup : %s" % e)
         return
@@ -423,7 +118,7 @@ class TestTemplate(cloudstackTestCase):
         cls.zone = get_zone(cls.api_client, cls.services)
         cls.services['mode'] = cls.zone.networktype
         cls.services["virtual_machine"]["zoneid"] = cls.zone.id
-        cls.services["templates"]["zoneid"] = cls.zone.id
+        cls.services["template"]["zoneid"] = cls.zone.id
 
         cls.service_offering = ServiceOffering.create(
                                             cls.api_client,
@@ -465,16 +160,26 @@ class TestTemplate(cloudstackTestCase):
         #2. Deploy VM using this template
         #3. Deploy VM should return password set in template.
 
+        builtin_info = get_builtin_template_info(self.apiclient, self.zone.id)
+        self.services["template"]["url"] = builtin_info[0] 
+        self.services["template"]["hypervisor"] = builtin_info[1]     
+        self.services["template"]["format"] = builtin_info[2]
+
         self.debug("Registering a new template")
+
         # Register new template
         template = Template.register(
-                                    self.apiclient,
-                                    self.services["templates"],
-                                    zoneid=self.zone.id,
-                                    account=self.account.name,
-                                    domainid=self.account.domainid
-                                    )
-        self.debug("Registering template with ID: %s" % template.id)
+                                        self.apiclient,
+                                        self.services["template"],
+                                        zoneid=self.zone.id,
+                                        account=self.account.name,
+                                        domainid=self.account.domainid
+                                        )
+        self.debug(
+                "Registered a template of format: %s with ID: %s" % (
+                                                                self.services["template"]["format"],
+                                                                template.id
+                                                                ))
         try:
             # Wait for template to download
             template.download(self.apiclient)
@@ -490,7 +195,7 @@ class TestTemplate(cloudstackTestCase):
         list_template_response = Template.list(
                                             self.apiclient,
                                             templatefilter=\
-                                            self.services["templates"]["templatefilter"],
+                                            self.services["template"]["templatefilter"],
                                             id=template.id,
                                             zoneid=self.zone.id
                                             )
@@ -588,6 +293,13 @@ class TestNATRules(cloudstackTestCase):
         self.cleanup = []
         return
 
+    def tearDown(self):
+        try:
+            cleanup_resources(self.apiclient, self.cleanup)
+        except Exception as e:
+            raise Exception("Warning: Exception during cleanup : %s" % e)
+        return
+
     @classmethod
     def tearDownClass(cls):
         try:
@@ -595,10 +307,6 @@ class TestNATRules(cloudstackTestCase):
             cleanup_resources(cls.api_client, cls._cleanup)
         except Exception as e:
             raise Exception("Warning: Exception during cleanup : %s" % e)
-
-    def tearDown(self):
-        cleanup_resources(self.apiclient, self.cleanup)
-        return
 
     @attr(tags = ["advanced"])
     def test_01_firewall_rules_port_fw(self):
@@ -622,111 +330,117 @@ class TestNATRules(cloudstackTestCase):
                             )
         self.debug("Enabled static NAT for public IP ID: %s" %
                                                     public_ip.id)
-        #Create Static NAT rule
+
+        #Create Static NAT rule, in fact it's firewall rule
         nat_rule = StaticNATRule.create(
                         self.apiclient,
-                        self.services["static_nat"],
+                        self.services["firewall_rule"],
                         public_ip.id
                         )
         self.debug("Created Static NAT rule for public IP ID: %s" %
                                                     public_ip.id)
-        list_rules_repsonse = StaticNATRule.list(
-                                                 self.apiclient,
-                                                 id=nat_rule.id
-                                                )
+        self.debug("Checking IP address")
+        ip_response = PublicIPAddress.list(
+                                         self.apiclient,
+                                         id = public_ip.id
+                                        )
         self.assertEqual(
-                            isinstance(list_rules_repsonse, list),
+                            isinstance(ip_response, list),
                             True,
-                            "Check list response returns a valid list"
+                            "Check ip response returns a valid list"
                         )
         self.assertNotEqual(
-                            len(list_rules_repsonse),
+                            len(ip_response),
                             0,
-                            "Check IP Forwarding Rule is created"
+                            "Check static NAT Rule is created"
                             )
-        self.assertEqual(
-                            list_rules_repsonse[0].id,
-                            nat_rule.id,
-                            "Check Correct IP forwarding Rule is returned"
-                        )
-        # Verify the entries made in firewall_rules tables
-        self.debug(
-                   "select id from user_ip_address where uuid = '%s';" \
-                    % public_ip.id
-                  )
-        qresultset = self.dbclient.execute(
-                        "select id from user_ip_address where uuid = '%s';" \
-                        % public_ip.id
+        self.assertTrue(
+                            ip_response[0].isstaticnat,
+                            "IP is not static nat enabled"
                         )
         self.assertEqual(
-                            isinstance(qresultset, list),
+                            ip_response[0].virtualmachineid,
+                            self.virtual_machine.id,
+                            "IP is not binding with the VM"
+                        )
+
+        self.debug("Checking Firewall rule")
+        firewall_response = FireWallRule.list(
+                                                self.apiclient,
+                                                ipaddressid = public_ip.id,
+                                                listall = True
+                                             )
+        self.assertEqual(
+                            isinstance(firewall_response, list),
                             True,
-                            "Check database query returns a valid data"
+                            "Check firewall response returns a valid list"
                         )
-
         self.assertNotEqual(
-                            len(qresultset),
+                            len(firewall_response),
                             0,
-                            "Check DB Query result set"
+                            "Check firewall rule is created"
                             )
-        qresult = qresultset[0]
-        public_ip_id = qresult[0]
-        # Verify the entries made in firewall_rules tables
-        self.debug(
-                   "select id, state from firewall_rules where ip_address_id = '%s';" \
-                    % public_ip_id
-                  )
-        qresultset = self.dbclient.execute(
-                        "select id, state from firewall_rules where ip_address_id = '%s';" \
-                        % public_ip_id
+        self.assertEqual(
+                            firewall_response[0].state,
+                            "Active",
+                            "Firewall rule is not active"
                         )
         self.assertEqual(
-                            isinstance(qresultset, list),
-                            True,
-                            "Check database query returns a valid data for firewall rules"
+                            firewall_response[0].ipaddressid,
+                            public_ip.id,
+                            "Firewall rule is not static nat related"
+                        )
+        self.assertEqual(
+                            firewall_response[0].startport,
+                            str(self.services["firewall_rule"]["startport"]),
+                            "Firewall rule is not with specific port"
                         )
 
-        self.assertNotEqual(
-                            len(qresultset),
-                            0,
-                            "Check DB Query result set"
-                            )
-
-        for qresult in qresultset:
-            self.assertEqual(
-                            qresult[1],
-                            'Active',
-                            "Check state of the static NAT rule in database"
-                            )
-
+        self.debug("Removed the firewall rule")
         nat_rule.delete(self.apiclient)
 
-        list_rules_repsonse = StaticNATRule.list(
-                                                    self.apiclient,
-                                                    id=nat_rule.id
-                                                    )
-
+        self.debug("Checking IP address, it should still existed")
+        ip_response = PublicIPAddress.list(
+                                         self.apiclient,
+                                         id = public_ip.id
+                                        )
         self.assertEqual(
-                            list_rules_repsonse,
-                            None,
-                            "Check Port Forwarding Rule is deleted"
+                            isinstance(ip_response, list),
+                            True,
+                            "Check ip response returns a valid list"
+                        )
+        self.assertNotEqual(
+                            len(ip_response),
+                            0,
+                            "Check static NAT Rule is created"
                             )
-
-        # Verify the entries made in firewall_rules tables
-        self.debug(
-                   "select id, state from firewall_rules where ip_address_id = '%s';" \
-                    % public_ip.id
-                  )
-        qresultset = self.dbclient.execute(
-                        "select id, state from firewall_rules where ip_address_id = '%s';" \
-                        % public_ip.id
+        self.assertTrue(
+                            ip_response[0].isstaticnat,
+                            "IP is not static nat enabled"
+                        )
+        self.assertEqual(
+                            ip_response[0].virtualmachineid,
+                            self.virtual_machine.id,
+                            "IP is not binding with the VM"
                         )
 
+        self.debug("Checking Firewall rule, it should be removed")
+        firewall_response = FireWallRule.list(
+                                                self.apiclient,
+                                                ipaddressid = public_ip.id,
+                                                listall = True
+                                             )
         self.assertEqual(
-                            len(qresultset),
-                            0,
-                            "Check DB Query result set"
-                            )
+                            isinstance(firewall_response, list),
+                            True,
+                            "Check firewall response returns a valid list"
+                        )
+        if len(firewall_response) != 0 :
+            self.assertEqual(
+                            firewall_response[0].state,
+                            "Deleting",
+                            "Firewall rule should be deleted or in deleting state"
+                        )
         return
 
 
@@ -796,7 +510,6 @@ class TestRouters(cloudstackTestCase):
 
     def tearDown(self):
         try:
-            #Clean up, terminate the created instance, users etc
             cleanup_resources(self.apiclient, self.cleanup)
         except Exception as e:
             raise Exception("Warning: Exception during cleanup : %s" % e)
@@ -913,6 +626,10 @@ class TestRouterRestart(cloudstackTestCase):
         self.apiclient = self.testClient.getApiClient()
         return
 
+    def tearDown(self):
+        # No need
+        return
+
     @attr(tags = ["advanced", "basic", "sg", "advancedns", "eip"])
     def test_01_restart_network_cleanup(self):
         """TS_BUG_008-Test restart network
@@ -1012,7 +729,7 @@ class TestTemplates(cloudstackTestCase):
         cls.services["account"] = cls.account.name
         cls.service_offering = ServiceOffering.create(
                                             cls.api_client,
-                                            cls.services["service_offering"]
+                                            cls.services["service_offering"],
                                         )
 
         # create virtual machine
@@ -1089,7 +806,7 @@ class TestTemplates(cloudstackTestCase):
         #Create template from volume
         template = Template.create(
                                    self.apiclient,
-                                   self.services["templates"],
+                                   self.services["template"],
                                    self.volume.id,
                                    account=self.account.name,
                                    domainid=self.account.domainid
@@ -1149,7 +866,7 @@ class TestTemplates(cloudstackTestCase):
         template = Template.create_from_snapshot(
                                     self.apiclient,
                                     snapshot,
-                                    self.services["templates"]
+                                    self.services["template"]
                                     )
         self.cleanup.append(template)
 
@@ -1157,7 +874,7 @@ class TestTemplates(cloudstackTestCase):
         templates = Template.list(
                                 self.apiclient,
                                 templatefilter=\
-                                self.services["templates"]["templatefilter"],
+                                self.services["template"]["templatefilter"],
                                 id=template.id
                                 )
         self.assertEqual(
@@ -1180,13 +897,13 @@ class TestTemplates(cloudstackTestCase):
         self.assertEqual(
                             templates[0].size,
                             self.volume.size,
-                            "Check if size of snapshot and template matches"
+                            "Derived template size (%s) does not match snapshot size (%s)" % (templates[0].size, self.volume.size)
                         )
         return
 
     @attr(speed = "slow")
     @attr(tags = ["advanced", "advancedns", "basic", "sg", "eip"])
-    def test_03_resuse_template_name(self):
+    def test_03_reuse_template_name(self):
         """TS_BUG_011-Test Reusing deleted template name
         """
 
@@ -1231,14 +948,14 @@ class TestTemplates(cloudstackTestCase):
         template = Template.create_from_snapshot(
                                     self.apiclient,
                                     snapshot,
-                                    self.services["templates"],
+                                    self.services["template"],
                                     random_name=False
                                     )
         self.debug("Created template from snapshot: %s" % template.id)
         templates = Template.list(
                                 self.apiclient,
                                 templatefilter=\
-                                self.services["templates"]["templatefilter"],
+                                self.services["template"]["templatefilter"],
                                 id=template.id
                                 )
         self.assertEqual(
@@ -1270,14 +987,14 @@ class TestTemplates(cloudstackTestCase):
         template = Template.create_from_snapshot(
                                     self.apiclient,
                                     snapshot,
-                                    self.services["templates"],
+                                    self.services["template"],
                                     random_name=False
                                     )
 
         templates = Template.list(
                                 self.apiclient,
                                 templatefilter=\
-                                self.services["templates"]["templatefilter"],
+                                self.services["template"]["templatefilter"],
                                 id=template.id
                                 )
         self.assertEqual(
@@ -1293,7 +1010,7 @@ class TestTemplates(cloudstackTestCase):
 
         self.assertEqual(
                             templates[0].name,
-                            self.services["templates"]["name"],
+                            self.services["template"]["name"],
                             "Check the name of the template"
                         )
         return

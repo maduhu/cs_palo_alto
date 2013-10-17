@@ -17,7 +17,6 @@
 package org.apache.cloudstack.affinity;
 
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyObject;
@@ -28,11 +27,15 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 import javax.inject.Inject;
 import javax.naming.ConfigurationException;
 
+import org.junit.After;
+import org.apache.cloudstack.acl.ControlledEntity;
 import org.apache.cloudstack.affinity.dao.AffinityGroupDao;
+import org.apache.cloudstack.affinity.dao.AffinityGroupDomainMapDao;
 import org.apache.cloudstack.affinity.dao.AffinityGroupVMMapDao;
 import org.apache.cloudstack.test.utils.SpringUtils;
 import org.junit.Before;
@@ -52,8 +55,16 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.test.context.support.AnnotationConfigContextLoader;
 
+import org.apache.cloudstack.affinity.dao.AffinityGroupDao;
+import org.apache.cloudstack.affinity.dao.AffinityGroupVMMapDao;
+import org.apache.cloudstack.context.CallContext;
+import org.apache.cloudstack.test.utils.SpringUtils;
+
 import com.cloud.dc.dao.DedicatedResourceDao;
-import com.cloud.event.EventUtils;
+import com.cloud.event.ActionEventUtils;
+import com.cloud.dc.dao.DedicatedResourceDao;
+import com.cloud.domain.dao.DomainDao;
+import com.cloud.event.ActionEventUtils;
 import com.cloud.event.EventVO;
 import com.cloud.event.dao.EventDao;
 import com.cloud.exception.InvalidParameterValueException;
@@ -63,11 +74,11 @@ import com.cloud.user.Account;
 import com.cloud.user.AccountManager;
 import com.cloud.user.AccountService;
 import com.cloud.user.AccountVO;
-import com.cloud.user.UserContext;
+import com.cloud.user.UserVO;
+import com.cloud.user.DomainManager;
 import com.cloud.user.dao.AccountDao;
+import com.cloud.user.dao.UserDao;
 import com.cloud.utils.component.ComponentContext;
-import com.cloud.utils.db.SearchBuilder;
-import com.cloud.utils.db.SearchCriteria;
 import com.cloud.vm.UserVmVO;
 import com.cloud.vm.VirtualMachine;
 import com.cloud.vm.dao.UserVmDao;
@@ -98,7 +109,7 @@ public class AffinityApiUnitTest {
     AffinityGroupDao _affinityGroupDao;
 
     @Inject
-    EventUtils _eventUtils;
+    ActionEventUtils _eventUtils;
 
     @Inject
     AccountDao _accountDao;
@@ -114,30 +125,38 @@ public class AffinityApiUnitTest {
 
 
     @BeforeClass
-    public static void setUp() throws ConfigurationException {
+    public static void setUpClass() throws ConfigurationException {
     }
 
     @Before
-    public void testSetUp() {
+    public void setUp() {
         ComponentContext.initComponentsLifeCycle();
         AccountVO acct = new AccountVO(200L);
         acct.setType(Account.ACCOUNT_TYPE_NORMAL);
         acct.setAccountName("user");
         acct.setDomainId(domainId);
 
-        UserContext.registerContext(1, acct, null, true);
+        UserVO user = new UserVO(1, "testuser", "password", "firstname", "lastName", "email", "timezone", UUID.randomUUID().toString());
+
+        CallContext.register(user, acct);
 
         when(_acctMgr.finalizeOwner((Account) anyObject(), anyString(), anyLong(), anyLong())).thenReturn(acct);
         when(_processor.getType()).thenReturn("mock");
         when(_accountDao.findByIdIncludingRemoved(0L)).thenReturn(acct);
 
-        AffinityGroupVO group = new AffinityGroupVO("group1", "mock", "mock group", domainId, 200L);
+        AffinityGroupVO group = new AffinityGroupVO("group1", "mock", "mock group", domainId, 200L,
+                ControlledEntity.ACLType.Account);
         Mockito.when(_affinityGroupDao.persist(Mockito.any(AffinityGroupVO.class))).thenReturn(group);
         Mockito.when(_affinityGroupDao.findById(Mockito.anyLong())).thenReturn(group);
         Mockito.when(_affinityGroupDao.findByAccountAndName(Mockito.anyLong(), Mockito.anyString())).thenReturn(group);
         Mockito.when(_affinityGroupDao.lockRow(Mockito.anyLong(), anyBoolean())).thenReturn(group);
         Mockito.when(_affinityGroupDao.expunge(Mockito.anyLong())).thenReturn(true);
         Mockito.when(_eventDao.persist(Mockito.any(EventVO.class))).thenReturn(new EventVO());
+    }
+
+    @After
+    public void tearDown() {
+        CallContext.unregister();
     }
 
     @Test
@@ -195,7 +214,7 @@ public class AffinityApiUnitTest {
     }
 
     @Configuration
-    @ComponentScan(basePackageClasses = {AffinityGroupServiceImpl.class, EventUtils.class}, includeFilters = {@Filter(value = TestConfiguration.Library.class, type = FilterType.CUSTOM)}, useDefaultFilters = false)
+    @ComponentScan(basePackageClasses = {AffinityGroupServiceImpl.class, ActionEventUtils.class}, includeFilters = {@Filter(value = TestConfiguration.Library.class, type = FilterType.CUSTOM)}, useDefaultFilters = false)
     public static class TestConfiguration extends SpringUtils.CloudStackTestConfiguration {
 
         @Bean
@@ -234,6 +253,11 @@ public class AffinityApiUnitTest {
         }
 
         @Bean
+        public DomainManager domainManager() {
+            return Mockito.mock(DomainManager.class);
+        }
+
+        @Bean
         public EventDao eventDao() {
             return Mockito.mock(EventDao.class);
         }
@@ -241,6 +265,21 @@ public class AffinityApiUnitTest {
         @Bean
         public UserVmDao userVMDao() {
             return Mockito.mock(UserVmDao.class);
+        }
+
+        @Bean
+        public UserDao userDao() {
+            return Mockito.mock(UserDao.class);
+        }
+
+        @Bean
+        public AffinityGroupDomainMapDao affinityGroupDomainMapDao() {
+            return Mockito.mock(AffinityGroupDomainMapDao.class);
+        }
+
+        @Bean
+        public DomainDao domainDao() {
+            return Mockito.mock(DomainDao.class);
         }
 
         public static class Library implements TypeFilter {

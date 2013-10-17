@@ -17,15 +17,17 @@
 package org.apache.cloudstack.api.command.admin.router;
 
 import org.apache.cloudstack.api.APICommand;
+import org.apache.cloudstack.api.ApiCommandJobType;
 import org.apache.cloudstack.api.ApiConstants;
 import org.apache.cloudstack.api.ApiErrorCode;
 import org.apache.cloudstack.api.BaseAsyncCmd;
 import org.apache.cloudstack.api.Parameter;
 import org.apache.cloudstack.api.ServerApiException;
 import org.apache.cloudstack.api.response.DomainRouterResponse;
+import org.apache.cloudstack.context.CallContext;
+
 import org.apache.log4j.Logger;
 
-import com.cloud.async.AsyncJob;
 import com.cloud.event.EventTypes;
 import com.cloud.exception.ConcurrentOperationException;
 import com.cloud.exception.InvalidParameterValueException;
@@ -33,7 +35,6 @@ import com.cloud.exception.ResourceUnavailableException;
 import com.cloud.network.router.VirtualRouter;
 import com.cloud.network.router.VirtualRouter.Role;
 import com.cloud.user.Account;
-import com.cloud.user.UserContext;
 
 @APICommand(name = "stopRouter", description = "Stops a router.", responseObject = DomainRouterResponse.class)
 public class StopRouterCmd extends BaseAsyncCmd {
@@ -89,8 +90,8 @@ public class StopRouterCmd extends BaseAsyncCmd {
     }
 
     @Override
-    public AsyncJob.Type getInstanceType() {
-        return AsyncJob.Type.DomainRouter;
+    public ApiCommandJobType getInstanceType() {
+        return ApiCommandJobType.DomainRouter;
     }
 
     @Override
@@ -104,7 +105,7 @@ public class StopRouterCmd extends BaseAsyncCmd {
 
     @Override
     public void execute() throws ConcurrentOperationException, ResourceUnavailableException {
-        UserContext.current().setEventDetails("Router Id: "+getId());
+        CallContext.current().setEventDetails("Router Id: "+getId());
         VirtualRouter result = null;
         VirtualRouter router = _routerService.findRouter(getId());
         if (router == null || router.getRole() != Role.VIRTUAL_ROUTER) {

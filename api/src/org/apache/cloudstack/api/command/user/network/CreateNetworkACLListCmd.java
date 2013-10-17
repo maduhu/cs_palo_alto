@@ -16,13 +16,8 @@
 // under the License.
 package org.apache.cloudstack.api.command.user.network;
 
-import com.cloud.event.EventTypes;
-import com.cloud.exception.InvalidParameterValueException;
-import com.cloud.exception.ResourceUnavailableException;
-import com.cloud.network.vpc.NetworkACL;
-import com.cloud.network.vpc.Vpc;
-import com.cloud.user.Account;
-import com.cloud.user.UserContext;
+import org.apache.log4j.Logger;
+
 import org.apache.cloudstack.api.APICommand;
 import org.apache.cloudstack.api.ApiConstants;
 import org.apache.cloudstack.api.ApiErrorCode;
@@ -31,7 +26,13 @@ import org.apache.cloudstack.api.Parameter;
 import org.apache.cloudstack.api.ServerApiException;
 import org.apache.cloudstack.api.response.NetworkACLResponse;
 import org.apache.cloudstack.api.response.VpcResponse;
-import org.apache.log4j.Logger;
+
+import com.cloud.event.EventTypes;
+import com.cloud.exception.InvalidParameterValueException;
+import com.cloud.exception.ResourceUnavailableException;
+import com.cloud.network.vpc.NetworkACL;
+import com.cloud.network.vpc.Vpc;
+import com.cloud.user.Account;
 
 @APICommand(name = "createNetworkACLList", description = "Creates a Network ACL for the given VPC",
 responseObject = NetworkACLResponse.class)
@@ -99,7 +100,7 @@ public class CreateNetworkACLListCmd extends BaseAsyncCreateCmd {
 
     @Override
     public long getEntityOwnerId() {
-        Vpc vpc = _vpcService.getVpc(getVpcId());
+        Vpc vpc = _entityMgr.findById(Vpc.class, getVpcId());
         if (vpc == null) {
             throw new InvalidParameterValueException("Invalid vpcId is given");
         }

@@ -27,17 +27,10 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.UUID;
 
 import org.apache.log4j.Logger;
 
-import com.cloud.hypervisor.vmware.mo.DatacenterMO;
-import com.cloud.hypervisor.vmware.mo.DatastoreMO;
-import com.cloud.hypervisor.vmware.mo.HostMO;
-import com.cloud.hypervisor.vmware.mo.VirtualEthernetCardType;
-import com.cloud.hypervisor.vmware.mo.VirtualMachineMO;
-import com.cloud.utils.Pair;
-import com.cloud.utils.Ternary;
-import com.cloud.utils.exception.ExceptionUtil;
 import com.vmware.vim25.DistributedVirtualSwitchPortConnection;
 import com.vmware.vim25.DynamicProperty;
 import com.vmware.vim25.ManagedObjectReference;
@@ -68,8 +61,21 @@ import com.vmware.vim25.VirtualPCNet32;
 import com.vmware.vim25.VirtualVmxnet2;
 import com.vmware.vim25.VirtualVmxnet3;
 
+import com.cloud.hypervisor.vmware.mo.HostMO;
+import com.cloud.hypervisor.vmware.mo.LicenseAssignmentManagerMO;
+import com.cloud.hypervisor.vmware.mo.VirtualEthernetCardType;
+import com.cloud.hypervisor.vmware.mo.VirtualMachineMO;
+import com.cloud.hypervisor.vmware.mo.VmwareHypervisorHost;
+import com.cloud.utils.Pair;
+import com.cloud.utils.Ternary;
+import com.cloud.utils.exception.ExceptionUtil;
+
 public class VmwareHelper {
     private static final Logger s_logger = Logger.getLogger(VmwareHelper.class);
+    
+	public static boolean isReservedScsiDeviceNumber(int deviceNumber) {
+		return deviceNumber == 7;
+	}
 
 	public static VirtualDevice prepareNicDevice(VirtualMachineMO vmMo, ManagedObjectReference morNetwork, VirtualEthernetCardType deviceType,
 		String portGroupName, String macAddress, int deviceNumber, int contextNumber, boolean conntected, boolean connectOnStart) throws Exception {
@@ -176,11 +182,15 @@ public class VmwareHelper {
         backingInfo.setFileName(vmdkDatastorePath);
         disk.setBacking(backingInfo);
 
+        int ideControllerKey = vmMo.getIDEDeviceControllerKey();
 		if(controllerKey < 0)
-			controllerKey = vmMo.getIDEDeviceControllerKey();
-        if(deviceNumber < 0)
+			controllerKey = ideControllerKey;
+        if(deviceNumber < 0) {
         	deviceNumber = vmMo.getNextDeviceNumber(controllerKey);
-		disk.setControllerKey(controllerKey);
+        	if(controllerKey != ideControllerKey && isReservedScsiDeviceNumber(deviceNumber))
+        		deviceNumber++;
+        }
+        disk.setControllerKey(controllerKey);
 
 	    disk.setKey(-contextNumber);
 	    disk.setUnitNumber(deviceNumber);
@@ -244,12 +254,16 @@ public class VmwareHelper {
 			throw new Exception("Unsupported disk backing: " + parentBacking.getClass().getCanonicalName());
 		}
 
+		int ideControllerKey = vmMo.getIDEDeviceControllerKey();
 		if(controllerKey < 0)
-			controllerKey = vmMo.getIDEDeviceControllerKey();
+			controllerKey = ideControllerKey;
 		disk.setControllerKey(controllerKey);
-		if(deviceNumber < 0)
+		if(deviceNumber < 0) {
 			deviceNumber = vmMo.getNextDeviceNumber(controllerKey);
-
+			if(controllerKey != ideControllerKey && isReservedScsiDeviceNumber(deviceNumber))
+				deviceNumber++;
+		}
+		
 	    disk.setKey(-contextNumber);
 	    disk.setUnitNumber(deviceNumber);
 	    disk.setCapacityInKB(sizeInMb*1024);
@@ -262,18 +276,44 @@ public class VmwareHelper {
 	}
 
 	// vmdkDatastorePath: [datastore name] vmdkFilePath
-	public static VirtualDevice prepareDiskDevice(VirtualMachineMO vmMo, int controllerKey, String vmdkDatastorePathChain[],
+	public static VirtualDevice prepareDiskDevice(VirtualMachineMO vmMo, VirtualDisk device, int controllerKey, String vmdkDatastorePathChain[],
 		ManagedObjectReference morDs, int deviceNumber, int contextNumber) throws Exception {
 
 		assert(vmdkDatastorePathChain != null);
 		assert(vmdkDatastorePathChain.length >= 1);
 
-		VirtualDisk disk = new VirtualDisk();
+		VirtualDisk disk;
+		VirtualDiskFlatVer2BackingInfo backingInfo;
+		if(device != null) {
+			disk = device;
+			backingInfo = (VirtualDiskFlatVer2BackingInfo)disk.getBacking();
+		} else {
+			disk = new VirtualDisk();
+			backingInfo = new VirtualDiskFlatVer2BackingInfo();
+	        backingInfo.setDatastore(morDs);
+	        backingInfo.setDiskMode(VirtualDiskMode.PERSISTENT.value());
+			disk.setBacking(backingInfo);
+			
+			int ideControllerKey = vmMo.getIDEDeviceControllerKey();
+			if(controllerKey < 0)
+				controllerKey = ideControllerKey;
+	        if(deviceNumber < 0) {
+	        	deviceNumber = vmMo.getNextDeviceNumber(controllerKey);
+	        	if(controllerKey != ideControllerKey && isReservedScsiDeviceNumber(deviceNumber))
+	        		deviceNumber++;
+	        }
+	        
+			disk.setControllerKey(controllerKey);
+		    disk.setKey(-contextNumber);
+		    disk.setUnitNumber(deviceNumber);
 
-		VirtualDiskFlatVer2BackingInfo backingInfo = new VirtualDiskFlatVer2BackingInfo();
-        backingInfo.setDatastore(morDs);
+		    VirtualDeviceConnectInfo connectInfo = new VirtualDeviceConnectInfo();
+		    connectInfo.setConnected(true);
+		    connectInfo.setStartConnected(true);
+		    disk.setConnectable(connectInfo);
+		}
+		
         backingInfo.setFileName(vmdkDatastorePathChain[0]);
-        backingInfo.setDiskMode(VirtualDiskMode.PERSISTENT.value());
         if(vmdkDatastorePathChain.length > 1) {
         	String[] parentDisks = new String[vmdkDatastorePathChain.length - 1];
         	for(int i = 0; i < vmdkDatastorePathChain.length - 1; i++)
@@ -281,22 +321,6 @@ public class VmwareHelper {
 
         	setParentBackingInfo(backingInfo, morDs, parentDisks);
         }
-
-        disk.setBacking(backingInfo);
-
-		if(controllerKey < 0)
-			controllerKey = vmMo.getIDEDeviceControllerKey();
-        if(deviceNumber < 0)
-        	deviceNumber = vmMo.getNextDeviceNumber(controllerKey);
-
-		disk.setControllerKey(controllerKey);
-	    disk.setKey(-contextNumber);
-	    disk.setUnitNumber(deviceNumber);
-
-	    VirtualDeviceConnectInfo connectInfo = new VirtualDeviceConnectInfo();
-	    connectInfo.setConnected(true);
-	    connectInfo.setStartConnected(true);
-	    disk.setConnectable(connectInfo);
 
 	    return disk;
 	}
@@ -324,11 +348,15 @@ public class VmwareHelper {
 
         disk.setBacking(backingInfo);
 
+        int ideControllerKey = vmMo.getIDEDeviceControllerKey();
 		if(controllerKey < 0)
-			controllerKey = vmMo.getIDEDeviceControllerKey();
-        if(deviceNumber < 0)
+			controllerKey = ideControllerKey;
+        if(deviceNumber < 0) {
         	deviceNumber = vmMo.getNextDeviceNumber(controllerKey);
-
+        	if(controllerKey != ideControllerKey && isReservedScsiDeviceNumber(deviceNumber))
+        		deviceNumber++;
+        }
+        
 		disk.setControllerKey(controllerKey);
 	    disk.setKey(-contextNumber);
 	    disk.setUnitNumber(deviceNumber);
@@ -608,17 +636,6 @@ public class VmwareHelper {
 		return ipAddress.equals(destName);
 	}
 
-	public static void deleteVolumeVmdkFiles(DatastoreMO dsMo, String volumeName, DatacenterMO dcMo) throws Exception {
-        String volumeDatastorePath = String.format("[%s] %s.vmdk", dsMo.getName(), volumeName);
-        dsMo.deleteFile(volumeDatastorePath, dcMo.getMor(), true);
-
-        volumeDatastorePath = String.format("[%s] %s-flat.vmdk", dsMo.getName(), volumeName);
-        dsMo.deleteFile(volumeDatastorePath, dcMo.getMor(), true);
-
-        volumeDatastorePath = String.format("[%s] %s-delta.vmdk", dsMo.getName(), volumeName);
-        dsMo.deleteFile(volumeDatastorePath, dcMo.getMor(), true);
-	}
-
 	public static String getExceptionMessage(Throwable e) {
 		return getExceptionMessage(e, false);
 	}
@@ -672,5 +689,28 @@ public class VmwareHelper {
 
     public static boolean isDvPortGroup(ManagedObjectReference networkMor) {
          return "DistributedVirtualPortgroup".equalsIgnoreCase(networkMor.getType());
+    }
+
+    public static boolean isFeatureLicensed(VmwareHypervisorHost hyperHost, String featureKey) throws Exception {
+        boolean hotplugSupportedByLicense = false;
+        String licenseName;
+        LicenseAssignmentManagerMO licenseAssignmentMgrMo;
+
+        licenseAssignmentMgrMo = hyperHost.getLicenseAssignmentManager();
+        // Check if license supports the feature
+        hotplugSupportedByLicense = licenseAssignmentMgrMo.isFeatureSupported(featureKey, hyperHost.getMor());
+        // Fetch license name
+        licenseName = licenseAssignmentMgrMo.getHostLicenseName(hyperHost.getMor());
+
+        if (!hotplugSupportedByLicense) {
+            throw new Exception("hotplug feature is not supported by license : [" + licenseName + "] assigned to host : " + hyperHost.getHyperHostName());
+        }
+
+        return hotplugSupportedByLicense;
+    }
+    
+    public static String getVCenterSafeUuid() {
+    	// Object name that is greater than 32 is not safe in vCenter
+    	return UUID.randomUUID().toString().replaceAll("-", "");
     }
 }

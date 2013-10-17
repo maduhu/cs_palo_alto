@@ -40,7 +40,7 @@ import com.cloud.utils.exception.CloudRuntimeException;
 
 @Component
 @Local(value = VersionDao.class)
-@DB(txn = false)
+@DB()
 public class VersionDaoImpl extends GenericDaoBase<VersionVO, Long> implements VersionDao {
     private static final Logger s_logger = Logger.getLogger(VersionDaoImpl.class);
 
@@ -51,7 +51,7 @@ public class VersionDaoImpl extends GenericDaoBase<VersionVO, Long> implements V
         super();
 
         CurrentVersionSearch = createSearchBuilder(String.class);
-        CurrentVersionSearch.selectField(CurrentVersionSearch.entity().getVersion());
+        CurrentVersionSearch.selectFields(CurrentVersionSearch.entity().getVersion());
         CurrentVersionSearch.and("step", CurrentVersionSearch.entity().getStep(), Op.EQ);
         CurrentVersionSearch.done();
 
@@ -73,6 +73,7 @@ public class VersionDaoImpl extends GenericDaoBase<VersionVO, Long> implements V
     }
 
     @Override
+    @DB
     public String getCurrentVersion() {
         Connection conn = null;
         try {

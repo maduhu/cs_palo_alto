@@ -25,12 +25,12 @@ import javax.persistence.Enumerated;
 import javax.persistence.Id;
 import javax.persistence.Table;
 
+import org.apache.cloudstack.api.Identity;
+import org.apache.cloudstack.api.InternalIdentity;
+
 import com.cloud.dc.DataCenter.NetworkType;
 import com.cloud.org.Grouping.AllocationState;
 import com.cloud.utils.db.GenericDao;
-
-import org.apache.cloudstack.api.Identity;
-import org.apache.cloudstack.api.InternalIdentity;
 
 @Entity
 @Table(name="data_center_view")
@@ -108,6 +108,14 @@ public class DataCenterJoinVO extends BaseViewVO implements InternalIdentity, Id
     @Column(name="domain_path")
     private String domainPath;
 
+    @Column(name = "affinity_group_id")
+    private long affinityGroupId;
+
+    @Column(name = "affinity_group_uuid")
+    private String affinityGroupUuid;
+
+    @Column(name = "account_id")
+    private long accountId;
 
     public DataCenterJoinVO() {
     }
@@ -118,189 +126,99 @@ public class DataCenterJoinVO extends BaseViewVO implements InternalIdentity, Id
     }
 
     @Override
-    public void setId(long id) {
-        this.id = id;
-    }
-
-    @Override
     public String getUuid() {
         return uuid;
-    }
-
-    public void setUuid(String uuid) {
-        this.uuid = uuid;
     }
 
     public String getName() {
         return name;
     }
 
-    public void setName(String name) {
-        this.name = name;
-    }
-
-
-
     public String getDescription() {
         return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
     }
 
     public String getDns1() {
         return dns1;
     }
 
-    public void setDns1(String dns1) {
-        this.dns1 = dns1;
-    }
-
     public String getDns2() {
         return dns2;
-    }
-
-    public void setDns2(String dns2) {
-        this.dns2 = dns2;
     }
 
     public String getInternalDns1() {
         return internalDns1;
     }
 
-    public void setInternalDns1(String internalDns1) {
-        this.internalDns1 = internalDns1;
-    }
-
     public String getInternalDns2() {
         return internalDns2;
-    }
-
-    public void setInternalDns2(String internalDns2) {
-        this.internalDns2 = internalDns2;
     }
 
     public String getGuestNetworkCidr() {
         return guestNetworkCidr;
     }
 
-    public void setGuestNetworkCidr(String guestNetworkCidr) {
-        this.guestNetworkCidr = guestNetworkCidr;
-    }
-
     public String getDomain() {
         return domain;
-    }
-
-    public void setDomain(String domain) {
-        this.domain = domain;
     }
 
     public NetworkType getNetworkType() {
         return networkType;
     }
 
-    public void setNetworkType(NetworkType networkType) {
-        this.networkType = networkType;
-    }
-
     public String getDhcpProvider() {
         return dhcpProvider;
-    }
-
-    public void setDhcpProvider(String dhcpProvider) {
-        this.dhcpProvider = dhcpProvider;
     }
 
     public String getZoneToken() {
         return zoneToken;
     }
 
-    public void setZoneToken(String zoneToken) {
-        this.zoneToken = zoneToken;
-    }
-
     public AllocationState getAllocationState() {
         return allocationState;
-    }
-
-    public void setAllocationState(AllocationState allocationState) {
-        this.allocationState = allocationState;
     }
 
     public boolean isSecurityGroupEnabled() {
         return securityGroupEnabled;
     }
 
-    public void setSecurityGroupEnabled(boolean securityGroupEnabled) {
-        this.securityGroupEnabled = securityGroupEnabled;
-    }
-
-
     public boolean isLocalStorageEnabled() {
         return localStorageEnabled;
-    }
-
-    public void setLocalStorageEnabled(boolean localStorageEnabled) {
-        this.localStorageEnabled = localStorageEnabled;
     }
 
     public Date getRemoved() {
         return removed;
     }
 
-    public void setRemoved(Date removed) {
-        this.removed = removed;
-    }
-
     public long getDomainId() {
         return domainId;
-    }
-
-    public void setDomainId(long domainId) {
-        this.domainId = domainId;
     }
 
     public String getDomainUuid() {
         return domainUuid;
     }
 
-    public void setDomainUuid(String domainUuid) {
-        this.domainUuid = domainUuid;
-    }
-
     public String getDomainName() {
         return domainName;
-    }
-
-    public void setDomainName(String domainName) {
-        this.domainName = domainName;
     }
 
     public String getDomainPath() {
         return domainPath;
     }
 
-    public void setDomainPath(String domainPath) {
-        this.domainPath = domainPath;
+    public String getIp6Dns1() {
+        return ip6Dns1;
     }
 
-	public String getIp6Dns1() {
-		return ip6Dns1;
-	}
+    public String getIp6Dns2() {
+        return ip6Dns2;
+    }
 
-	public void setIp6Dns1(String ip6Dns1) {
-		this.ip6Dns1 = ip6Dns1;
-	}
+    public String getAffinityGroupUuid() {
+        return affinityGroupUuid;
+    }
 
-	public String getIp6Dns2() {
-		return ip6Dns2;
-	}
-
-	public void setIp6Dns2(String ip6Dns2) {
-		this.ip6Dns2 = ip6Dns2;
-	}
-
-
+    public long getAccountId() {
+        return accountId;
+    }
 }

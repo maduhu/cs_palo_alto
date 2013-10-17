@@ -17,9 +17,11 @@
 package com.cloud.network.dao;
 
 import com.cloud.dc.Vlan.VlanType;
+import com.cloud.utils.db.DB;
 import com.cloud.utils.db.GenericDao;
 import com.cloud.utils.net.Ip;
 
+import java.sql.SQLException;
 import java.util.List;
 
 public interface IPAddressDao extends GenericDao<IPAddressVO, Long> {
@@ -72,4 +74,10 @@ public interface IPAddressDao extends GenericDao<IPAddressVO, Long> {
     IPAddressVO findByIpAndVlanId(String ipAddress, long vlanid);
 
     long countFreeIpsInVlan(long vlanDbId);
+
+    void deletePublicIPRangeExceptAliasIP(long vlanDbId, String aliasIp);
+
+    boolean deletePublicIPRange(long vlanDbId) ;
+
+    void lockRange(long vlandbId);
 }

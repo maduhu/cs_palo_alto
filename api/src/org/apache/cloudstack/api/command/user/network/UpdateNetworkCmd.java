@@ -24,6 +24,8 @@ import org.apache.cloudstack.api.Parameter;
 import org.apache.cloudstack.api.ServerApiException;
 import org.apache.cloudstack.api.response.NetworkOfferingResponse;
 import org.apache.cloudstack.api.response.NetworkResponse;
+import org.apache.cloudstack.context.CallContext;
+
 import org.apache.log4j.Logger;
 
 import com.cloud.event.EventTypes;
@@ -31,9 +33,9 @@ import com.cloud.exception.ConcurrentOperationException;
 import com.cloud.exception.InsufficientCapacityException;
 import com.cloud.exception.InvalidParameterValueException;
 import com.cloud.network.Network;
+import com.cloud.offering.NetworkOffering;
 import com.cloud.user.Account;
 import com.cloud.user.User;
-import com.cloud.user.UserContext;
 
 @APICommand(name = "updateNetwork", description="Updates a network", responseObject=NetworkResponse.class)
 public class UpdateNetworkCmd extends BaseAsyncCmd {
@@ -129,7 +131,7 @@ public class UpdateNetworkCmd extends BaseAsyncCmd {
 
     @Override
     public void execute() throws InsufficientCapacityException, ConcurrentOperationException{
-        User callerUser = _accountService.getActiveUser(UserContext.current().getCallerUserId());
+        User callerUser = _accountService.getActiveUser(CallContext.current().getCallingUserId());
         Account callerAccount = _accountService.getActiveAccountById(callerUser.getAccountId());
         Network network = _networkService.getNetwork(id);
         if (network == null) {
@@ -151,11 +153,40 @@ public class UpdateNetworkCmd extends BaseAsyncCmd {
 
     @Override
     public String getEventDescription() {
-        return  "Updating network: " + getId();
+        
+        
+        StringBuffer eventMsg = new StringBuffer("Updating network: " + getId());
+        if (getNetworkOfferingId() != null) {
+            Network network = _networkService.getNetwork(getId());
+            if (network == null) {
+                throw new InvalidParameterValueException("Networkd id=" + id + " doesn't exist");
+            }
+            if (network.getNetworkOfferingId() != getNetworkOfferingId()) {
+                NetworkOffering oldOff = _entityMgr.findById(NetworkOffering.class, network.getNetworkOfferingId());
+                NetworkOffering newOff = _entityMgr.findById(NetworkOffering.class, getNetworkOfferingId());
+                if (newOff == null) {
+                    throw new InvalidParameterValueException("Networkd offering id supplied is invalid");
+                }
+
+                eventMsg.append(". Original network offering id: " + oldOff.getUuid() + ", new network offering id: " + newOff.getUuid());
+            }
+        }
+            
+        return eventMsg.toString();
     }
 
     @Override
     public String getEventType() {
         return EventTypes.EVENT_NETWORK_UPDATE;
+    }
+
+    @Override
+    public String getSyncObjType() {
+        return BaseAsyncCmd.networkSyncObject;
+    }
+
+    @Override
+    public Long getSyncObjId() {
+        return id;
     }
 }

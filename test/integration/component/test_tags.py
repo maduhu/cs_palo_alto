@@ -240,7 +240,7 @@ class TestResourceTags(cloudstackTestCase):
         try:
             #Cleanup resources used
             print("Cleanup resources used")
-            #cleanup_resources(cls.api_client, cls._cleanup)
+            cleanup_resources(cls.api_client, cls._cleanup)
         except Exception as e:
             raise Exception("Warning: Exception during cleanup : %s" % e)
         return
@@ -697,6 +697,7 @@ class TestResourceTags(cloudstackTestCase):
         # 1. Enable the VPN
         # 2. create Tag on VPN rule using CreateTag API
         # 3. Delete the VPN rule
+        self.skipTest("VPN resource tags are unsupported in 4.0")
 
         self.debug("Fetching the network details for account: %s" %
                                                 self.account.name)
@@ -1083,12 +1084,13 @@ class TestResourceTags(cloudstackTestCase):
                          'CentOS',
                          'The tag should have original value'
                          )
-        
         isos = Iso.list(
                         self.apiclient,
-                        listall=True,
                         key='OS',
-                        value='CentOS'
+                        value='CentOS',
+                        account=self.account.name,
+                        domainid=self.account.domainid,
+                        isofilter='all'
                     )
 
         self.assertEqual(
@@ -1096,7 +1098,7 @@ class TestResourceTags(cloudstackTestCase):
                          True,
                          "List isos should not return an empty response"
                          )
-    
+
         self.debug("Deleting the created tag..")
         try:
             tag.delete(
@@ -1454,14 +1456,14 @@ class TestResourceTags(cloudstackTestCase):
 
         self.debug("Available hosts: ")
         for host in hosts:
-            self.debug("Host: %s", host.id)
+            self.debug("Host: %s" % host.id)
 
             # Filtering out the source host from list host response
             temp_hosts = [host for host in hosts if host.id != source_host]
             dest_host = temp_hosts[0]
 
             self.debug("Destination host is: %s" % dest_host.id)
-            self.debug("Source host is: %s" % source_host.id)
+            self.debug("Source host is: %s" % source_host)
 
         self.debug("Creating a tag for user VM")
         tag = Tag.create(
@@ -1946,7 +1948,7 @@ class TestResourceTags(cloudstackTestCase):
         
         return
 
-    @attr(tags=["advanced", "basic"])
+    @attr(tags=["advanced", "basic", "simulator"])
     def test_18_invalid_list_parameters(self):
         """ Test listAPI with invalid tags parameter
         """
@@ -1973,9 +1975,10 @@ class TestResourceTags(cloudstackTestCase):
         self.debug("Passing invalid key parameter to the listAPI for vms")
 
         vms = VirtualMachine.list(self.apiclient,
-                  listall=True,
-                  tags={'region111': 'India'}
-                 )
+            **{'tags[0].key': 'region111',
+             'tags[0].value': 'India',
+             'listall' : 'True'}
+        )
         self.assertEqual(
                          vms,
                          None,

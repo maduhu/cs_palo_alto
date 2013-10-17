@@ -137,7 +137,7 @@ class Services:
                                     "startport": 80,
                                     "endport": 80,
                                     "cidrlist": '0.0.0.0/0',
-                                    "protocol": "ICMP"
+                                    "protocol": "TCP"
                                 },
                          "virtual_machine": {
                                     "displayname": "Test VM",
@@ -153,7 +153,6 @@ class Services:
                                 },
                          "ostype": 'CentOS 5.3 (64-bit)',
                          # Cent OS 5.3 (64 bit)
-                         "sleep": 60,
                          "timeout": 10,
                          "mode": 'advanced'
                     }
@@ -219,10 +218,6 @@ class TestVMDeployVPC(cloudstackTestCase):
         try:
             #Clean up, terminate the created network offerings
             cleanup_resources(self.apiclient, self.cleanup)
-            wait_for_cleanup(self.apiclient, [
-                                              "network.gc.interval",
-                                              "network.gc.wait"])
-
         except Exception as e:
             raise Exception("Warning: Exception during cleanup : %s" % e)
         return
@@ -305,7 +300,6 @@ class TestVMDeployVPC(cloudstackTestCase):
                                      self.services["vpc_offering"]
                                      )
 
-        self._cleanup.append(vpc_off)
         self.validate_vpc_offering(vpc_off)
 
         self.debug("Enabling the VPC offering created")
@@ -354,7 +348,7 @@ class TestVMDeployVPC(cloudstackTestCase):
                                     )
         # Enable Network offering
         nw_off_no_lb.update(self.apiclient, state='Enabled')
-        self._cleanup.append(nw_off)
+        self._cleanup.append(nw_off_no_lb)
 
         # Creating network using the network offering created
         self.debug("Creating network with network offering: %s" %
@@ -569,7 +563,7 @@ class TestVMDeployVPC(cloudstackTestCase):
                                     )
         # Enable Network offering
         nw_off_no_lb.update(self.apiclient, state='Enabled')
-        self._cleanup.append(nw_off)
+        self._cleanup.append(nw_off_no_lb)
 
         # Creating network using the network offering created
         self.debug("Creating network with network offering: %s" %
@@ -822,7 +816,7 @@ class TestVMDeployVPC(cloudstackTestCase):
                                     )
         # Enable Network offering
         nw_off_no_lb.update(self.apiclient, state='Enabled')
-        self._cleanup.append(nw_off)
+        self._cleanup.append(nw_off_no_lb)
 
         # Creating network using the network offering created
         self.debug("Creating network with network offering: %s" %
@@ -1091,7 +1085,7 @@ class TestVMDeployVPC(cloudstackTestCase):
                                     )
         # Enable Network offering
         nw_off_no_lb.update(self.apiclient, state='Enabled')
-        self._cleanup.append(nw_off)
+        self._cleanup.append(nw_off_no_lb)
 
         # Creating network using the network offering created
         self.debug("Creating network with network offering: %s" %
@@ -1375,7 +1369,7 @@ class TestVMDeployVPC(cloudstackTestCase):
                                     )
         # Enable Network offering
         nw_off_no_lb.update(self.apiclient, state='Enabled')
-        self._cleanup.append(nw_off)
+        self._cleanup.append(nw_off_no_lb)
 
         configs = Configurations.list(
                                 self.apiclient,
@@ -1546,7 +1540,7 @@ class TestVMDeployVPC(cloudstackTestCase):
                                     )
         # Enable Network offering
         nw_off_no_lb.update(self.apiclient, state='Enabled')
-        self._cleanup.append(nw_off)
+        self._cleanup.append(nw_off_no_lb)
 
         # Creating network using the network offering created
         self.debug("Creating network with network offering: %s" %
@@ -1752,9 +1746,6 @@ class TestVMDeployVPC(cloudstackTestCase):
         #    expected
         # 2. All the resources associated with account should be deleted
 
-        # Remove account from cleanup list, we will delete it at end of test
-        self.cleanup = []
-
         self.debug("Creating a VPC offering..")
         vpc_off = VpcOffering.create(
                                      self.apiclient,
@@ -1810,7 +1801,7 @@ class TestVMDeployVPC(cloudstackTestCase):
                                     )
         # Enable Network offering
         nw_off_no_lb.update(self.apiclient, state='Enabled')
-        self._cleanup.append(nw_off)
+        self._cleanup.append(nw_off_no_lb)
 
         # Creating network using the network offering created
         self.debug("Creating network with network offering: %s" %
@@ -1982,24 +1973,7 @@ class TestVMDeployVPC(cloudstackTestCase):
                                         network_2.id
                                         ))
 
-        self.debug("Creating LB rule for IP address: %s" %
-                                        public_ip_3.ipaddress.ipaddress)
-
-        lb_rule = LoadBalancerRule.create(
-                                    self.apiclient,
-                                    self.services["lbrule"],
-                                    ipaddressid=public_ip_3.ipaddress.id,
-                                    accountid=self.account.name,
-                                    networkid=network_2.id,
-                                    vpcid=vpc.id,
-                                    domainid=self.account.domainid
-                                )
-
-        self.debug("Adding virtual machines %s and %s to LB rule" % (
-                                    vm_3.name, vm_4.name))
-        lb_rule.assign(self.apiclient, [vm_3, vm_4])
-
-        self.debug("Adding NetwrokACl rules to make PF and LB accessible")
+        self.debug("Adding NetworkACl rules to make PF accessible")
         nwacl_lb = NetworkACL.create(
                                 self.apiclient,
                                 networkid=network_2.id,
@@ -2025,8 +1999,8 @@ class TestVMDeployVPC(cloudstackTestCase):
         self.debug("Creating private gateway in VPC: %s" % vpc.name)
         private_gateway = PrivateGateway.create(
                                                 self.apiclient,
-                                                gateway='10.1.3.1',
-                                                ipaddress='10.1.3.2',
+                                                gateway='10.2.3.1',
+                                                ipaddress='10.2.3.2',
                                                 netmask='255.255.255.0',
                                                 vlan=678,
                                                 vpcid=vpc.id
@@ -2037,7 +2011,7 @@ class TestVMDeployVPC(cloudstackTestCase):
                                        id=private_gateway.id,
                                        listall=True
                                        )
-        self.assertEqaul(
+        self.assertEqual(
                         isinstance(gateways, list),
                         True,
                         "List private gateways should return a valid response"
@@ -2045,7 +2019,7 @@ class TestVMDeployVPC(cloudstackTestCase):
         self.debug("Creating static route for this gateway")
         static_route = StaticRoute.create(
                                           self.apiclient,
-                                          cidr='10.1.3.0/24',
+                                          cidr='10.2.3.0/24',
                                           gatewayid=private_gateway.id
                                           )
         self.debug("Check if the static route created successfully?")
@@ -2054,7 +2028,7 @@ class TestVMDeployVPC(cloudstackTestCase):
                                        id=static_route.id,
                                        listall=True
                                        )
-        self.assertEqaul(
+        self.assertEqual(
                         isinstance(static_routes, list),
                         True,
                         "List static route should return a valid response"
@@ -2084,7 +2058,7 @@ class TestVMDeployVPC(cloudstackTestCase):
                                   vpcid=vpc.id
                                   )
 
-        self.debug("Adding NetwrokACl rules to make NAT rule accessible")
+        self.debug("Adding NetworkACl rules to make NAT rule accessible")
         nwacl_nat = NetworkACL.create(
                                          self.apiclient,
                                          networkid=network_2.id,
@@ -2153,24 +2127,7 @@ class TestVMDeployVPC(cloudstackTestCase):
                                         network_2.id
                                         ))
 
-        self.debug("Creating LB rule for IP address: %s" %
-                                        public_ip_7.ipaddress.ipaddress)
-
-        lb_rule = LoadBalancerRule.create(
-                                    self.apiclient,
-                                    self.services["lbrule"],
-                                    ipaddressid=public_ip_7.ipaddress.id,
-                                    accountid=self.account.name,
-                                    networkid=network_2.id,
-                                    vpcid=vpc.id,
-                                    domainid=self.account.domainid
-                                )
-
-        self.debug("Adding virtual machines %s and %s to LB rule" % (
-                                    vm_3.name, vm_4.name))
-        lb_rule.assign(self.apiclient, [vm_3, vm_4])
-
-        self.debug("Adding NetwrokACl rules to make PF and LB accessible")
+        self.debug("Adding NetwrokACl rules to make PF accessible")
         nwacl_lb = NetworkACL.create(
                                 self.apiclient,
                                 networkid=network_2.id,
@@ -2196,8 +2153,8 @@ class TestVMDeployVPC(cloudstackTestCase):
         self.debug("Creating private gateway in VPC: %s" % vpc.name)
         private_gateway = PrivateGateway.create(
                                                 self.apiclient,
-                                                gateway='10.1.4.1',
-                                                ipaddress='10.1.4.2',
+                                                gateway='10.2.4.1',
+                                                ipaddress='10.2.4.2',
                                                 netmask='255.255.255.0',
                                                 vlan=678,
                                                 vpcid=vpc.id
@@ -2208,7 +2165,7 @@ class TestVMDeployVPC(cloudstackTestCase):
                                        id=private_gateway.id,
                                        listall=True
                                        )
-        self.assertEqaul(
+        self.assertEqual(
                         isinstance(gateways, list),
                         True,
                         "List private gateways should return a valid response"
@@ -2216,7 +2173,7 @@ class TestVMDeployVPC(cloudstackTestCase):
         self.debug("Creating static route for this gateway")
         static_route = StaticRoute.create(
                                           self.apiclient,
-                                          cidr='10.1.4.0/24',
+                                          cidr='10.2.4.0/24',
                                           gatewayid=private_gateway.id
                                           )
         self.debug("Check if the static route created successfully?")
@@ -2225,7 +2182,7 @@ class TestVMDeployVPC(cloudstackTestCase):
                                        id=static_route.id,
                                        listall=True
                                        )
-        self.assertEqaul(
+        self.assertEqual(
                         isinstance(static_routes, list),
                         True,
                         "List static route should return a valid response"
@@ -2290,32 +2247,10 @@ class TestVMDeployVPC(cloudstackTestCase):
                          "Ping to outside world from VM should be successful"
                          )
 
-        self.debug("Checking if we can SSH into VM using LB rule?")
-        try:
-            ssh_3 = vm_3.get_ssh_client(
-                            ipaddress=public_ip_3.ipaddress.ipaddress,
-                            reconnect=True,
-                            port=self.services["lbrule"]["publicport"]
-                            )
-            self.debug("SSH into VM is successfully")
-
-            self.debug("Verifying if we can ping to outside world from VM?")
-            res = ssh_3.execute("ping -c 1 www.google.com")
-        except Exception as e:
-            self.fail("Failed to SSH into VM - %s, %s" %
-                                        (public_ip_3.ipaddress.ipaddress, e))
-
-        result = str(res)
-        self.assertEqual(
-                         result.count("1 received"),
-                         1,
-                         "Ping to outside world from VM should be successful"
-                         )
-
         self.debug("Trying to delete network: %s" % network_1.name)
         with self.assertRaises(Exception):
             network_1.delete(self.apiclient)
-        self.debug("Delete netwpork failed as there are running instances")
+        self.debug("Delete network failed as there are running instances")
 
         self.debug("Destroying all the instances in network1: %s" %
                                                             network_1.name)
@@ -2403,28 +2338,6 @@ class TestVMDeployVPC(cloudstackTestCase):
                          "Ping to outside world from VM should be successful"
                          )
 
-        self.debug("Checking if we can SSH into VM using LB rule?")
-        try:
-            ssh_6 = vm_3.get_ssh_client(
-                            ipaddress=public_ip_7.ipaddress.ipaddress,
-                            reconnect=True,
-                            port=self.services["lbrule"]["publicport"]
-                            )
-            self.debug("SSH into VM is successfully")
-
-            self.debug("Verifying if we can ping to outside world from VM?")
-            res = ssh_6.execute("ping -c 1 www.google.com")
-        except Exception as e:
-            self.fail("Failed to SSH into VM - %s, %s" %
-                                        (public_ip_7.ipaddress.ipaddress, e))
-
-        result = str(res)
-        self.assertEqual(
-                         result.count("1 received"),
-                         1,
-                         "Ping to outside world from VM should be successful"
-                         )
-
         self.debug("Deleting the account..")
         try:
             self.account.delete(self.apiclient)
@@ -2432,6 +2345,9 @@ class TestVMDeployVPC(cloudstackTestCase):
             self.fail("Failed to delete account: %s" %
                                                 self.account.name)
         wait_for_cleanup(self.apiclient, ["account.cleanup.interval"])
+
+        # Remove account from cleanup list, we've already deleted it
+        self.cleanup.remove(self.account)
 
         self.debug("Check if the VPC network is created successfully?")
         vpc_networks = VPC.list(

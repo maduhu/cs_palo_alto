@@ -16,7 +16,10 @@
 // under the License.
 package com.cloud.agent.api.to;
 
-public class SwiftTO {
+import com.cloud.storage.DataStoreRole;
+import com.cloud.utils.SwiftUtil;
+
+public class SwiftTO implements DataStoreTO, SwiftUtil.SwiftClientCfg {
     Long id;
     String url;
     String account;
@@ -42,17 +45,33 @@ public class SwiftTO {
         return url;
     }
 
+    @Override
     public String getAccount() {
         return account;
     }
 
+    @Override
     public String getUserName() {
         return userName;
     }
 
+    @Override
     public String getKey() {
         return key;
     }
 
+    @Override
+    public DataStoreRole getRole() {
+        return DataStoreRole.Image;
+    }
 
+    @Override
+    public String getEndPoint() {
+        return this.url;
+    }
+
+    @Override
+    public String getUuid() {
+        return null;
+    }
 }

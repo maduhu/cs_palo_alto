@@ -52,7 +52,7 @@
   <!--
     DAO with customized configuration under non-OSS deployment
   -->
-  <bean id="configurationDaoImpl" class="com.cloud.configuration.dao.ConfigurationDaoImpl">
+  <bean id="configurationDaoImpl" class="org.apache.cloudstack.framework.config.dao.ConfigurationDaoImpl">
     <property name="configParams">
       <map>
         <entry key="premium" value="true" />
@@ -80,7 +80,6 @@
   <bean id="VmwareDatacenterDaoImpl" class="com.cloud.hypervisor.vmware.dao.VmwareDatacenterDaoImpl" />
   <bean id="VmwareDatacenterZoneMapDaoImpl" class="com.cloud.hypervisor.vmware.dao.VmwareDatacenterZoneMapDaoImpl" />
   <bean id="LegacyZoneDaoImpl" class="com.cloud.hypervisor.vmware.dao.LegacyZoneDaoImpl" />
-  <bean id="vmwareStorageMotionStrategy" class="org.apache.cloudstack.storage.motion.VmwareStorageMotionStrategy"/>
 
   <!--
     Nicira support components
@@ -177,13 +176,54 @@
   </bean>
 
 
+  <!--
+    UCS support components
+  -->
+  <bean id="ucsBladeDaoImpl" class="com.cloud.ucs.database.UcsBladeDaoImpl" />
+  <bean id="ucsManagerDaoImpl" class="com.cloud.ucs.database.UcsManagerDaoImpl" />
+  
 <!--
 
   Deployment configurations of various adapters
     
   It determines whether or not a adapter is activated or how it is loaded in order in its managing provider,
      
---> 
+-->
+
+  <!--Motion Strategies-->
+  <bean id="vmwareStorageMotionStrategy" class="org.apache.cloudstack.storage.motion.VmwareStorageMotionStrategy" />
+  <bean id="dataMotionServiceImpl" class="org.apache.cloudstack.storage.motion.DataMotionServiceImpl">
+    <property name="strategies">
+      <list>
+        <ref bean="ancientDataMotionStrategy"/>
+        <ref bean="xenserverStorageMotionStrategy"/>
+        <ref local="vmwareStorageMotionStrategy"/>
+      </list>
+    </property>
+  </bean>
+
+  <bean id="cloudStackImageStoreProviderImpl"
+        class="org.apache.cloudstack.storage.datastore.provider.CloudStackImageStoreProviderImpl"/>
+  <bean id="s3ImageStoreProviderImpl"
+        class="org.apache.cloudstack.storage.datastore.provider.S3ImageStoreProviderImpl"/>
+  <bean id="swiftImageStoreProviderImpl"
+        class="org.apache.cloudstack.storage.datastore.provider.SwiftImageStoreProviderImpl"/>
+  <bean id="solidFireDataStoreProvider"
+        class="org.apache.cloudstack.storage.datastore.provider.SolidfirePrimaryDataStoreProvider"/>
+
+  <!--Storage Providers-->
+  <bean id="dataStoreProviderManager"
+        class="org.apache.cloudstack.storage.datastore.provider.DataStoreProviderManagerImpl">
+    <property name="providers">
+      <list merge="true">
+        <ref bean="cloudStackPrimaryDataStoreProviderImpl"/>
+        <ref bean="cloudStackImageStoreProviderImpl"/>
+        <ref bean="s3ImageStoreProviderImpl"/>
+        <ref local="swiftImageStoreProviderImpl"/>
+        <ref bean="solidFireDataStoreProvider"/>
+      </list>
+    </property>
+  </bean>
 
   <!-- Security adapters -->
   <bean id="userAuthenticators" class="com.cloud.utils.component.AdapterList">
@@ -191,7 +231,7 @@
       <list>
           <ref bean="SHA256SaltedUserAuthenticator"/>
           <ref bean="MD5UserAuthenticator"/>
-          <ref bean="LDAPUserAuthenticator"/>
+          <ref bean="LdapAuthenticator"/>
           <ref bean="PlainTextUserAuthenticator"/>
       </list>
     </property>
@@ -201,7 +241,7 @@
       <list>
           <ref bean="SHA256SaltedUserAuthenticator"/>
           <ref bean="MD5UserAuthenticator"/>
-          <ref bean="LDAPUserAuthenticator"/>
+          <ref bean="LdapAuthenticator"/>
           <ref bean="PlainTextUserAuthenticator"/>
       </list>
     </property>
@@ -210,6 +250,7 @@
   <bean id="securityCheckers" class="com.cloud.utils.component.AdapterList">
     <property name="Adapters">
       <list>
+	      <ref bean="affinityGroupAccessChecker"/>
           <ref bean="domainChecker"/>
       </list>
     </property>
@@ -222,9 +263,7 @@
           <ref bean="XcpServerDiscoverer"/>
           <ref bean="SecondaryStorageDiscoverer"/>
           <ref bean="KvmServerDiscoverer"/>
-<!--          
           <ref bean="BareMetalDiscoverer"/>
--->
           <ref bean="OvmDiscoverer"/>
           <ref bean="vmwareServerDiscoverer"/>
       </list>
@@ -240,6 +279,7 @@
           <ref bean="VmwareInvestigator"/>
           <ref bean="UserVmDomRInvestigator"/>
           <ref bean="ManagementIPSystemVMInvestigator"/>
+          <ref bean="KVMInvestigator"/>
       </list>
     </property>
   </bean>
@@ -263,9 +303,7 @@
           <ref bean="UserDispersingPlanner" />
           <ref bean="UserConcentratedPodPlanner" />
           <ref bean="ImplicitDedicationPlanner" />
-<!--
           <ref bean="BareMetalPlanner" />
--->
       </list>
     </property>
   </bean>
@@ -292,7 +330,6 @@
           <ref bean="LocalStoragePoolAllocator"/>
           <ref bean="clusterScopeStoragePoolAllocator"/>
           <ref bean="zoneWideStoragePoolAllocator"/>
-          <ref bean="garbageCollectingStoragePoolAllocator"/>
       </list>
     </property>
   </bean>
@@ -315,9 +352,7 @@
       <list>
           <ref bean="VirtualRouter"/>
           <ref bean="VpcVirtualRouter"/>
-<!--          
           <ref bean="BareMetalDhcp"/>
--->    
       </list>
     </property>
   </bean>
@@ -357,11 +392,9 @@
           <ref bean="VpcVirtualRouter"/>
           <ref bean="PaloAlto"/>
           <ref bean="InternalLbVm"/>
-<!--
           <ref bean="BareMetalDhcp"/>
           <ref bean="BareMetalPxe"/>
           <ref bean="BareMetalUserdata"/>
--->    
       </list>
     </property>
   </bean>

@@ -16,17 +16,27 @@
 // under the License.
 package org.apache.cloudstack.api.command.admin.systemvm;
 
-import com.cloud.event.EventTypes;
-import com.cloud.exception.*;
-import org.apache.cloudstack.api.*;
+import org.apache.log4j.Logger;
+
+import org.apache.cloudstack.api.APICommand;
+import org.apache.cloudstack.api.ApiConstants;
+import org.apache.cloudstack.api.ApiErrorCode;
+import org.apache.cloudstack.api.BaseAsyncCmd;
+import org.apache.cloudstack.api.Parameter;
+import org.apache.cloudstack.api.ServerApiException;
 import org.apache.cloudstack.api.command.user.vm.UpgradeVMCmd;
 import org.apache.cloudstack.api.response.ServiceOfferingResponse;
 import org.apache.cloudstack.api.response.SystemVmResponse;
-import org.apache.log4j.Logger;
+import org.apache.cloudstack.context.CallContext;
 
+import com.cloud.event.EventTypes;
+import com.cloud.exception.ConcurrentOperationException;
+import com.cloud.exception.InvalidParameterValueException;
+import com.cloud.exception.ManagementServerException;
+import com.cloud.exception.ResourceUnavailableException;
+import com.cloud.exception.VirtualMachineMigrationException;
 import com.cloud.offering.ServiceOffering;
 import com.cloud.user.Account;
-import com.cloud.user.UserContext;
 import com.cloud.vm.VirtualMachine;
 
 @APICommand(name = "scaleSystemVm", responseObject=SystemVmResponse.class, description="Scale the service offering for a system vm (console proxy or secondary storage). " +
@@ -71,7 +81,7 @@ public class ScaleSystemVMCmd extends BaseAsyncCmd {
 
     @Override
     public long getEntityOwnerId() {
-        Account account = UserContext.current().getCaller();
+        Account account = CallContext.current().getCallingAccount();
         if (account != null) {
             return account.getId();
         }
@@ -81,9 +91,9 @@ public class ScaleSystemVMCmd extends BaseAsyncCmd {
 
     @Override
     public void execute(){
-        UserContext.current().setEventDetails("SystemVm Id: "+getId());
+        CallContext.current().setEventDetails("SystemVm Id: "+getId());
 
-        ServiceOffering serviceOffering = _configService.getServiceOffering(serviceOfferingId);
+        ServiceOffering serviceOffering = _entityMgr.findById(ServiceOffering.class, serviceOfferingId);
         if (serviceOffering == null) {
             throw new InvalidParameterValueException("Unable to find service offering: " + serviceOfferingId);
         }
@@ -107,25 +117,19 @@ public class ScaleSystemVMCmd extends BaseAsyncCmd {
         if (result != null) {
             SystemVmResponse response = _responseGenerator.createSystemVmResponse(result);
             response.setResponseName(getCommandName());
-            this.setResponseObject(response);
+            setResponseObject(response);
         } else {
-            throw new ServerApiException(ApiErrorCode.INTERNAL_ERROR, "Failed to scale system vm");
+            throw new ServerApiException(ApiErrorCode.INTERNAL_ERROR, "Failed to upgrade system vm");
         }
     }
 
     @Override
     public String getEventType() {
-        VirtualMachine.Type type = _mgr.findSystemVMTypeById(getId());
-        if(type == VirtualMachine.Type.ConsoleProxy){
-            return EventTypes.EVENT_PROXY_SCALE;
-        }
-        else{
-            return EventTypes.EVENT_SSVM_SCALE;
-        }
+        return EventTypes.EVENT_VM_UPGRADE;
     }
 
     @Override
     public String getEventDescription() {
-        return  "scaling system vm: " + getId() + " to service offering: " + getServiceOfferingId();
+        return  "Upgrading system vm: " + getId() + " to service offering: " + getServiceOfferingId();
     }
 }

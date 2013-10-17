@@ -17,6 +17,7 @@
 package org.apache.cloudstack.api.command.user.loadbalancer;
 
 import org.apache.cloudstack.api.APICommand;
+import org.apache.cloudstack.api.ApiCommandJobType;
 import org.apache.cloudstack.api.ApiConstants;
 import org.apache.cloudstack.api.ApiErrorCode;
 import org.apache.cloudstack.api.BaseAsyncCreateCmd;
@@ -24,10 +25,11 @@ import org.apache.cloudstack.api.Parameter;
 import org.apache.cloudstack.api.ServerApiException;
 import org.apache.cloudstack.api.response.ApplicationLoadBalancerResponse;
 import org.apache.cloudstack.api.response.NetworkResponse;
+import org.apache.cloudstack.context.CallContext;
 import org.apache.cloudstack.network.lb.ApplicationLoadBalancerRule;
+
 import org.apache.log4j.Logger;
 
-import com.cloud.async.AsyncJob;
 import com.cloud.event.EventTypes;
 import com.cloud.exception.InsufficientAddressCapacityException;
 import com.cloud.exception.InsufficientVirtualNetworkCapcityException;
@@ -37,7 +39,6 @@ import com.cloud.exception.ResourceAllocationException;
 import com.cloud.exception.ResourceUnavailableException;
 import com.cloud.network.Network;
 import com.cloud.network.rules.LoadBalancerContainer.Scheme;
-import com.cloud.user.UserContext;
 import com.cloud.utils.net.NetUtils;
 
 @APICommand(name = "createLoadBalancer", description="Creates a Load Balancer", responseObject=ApplicationLoadBalancerResponse.class, since="4.2.0")
@@ -143,8 +144,8 @@ public class CreateApplicationLoadBalancerCmd extends BaseAsyncCreateCmd {
     }
 
     @Override
-    public AsyncJob.Type getInstanceType() {
-        return AsyncJob.Type.LoadBalancerRule;
+    public ApiCommandJobType getInstanceType() {
+        return ApiCommandJobType.LoadBalancerRule;
     }
     
     public String getSourceIp() {
@@ -180,7 +181,7 @@ public class CreateApplicationLoadBalancerCmd extends BaseAsyncCreateCmd {
     public void execute() throws ResourceAllocationException, ResourceUnavailableException {
         ApplicationLoadBalancerRule rule = null;
         try {
-            UserContext.current().setEventDetails("Load Balancer Id: " + getEntityId());
+            CallContext.current().setEventDetails("Load Balancer Id: " + getEntityId());
             // State might be different after the rule is applied, so get new object here
             rule = _entityMgr.findById(ApplicationLoadBalancerRule.class, getEntityId());
             ApplicationLoadBalancerResponse lbResponse = _responseGenerator.createLoadBalancerContainerReponse(rule, _lbService.getLbInstances(getEntityId()));

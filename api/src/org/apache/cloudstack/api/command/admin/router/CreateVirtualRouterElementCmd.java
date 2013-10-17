@@ -28,16 +28,17 @@ import org.apache.cloudstack.api.Parameter;
 import org.apache.cloudstack.api.ServerApiException;
 import org.apache.cloudstack.api.response.ProviderResponse;
 import org.apache.cloudstack.api.response.VirtualRouterProviderResponse;
+import org.apache.cloudstack.context.CallContext;
+
 import org.apache.log4j.Logger;
 
 import com.cloud.event.EventTypes;
 import com.cloud.exception.InvalidParameterValueException;
 import com.cloud.exception.ResourceAllocationException;
 import com.cloud.network.VirtualRouterProvider;
-import com.cloud.network.VirtualRouterProvider.VirtualRouterProviderType;
+import com.cloud.network.VirtualRouterProvider.Type;
 import com.cloud.network.element.VirtualRouterElementService;
 import com.cloud.user.Account;
-import com.cloud.user.UserContext;
 
 @APICommand(name = "createVirtualRouterElement", responseObject=VirtualRouterProviderResponse.class, description="Create a virtual router element.")
 public class CreateVirtualRouterElementCmd extends BaseAsyncCreateCmd {
@@ -69,15 +70,15 @@ public class CreateVirtualRouterElementCmd extends BaseAsyncCreateCmd {
         return nspId;
     }
     
-    public VirtualRouterProviderType getProviderType() {
+    public Type getProviderType() {
         if (providerType != null) {
-            if (providerType.equalsIgnoreCase(VirtualRouterProviderType.VirtualRouter.toString())) {
-                return VirtualRouterProviderType.VirtualRouter;
-            } else if (providerType.equalsIgnoreCase(VirtualRouterProviderType.VPCVirtualRouter.toString())) {
-                return VirtualRouterProviderType.VPCVirtualRouter;
+            if (providerType.equalsIgnoreCase(Type.VirtualRouter.toString())) {
+                return Type.VirtualRouter;
+            } else if (providerType.equalsIgnoreCase(Type.VPCVirtualRouter.toString())) {
+                return Type.VPCVirtualRouter;
             } else throw new InvalidParameterValueException("Invalid providerType specified");
         } 
-        return VirtualRouterProviderType.VirtualRouter;
+        return Type.VirtualRouter;
     }
 
     /////////////////////////////////////////////////////
@@ -98,7 +99,7 @@ public class CreateVirtualRouterElementCmd extends BaseAsyncCreateCmd {
 
     @Override
     public void execute(){
-        UserContext.current().setEventDetails("Virtual router element Id: "+getEntityId());
+        CallContext.current().setEventDetails("Virtual router element Id: "+getEntityId());
         VirtualRouterProvider result = _service.get(0).getCreatedElement(getEntityId());
         if (result != null) {
             VirtualRouterProviderResponse response = _responseGenerator.createVirtualRouterProviderResponse(result);

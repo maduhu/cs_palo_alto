@@ -61,8 +61,6 @@ public class Script implements Callable<String> {
     Process _process;
     Thread _thread;
 
-    ScriptBuilder _builder;
-
     public Script(String command, long timeout, Logger logger) {
         _command = new ArrayList<String>();
         _command.add(command);
@@ -73,10 +71,6 @@ public class Script implements Callable<String> {
         }
         _process = null;
         _logger = logger != null ? logger : s_logger;
-    }
-
-    protected Script(ScriptBuilder builder) {
-        this(builder._command, builder._timeout, builder._logger);
     }
 
     public Script(boolean runWithSudo, String command, long timeout, Logger logger) {
@@ -207,8 +201,8 @@ public class Script implements Callable<String> {
                         if (interpreter != null) {
                             return interpreter.drain() ? task.getResult() : interpreter.interpret(ir);
                         } else {
-                            // null return is ok apparently
-                            return (_process.exitValue() == 0) ? "Ok" : "Failed, exit code " + _process.exitValue();
+                            // null return exitValue apparently
+                            return String.valueOf(_process.exitValue());
                         }
                     } else {
                         break;
@@ -251,7 +245,7 @@ public class Script implements Callable<String> {
                 error = interpreter.processError(reader);
             }
             else {
-                error = "Non zero exit code : " + _process.exitValue();
+                error = String.valueOf(_process.exitValue());
             }
             
             if (_logger.isDebugEnabled()) {
@@ -450,7 +444,15 @@ public class Script implements Callable<String> {
 
         }
 
-        file = new File(System.getProperty("paths.script") + File.separator + path + File.separator + script);
+        search = System.getProperty("paths.script");
+        
+        search += File.separatorChar + path + File.separator;
+        do {
+            search = search.substring(0, search.lastIndexOf(File.separator));
+            file = new File(search + File.separator + script);
+            s_logger.debug("Looking for " + script + " in " + file.getAbsolutePath());
+        } while (!file.exists() && search.lastIndexOf(File.separator) != -1);
+
         if (file.exists()) {
             return file.getAbsolutePath();
         }
@@ -478,6 +480,28 @@ public class Script implements Callable<String> {
             return null;
         else
             return result.trim();
+    }
+
+    public static int runSimpleBashScriptForExitValue(String command) {
+        return runSimpleBashScriptForExitValue(command, 0);
+    }
+
+    public static int runSimpleBashScriptForExitValue(String command, int timeout) {
+
+        Script s = new Script("/bin/bash", timeout);
+        s.add("-c");
+        s.add(command);
+
+        String result = s.execute(null);
+        if (result == null || result.trim().isEmpty())
+            return -1;
+        else {
+            try {
+                return Integer.valueOf(result.trim());
+            } catch (NumberFormatException e) {
+                return -1;
+            }
+        }
     }
 
 }

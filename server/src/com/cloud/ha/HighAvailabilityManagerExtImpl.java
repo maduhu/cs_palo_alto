@@ -26,9 +26,10 @@ import javax.naming.ConfigurationException;
 
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
+import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
+import org.apache.cloudstack.managed.context.ManagedContextRunnable;
 
 import com.cloud.alert.AlertManager;
-import com.cloud.configuration.dao.ConfigurationDao;
 import com.cloud.usage.dao.UsageJobDao;
 import com.cloud.utils.db.Transaction;
 
@@ -64,9 +65,9 @@ public class HighAvailabilityManagerExtImpl extends HighAvailabilityManagerImpl 
         return true;
     }
 	
-	protected class UsageServerMonitorTask implements Runnable {
+	protected class UsageServerMonitorTask  extends ManagedContextRunnable{
         @Override
-        public void run() {
+        protected void runInContext() {
             if (s_logger.isInfoEnabled()) {
                 s_logger.info("checking health of usage server");
             }

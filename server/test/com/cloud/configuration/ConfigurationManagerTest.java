@@ -17,29 +17,47 @@
 
 package com.cloud.configuration;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
-import java.lang.reflect.Field;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyLong;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.when;
 
-import org.apache.cloudstack.api.command.admin.vlan.DedicatePublicIpRangeCmd;
-import org.apache.cloudstack.api.command.admin.vlan.ReleasePublicIpRangeCmd;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+import junit.framework.Assert;
+
 import org.apache.log4j.Logger;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
+import org.apache.cloudstack.api.command.admin.vlan.DedicatePublicIpRangeCmd;
+import org.apache.cloudstack.api.command.admin.vlan.ReleasePublicIpRangeCmd;
+import org.apache.cloudstack.context.CallContext;
+import org.apache.cloudstack.engine.orchestration.service.NetworkOrchestrationService;
+
 import com.cloud.configuration.Resource.ResourceType;
 import com.cloud.dc.AccountVlanMapVO;
+import com.cloud.dc.DataCenter.NetworkType;
 import com.cloud.dc.DataCenterVO;
 import com.cloud.dc.Vlan;
 import com.cloud.dc.VlanVO;
-import com.cloud.dc.DataCenter.NetworkType;
 import com.cloud.dc.dao.AccountVlanMapDao;
 import com.cloud.dc.dao.DataCenterDao;
 import com.cloud.dc.dao.VlanDao;
-import com.cloud.network.NetworkManager;
+import com.cloud.exception.InvalidParameterValueException;
+import com.cloud.network.IpAddressManager;
+import com.cloud.network.Network.Capability;
 import com.cloud.network.dao.FirewallRulesDao;
 import com.cloud.network.dao.IPAddressDao;
 import com.cloud.network.dao.IPAddressVO;
@@ -48,16 +66,10 @@ import com.cloud.user.Account;
 import com.cloud.user.AccountManager;
 import com.cloud.user.AccountVO;
 import com.cloud.user.ResourceLimitService;
-import com.cloud.user.UserContext;
+import com.cloud.user.UserVO;
 import com.cloud.user.dao.AccountDao;
 import com.cloud.utils.db.Transaction;
 import com.cloud.utils.net.Ip;
-
-import junit.framework.Assert;
-
-import static org.mockito.Matchers.*;
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.doNothing;
 
 public class ConfigurationManagerTest {
 
@@ -74,13 +86,15 @@ public class ConfigurationManagerTest {
     @Mock AccountManager _accountMgr;
     @Mock ProjectManager _projectMgr;
     @Mock ResourceLimitService _resourceLimitMgr;
-    @Mock NetworkManager _networkMgr;
+    @Mock NetworkOrchestrationService _networkMgr;
     @Mock AccountDao _accountDao;
     @Mock VlanDao _vlanDao;
     @Mock AccountVlanMapDao _accountVlanMapDao;
     @Mock IPAddressDao _publicIpAddressDao;
     @Mock DataCenterDao _zoneDao;
     @Mock FirewallRulesDao _firewallDao;
+    @Mock
+    IpAddressManager _ipAddrMgr;
 
     VlanVO vlan = new VlanVO(Vlan.VlanType.VirtualNetwork, "vlantag", "vlangateway","vlannetmask", 1L, "iprange", 1L, 1L, null, null, null);
 
@@ -97,11 +111,15 @@ public class ConfigurationManagerTest {
         configurationMgr._publicIpAddressDao = _publicIpAddressDao;
         configurationMgr._zoneDao = _zoneDao;
         configurationMgr._firewallDao = _firewallDao;
+        configurationMgr._ipAddrMgr = _ipAddrMgr;
 
-        Account account = (Account) new AccountVO("testaccount", 1, "networkdomain", (short) 0, UUID.randomUUID().toString());
+        Account account = new AccountVO("testaccount", 1, "networkdomain", (short) 0, UUID.randomUUID().toString());
         when(configurationMgr._accountMgr.getAccount(anyLong())).thenReturn(account);
         when(configurationMgr._accountDao.findActiveAccount(anyString(), anyLong())).thenReturn(account);
         when(configurationMgr._accountMgr.getActiveAccountById(anyLong())).thenReturn(account);
+
+        UserVO user = new UserVO(1, "testuser", "password", "firstname", "lastName", "email", "timezone", UUID.randomUUID().toString());
+        CallContext.register(user, account);
 
         when(configurationMgr._publicIpAddressDao.countIPs(anyLong(), anyLong(), anyBoolean())).thenReturn(1);
 
@@ -111,8 +129,6 @@ public class ConfigurationManagerTest {
         when(configurationMgr._accountVlanMapDao.persist(any(AccountVlanMapVO.class))).thenReturn(new AccountVlanMapVO());
 
         when(configurationMgr._vlanDao.acquireInLockTable(anyLong(), anyInt())).thenReturn(vlan);
-
-        UserContext.registerContext(1, account, null, true);
 
         Field dedicateIdField = _dedicatePublicIpRangeClass.getDeclaredField("id");
         dedicateIdField.setAccessible(true);
@@ -133,6 +149,11 @@ public class ConfigurationManagerTest {
         Field releaseIdField = _releasePublicIpRangeClass.getDeclaredField("id");
         releaseIdField.setAccessible(true);
         releaseIdField.set(releasePublicIpRangesCmd, 1L);
+    }
+
+    @After
+    public void tearDown() {
+        CallContext.unregister();
     }
 
     @Test
@@ -355,7 +376,7 @@ public class ConfigurationManagerTest {
 
         when(configurationMgr._firewallDao.countRulesByIpId(anyLong())).thenReturn(0L);
 
-        when(configurationMgr._networkMgr.disassociatePublicIpAddress(anyLong(), anyLong(), any(Account.class))).thenReturn(true);
+        when(configurationMgr._ipAddrMgr.disassociatePublicIpAddress(anyLong(), anyLong(), any(Account.class))).thenReturn(true);
 
         when(configurationMgr._vlanDao.releaseFromLockTable(anyLong())).thenReturn(true);
 
@@ -398,14 +419,80 @@ public class ConfigurationManagerTest {
         }
     }
 
+    @Test
+    public void validateEmptyStaticNatServiceCapablitiesTest() {
+        Map<Capability, String> staticNatServiceCapabilityMap = new HashMap<Capability, String>();
+
+        configurationMgr.validateStaticNatServiceCapablities(staticNatServiceCapabilityMap);
+    }
+
+    @Test
+    public void validateInvalidStaticNatServiceCapablitiesTest() {
+        Map<Capability, String> staticNatServiceCapabilityMap = new HashMap<Capability, String>();
+        staticNatServiceCapabilityMap.put(Capability.AssociatePublicIP, "Frue and Talse");
+
+        boolean caught = false;
+        try {
+            configurationMgr.validateStaticNatServiceCapablities(staticNatServiceCapabilityMap);
+        }
+        catch (InvalidParameterValueException e) {
+            Assert.assertTrue(e.getMessage(),e.getMessage().contains("(frue and talse)"));
+            caught = true;
+        }
+        Assert.assertTrue("should not be accepted",caught);
+    }
+
+    @Test
+    public void validateTTStaticNatServiceCapablitiesTest() {
+        Map<Capability, String> staticNatServiceCapabilityMap = new HashMap<Capability, String>();
+        staticNatServiceCapabilityMap.put(Capability.AssociatePublicIP, "true and Talse");
+        staticNatServiceCapabilityMap.put(Capability.ElasticIp, "True");
+
+        configurationMgr.validateStaticNatServiceCapablities(staticNatServiceCapabilityMap);
+    }
+    @Test
+    public void validateFTStaticNatServiceCapablitiesTest() {
+        Map<Capability, String> staticNatServiceCapabilityMap = new HashMap<Capability, String>();
+        staticNatServiceCapabilityMap.put(Capability.AssociatePublicIP, "false");
+        staticNatServiceCapabilityMap.put(Capability.ElasticIp, "True");
+
+        configurationMgr.validateStaticNatServiceCapablities(staticNatServiceCapabilityMap);
+    }
+    @Test
+    public void validateTFStaticNatServiceCapablitiesTest() {
+        Map<Capability, String> staticNatServiceCapabilityMap = new HashMap<Capability, String>();
+        staticNatServiceCapabilityMap.put(Capability.AssociatePublicIP, "true and Talse");
+        staticNatServiceCapabilityMap.put(Capability.ElasticIp, "false");
+
+        boolean caught = false;
+        try {
+            configurationMgr.validateStaticNatServiceCapablities(staticNatServiceCapabilityMap);
+        }
+        catch (InvalidParameterValueException e) {
+            Assert.assertTrue(e.getMessage(),e.getMessage().contains("Capability " + Capability.AssociatePublicIP.getName()
+                        + " can only be set when capability " + Capability.ElasticIp.getName() + " is true"));
+            caught = true;
+        }
+        Assert.assertTrue("should not be accepted",caught);
+    }
+    @Test
+    public void validateFFStaticNatServiceCapablitiesTest() {
+        Map<Capability, String> staticNatServiceCapabilityMap = new HashMap<Capability, String>();
+        staticNatServiceCapabilityMap.put(Capability.AssociatePublicIP, "false");
+        staticNatServiceCapabilityMap.put(Capability.ElasticIp, "False");
+
+        configurationMgr.validateStaticNatServiceCapablities(staticNatServiceCapabilityMap);
+    }
 
     public class DedicatePublicIpRangeCmdExtn extends DedicatePublicIpRangeCmd {
+        @Override
         public long getEntityOwnerId() {
             return 1;
         }
     }
 
     public class ReleasePublicIpRangeCmdExtn extends ReleasePublicIpRangeCmd {
+        @Override
         public long getEntityOwnerId() {
             return 1;
         }

@@ -24,8 +24,7 @@ from marvin.integration.lib.base import *
 from marvin.integration.lib.common import *
 from marvin import remoteSSHClient
 from nose.plugins.attrib import attr
-import datetime
-
+from marvin.cloudstackException import cloudstackAPIException
 
 class Services:
     """Test Account Services
@@ -78,12 +77,14 @@ class Services:
                          "template": {
                                 "displaytext": "Public Template",
                                 "name": "Public template",
-                                "url": "http://download.cloud.com/releases/2.0.0/UbuntuServer-10-04-64bit.vhd.bz2",
-                                "hypervisor": 'XenServer',
-                                "format": 'VHD',
+                                "ostype": 'CentOS 5.3 (64-bit)',
+                                "url": "",
+                                "hypervisor": '',
+                                "format": '',
                                 "isfeatured": True,
                                 "ispublic": True,
                                 "isextractable": True,
+                                "templatefilter": "self"
                         },
                         "natrule": {
                                     "publicport": 22,
@@ -304,6 +305,7 @@ class TestRemoveUserFromAccount(cloudstackTestCase):
                             domainid=self.account.domainid
                             )
         self.debug("Created user: %s" % user_1.id)
+
         user_2 = User.create(
                             self.apiclient,
                             self.services["user"],
@@ -383,114 +385,6 @@ class TestRemoveUserFromAccount(cloudstackTestCase):
                             'Running',
                             "Check state of VMs associated with account"
                             )
-        return
-
-    @attr(tags=["advanced", "basic", "eip", "advancedns", "sg"])
-    def test_02_remove_all_users(self):
-        """Test Remove both users from the account
-        """
-
-        # Validate the following
-        # 1. Remove both the users from the account.
-        # 2. Verify account is removed
-        # 3. Verify all VMs associated with that account got removed
-
-        # Create an User associated with account and VMs
-        user_1 = User.create(
-                            self.apiclient,
-                            self.services["user"],
-                            account=self.account.name,
-                            domainid=self.account.domainid
-                            )
-        self.debug("Created user: %s" % user_1.id)
-        user_2 = User.create(
-                            self.apiclient,
-                            self.services["user"],
-                            account=self.account.name,
-                            domainid=self.account.domainid
-                            )
-        self.debug("Created user: %s" % user_2.id)
-        vm_1 = VirtualMachine.create(
-                                  self.apiclient,
-                                  self.services["virtual_machine"],
-                                  accountid=self.account.name,
-                                  serviceofferingid=self.service_offering.id
-                                  )
-        self.debug("Deployed VM in account: %s, ID: %s" % (
-                                                           self.account.name,
-                                                           vm_1.id
-                                                           ))
-        vm_2 = VirtualMachine.create(
-                                  self.apiclient,
-                                  self.services["virtual_machine"],
-                                  accountid=self.account.name,
-                                  serviceofferingid=self.service_offering.id
-                                  )
-        self.debug("Deployed VM in account: %s, ID: %s" % (
-                                                           self.account.name,
-                                                           vm_2.id
-                                                           ))
-        # Get users associated with an account
-        # (Total 3: 2 - Created & 1 default generated while account creation)
-        users = list_users(
-                          self.apiclient,
-                          account=self.account.name,
-                          domainid=self.account.domainid
-                          )
-        self.assertEqual(
-                         isinstance(users, list),
-                         True,
-                         "Check for valid list users response"
-                         )
-        for user in users:
-
-            self.debug("Deleting user: %s" % user.id)
-            cmd = deleteUser.deleteUserCmd()
-            cmd.id = user.id
-            self.apiclient.deleteUser(cmd)
-
-        interval = list_configurations(
-                                    self.apiclient,
-                                    name='account.cleanup.interval'
-                                    )
-        self.assertEqual(
-                         isinstance(interval, list),
-                         True,
-                         "Check for valid list configurations response"
-                         )
-        self.debug("account.cleanup.interval: %s" % interval[0].value)
-
-        # Sleep to ensure that all resources are deleted
-        time.sleep(int(interval[0].value))
-
-        # Account is removed after last user is deleted
-        account_response = list_accounts(
-                                         self.apiclient,
-                                         id=self.account.id
-                                         )
-        self.assertEqual(
-                            account_response,
-                            None,
-                            "Check List VM response"
-                            )
-        # All VMs associated with account are removed.
-        vm_response = list_virtual_machines(
-                                    self.apiclient,
-                                    account=self.account.name,
-                                    domainid=self.account.domainid
-                                    )
-        self.assertEqual(
-                            vm_response,
-                            None,
-                            "Check List VM response"
-                            )
-        # DomR associated with account is deleted
-        with self.assertRaises(Exception):
-            list_routers(
-                          self.apiclient,
-                          account=self.account.name,
-                          domainid=self.account.domainid
-                        )
         return
 
 
@@ -753,12 +647,13 @@ class TestServiceOfferingHierarchy(cloudstackTestCase):
                             )
 
         cls._cleanup = [
-                        cls.account_1,
-                        cls.account_2,
-                        cls.service_offering,
-                        cls.domain_1,
-                        cls.domain_2,
-                        ]
+                       cls.account_2,
+                       cls.domain_2,
+                       cls.service_offering,
+                       cls.account_1,
+                       cls.domain_1,
+                       ]
+
         return
 
     @classmethod
@@ -820,37 +715,24 @@ class TestServiceOfferingHierarchy(cloudstackTestCase):
                                                   domainid=self.domain_2.id
                                                   )
         self.assertEqual(
-                            isinstance(service_offerings, list),
-                            True,
+                            service_offerings,
+                            None,
                             "Check List Service Offerings for a valid response"
                         )
-        self.assertNotEqual(
-                            len(service_offerings),
-                            0,
-                            "Check List Service Offerings response"
-                            )
-
-        for service_offering in service_offerings:
-            self.assertEqual(
-               service_offering.id,
-               self.service_offering.id,
-               "Check Service offering ID for domain" + str(self.domain_2.name)
-            )
         return
 
 
-class TesttemplateHierarchy(cloudstackTestCase):
+class TestTemplateHierarchy(cloudstackTestCase):
 
     @classmethod
     def setUpClass(cls):
         cls.api_client = super(
-                               TesttemplateHierarchy,
+                               TestTemplateHierarchy,
                                cls).getClsTestClient().getApiClient()
         cls.services = Services().services
         # Get Zone settings
         cls.zone = get_zone(cls.api_client, cls.services)
-        cls.services['mode'] = cls.zone.networktype
-        cls.services["template"]["zoneid"] = cls.zone.id
+        cls.services['mode'] = cls.zone.networktype 
 
         # Create domains, accounts and template
         cls.domain_1 = Domain.create(
@@ -879,18 +761,32 @@ class TesttemplateHierarchy(cloudstackTestCase):
                             domainid=cls.domain_2.id
                             )
 
+        builtin_info = get_builtin_template_info(cls.api_client, cls.zone.id)
+        cls.services["template"]["url"] = builtin_info[0] 
+        cls.services["template"]["hypervisor"] = builtin_info[1]     
+        cls.services["template"]["format"] = builtin_info[2] 
+        
+        # Register new template
         cls.template = Template.register(
-                                            cls.api_client,
-                                            cls.services["template"],
-                                            account=cls.account_1.name,
-                                            domainid=cls.domain_1.id
+                                        cls.api_client,
+                                        cls.services["template"],
+                                        zoneid=cls.zone.id,
+                                        account=cls.account_1.name,
+                                        domainid=cls.domain_1.id
                                         )
+
+        # Wait for template to download
+        cls.template.download(cls.api_client)
+
+        # Wait for template status to be changed across
+        time.sleep(60)
+
         cls._cleanup = [
+                        cls.account_2,
+                        cls.domain_2,
                         cls.template,
                         cls.account_1,
-                        cls.account_2,
                         cls.domain_1,
-                        cls.domain_2,
                         ]
         return
 
@@ -926,7 +822,6 @@ class TesttemplateHierarchy(cloudstackTestCase):
         # 2. Verify template is also visible for domain_2
 
         # Sleep to ensure that template state is reflected across
-        time.sleep(self.services["sleep"])
 
         templates = list_templates(
                                     self.apiclient,
@@ -937,12 +832,12 @@ class TesttemplateHierarchy(cloudstackTestCase):
         self.assertEqual(
                             isinstance(templates, list),
                             True,
-                            "Check List templates for a valid response"
+                            "Template response %s is not a list" % templates
                         )
         self.assertNotEqual(
                             len(templates),
                             0,
-                            "Check List Template response"
+                            "No templates found"
                             )
 
         for template in templates:
@@ -955,19 +850,20 @@ class TesttemplateHierarchy(cloudstackTestCase):
         # Verify private service offering is not visible to other domain
         templates = list_templates(
                                     self.apiclient,
-                                    templatefilter='self',
+                                    id=self.template.id,
+                                    templatefilter='all',
                                     account=self.account_2.name,
                                     domainid=self.domain_2.id
                                 )
         self.assertEqual(
                             isinstance(templates, list),
                             True,
-                            "Check List templates for a valid response"
+                            "Template response %s is not a list" % templates
                         )
         self.assertNotEqual(
                             len(templates),
                             0,
-                            "Check List Service Offerings response"
+                            "No templates found"
                             )
 
         for template in templates:
@@ -1082,8 +978,7 @@ class TestAddVmToSubDomain(cloudstackTestCase):
 
     @attr(tags=["advanced", "basic", "eip", "advancedns", "sg"])
     def test_01_add_vm_to_subdomain(self):
-        """ Test Sub domain allowed to launch VM  when a Domain level zone is
-            created"""
+        """ Test Sub domain allowed to launch VM  when a Domain level zone is created"""
 
         # Validate the following
         # 1. Verify VM created by Account_1 is in Running state
@@ -1165,12 +1060,6 @@ class TestUserDetails(cloudstackTestCase):
 
     def tearDown(self):
         try:
-            interval = list_configurations(
-                                    self.apiclient,
-                                    name='account.cleanup.interval'
-                                    )
-            # Sleep to ensure that all resources are deleted
-            time.sleep(int(interval[0].value) * 2)
             #Clean up, terminate the created network offerings
             cleanup_resources(self.apiclient, self.cleanup)
         except Exception as e:
@@ -1471,12 +1360,6 @@ class TestUserLogin(cloudstackTestCase):
 
     def tearDown(self):
         try:
-            interval = list_configurations(
-                                    self.apiclient,
-                                    name='account.cleanup.interval'
-                                    )
-            # Sleep to ensure that all resources are deleted
-            time.sleep(int(interval[0].value) * 2)
             #Clean up, terminate the created network offerings
             cleanup_resources(self.apiclient, self.cleanup)
         except Exception as e:
@@ -1513,7 +1396,7 @@ class TestUserLogin(cloudstackTestCase):
                              username=self.account.name,
                              password=self.services["account"]["password"]
                              )
-        self.assertEqual(respose, None, "Login response should not be none")
+
         self.debug("Login API response: %s" % respose)
 
         self.assertNotEqual(
@@ -1582,9 +1465,8 @@ class TestUserLogin(cloudstackTestCase):
         respose = User.login(
                              self.apiclient,
                              username=self.account.name,
-                             password=self.services["account"]["password"]
-                             )
-        self.assertEqual(respose, None, "Login response should not be none")
+                             password=self.services["account"]["password"],
+                             domainid=domain.id)
         self.debug("Login API response: %s" % respose)
 
         self.assertNotEqual(
@@ -1647,12 +1529,6 @@ class TestDomainForceRemove(cloudstackTestCase):
         try:
             #Clean up, terminate the created resources
             cleanup_resources(self.apiclient, self.cleanup)
-            interval = list_configurations(
-                                    self.apiclient,
-                                    name='account.cleanup.interval'
-                                    )
-            # Sleep to ensure that all resources are deleted
-            time.sleep(int(interval[0].value) * 2)
         except Exception as e:
             raise Exception("Warning: Exception during cleanup : %s" % e)
         return
@@ -1801,38 +1677,30 @@ class TestDomainForceRemove(cloudstackTestCase):
         try:
             domain.delete(self.apiclient, cleanup=True)
         except Exception as e:
-            self.fail("Failed to delete domain: %s" % e)
+            self.debug("Waiting for account.cleanup.interval" +
+                " to cleanup any remaining resouces")
+            # Sleep 3*account.gc to ensure that all resources are deleted
+            wait_for_cleanup(self.apiclient, ["account.cleanup.interval"]*3)
+            with self.assertRaises(cloudstackAPIException):
+                Domain.list(
+                        self.apiclient,
+                        id=domain.id,
+                        listall=True
+                        )
 
-        self.debug("Waiting for account.cleanup.interval" +
-                   " to cleanup any remaining resouces")
-
-        configurations = Configurations.list(
-                                            self.apiclient,
-                                            name="account.cleanup.interval",
-                                            listall=True
-                                            )
-        self.debug("account.cleanup.interval: %s" %
-                                            int(configurations[0].value))
-        # Sleep to ensure that all resources are deleted
-        time.sleep(int(configurations[0].value) * 2)
-        self.debug("Checking if the resources in domain are deleted or not..")
-        accounts = Account.list(
-                                self.apiclient,
-                                name=self.account_1.name,
-                                domainid=self.account_1.domainid,
-                                listall=True
-                                )
-
-        self.assertEqual(
-            accounts,
-            None,
-            "Account should get automatically deleted after domain removal"
-            )
+        self.debug("Checking if the resources in domain are deleted")
+        with self.assertRaises(cloudstackAPIException):
+            Account.list(
+                        self.apiclient,
+                        name=self.account_1.name,
+                        domainid=self.account_1.domainid,
+                        listall=True
+                        )
         return
 
     @attr(tags=["domains", "advanced", "advancedns", "simulator"])
     def test_DeleteDomain(self):
-        """ Test delete domain with force option"""
+        """ Test delete domain without force option"""
 
         # Steps for validations
         # 1. create a domain DOM
@@ -1854,7 +1722,6 @@ class TestDomainForceRemove(cloudstackTestCase):
                                 self.services["domain"],
                                 parentdomainid=self.domain.id
                                 )
-        self._cleanup.append(domain)
         self.debug("Domain: %s is created successfully." % domain.name)
         self.debug(
             "Checking if the created domain is listed in list domains API")

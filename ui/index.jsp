@@ -238,10 +238,10 @@ under the License.
             <!-- Step 6: Network -->
             <div class="step network always-load" wizard-step-id="network">
               <!-- 5a: Network description -->
-              <div class="wizard-step-conditional nothing-to-select">     
+              <div class="wizard-step-conditional nothing-to-select">
 								<p id="from_instance_page_1"><fmt:message key="message.zone.no.network.selection"/></p>
 								<p id="from_instance_page_2"><fmt:message key="message.please.proceed"/></p>
-								<p id="from_vpc_tier"></p>     										
+								<p id="from_vpc_tier"></p>
               </div>
 
               <!-- 5b: Select network -->
@@ -298,7 +298,7 @@ under the License.
                                 <div class="field name hide-if-unselected">
                                   <div class="name"> <span class="field-required">*</span> <fmt:message key="label.name"/></div>
                                   <div class="value">
-                                    <input type="text" class="required" name="new-network-name" />
+                                      <input type="text" class="required disallowSpecialCharacters" name="new-network-name" />
                                   </div>
                                 </div>
 
@@ -348,7 +348,7 @@ under the License.
                       <span><fmt:message key="label.name"/> (<fmt:message key="label.optional"/>)</span>
                     </div>
                     <div class="value">
-                      <input type="text" name="displayname" />
+                      <input type="text" name="displayname" class="disallowSpecialCharacters" />
                     </div>
                   </div>
                   <!-- Add to group -->
@@ -357,7 +357,7 @@ under the License.
                       <span><fmt:message key="label.add.to.group"/> (<fmt:message key="label.optional"/>)</span>
                     </div>
                     <div class="value">
-                      <input type="text" name="groupname" />
+                      <input type="text" name="groupname" class="disallowSpecialCharacters" />
                     </div>
                   </div>
                   <!-- Zone -->
@@ -420,6 +420,20 @@ under the License.
                       <a href="4"><fmt:message key="label.edit"/></a>
                     </div>
                   </div>
+
+                  <!-- Affinity -->
+                  <div class="select">
+                      <div class="name">
+                          <span><fmt:message key="label.affinity.groups"/></span>
+                      </div>
+                      <div class="value">
+                          <span wizard-field="affinity-groups"></span>
+                      </div>
+                      <div class="edit">
+                          <a href="5"><fmt:message key="label.edit"/></a>
+                      </div>
+                  </div>
+                  
                   <!-- Primary network -->
                   <div class="select odd">
                     <div class="name">
@@ -429,10 +443,10 @@ under the License.
                       <span wizard-field="default-network" conditional-field="select-network"></span>
                     </div>
                     <div class="edit">
-                      <a href="5"><fmt:message key="label.edit"/></a>
+                      <a href="6"><fmt:message key="label.edit"/></a>
                     </div>
                   </div>
-                  
+
                   <!-- Security groups -->
                   <div class="select odd">
                     <div class="name">
@@ -442,7 +456,7 @@ under the License.
                       <span wizard-field="security-groups" conditional-field="select-security-group"></span>
                     </div>
                     <div class="edit">
-                      <a href="5"><fmt:message key="label.edit"/></a>
+                      <a href="6"><fmt:message key="label.edit"/></a>
                     </div>
                   </div>
                 </div>
@@ -467,6 +481,37 @@ under the License.
           <div class="button previous"><span><fmt:message key="label.previous"/></span></div>
           <div class="button cancel"><span><fmt:message key="label.cancel"/></span></div>
           <div class="button next"><span><fmt:message key="label.next"/></span></div>
+        </div>
+      </div>
+      <!-- Accounts wizard -->
+      <div class="multi-wizard accounts-wizard">
+        <form>
+          <div class="steps">
+              <div class="content ldap-account-choice">
+                <div class="select-container">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style="width:40px">Select</th>
+                        <th style="width:110px">Realname</th>
+                        <th style="width:70px">Username</th>
+                        <th>Email</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="content input-area">
+                <div class="select-container manual-account-details">
+                </div>
+              </div>
+          </div>
+        </form>
+        <div class="buttons">
+          <button class="cancel ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only"><span><fmt:message key="label.cancel"/></span></button>
+          <button class="next ok ui-button ui-widget ui-state-default ui-corner-all ui-button-text-only"><span><fmt:message key="label.add"/></span></button>
         </div>
       </div>
       <!-- Zone wizard -->
@@ -505,7 +550,7 @@ under the License.
                   </div>
                   <div class="select-area advanced-zone disabled">
                     <div class="desc">
-                      <fmt:message key="message.desc.advanced.zone"/>  
+                      <fmt:message key="message.desc.advanced.zone"/>
 										</div>
                     <input type="radio" name="network-model" value="Advanced" />
                     <label><fmt:message key="label.advanced"/></label>
@@ -533,7 +578,7 @@ under the License.
           <div class="setup-zone" zone-wizard-form="zone"
                zone-wizard-step-id="addZone">
             <div class="info-desc">
-              <fmt:message key="message.desc.zone"/> 
+              <fmt:message key="message.desc.zone"/>
 						</div>
             <div class="content input-area">
               <div class="select-container"></div>
@@ -752,7 +797,7 @@ under the License.
               <li class="secondary-storage"><fmt:message key="label.secondary.storage"/></li>
             </ul>
             <div class="info-desc">
-              <fmt:message key="message.desc.host"/>         
+              <fmt:message key="message.desc.host"/>
 						</div>
             <div class="content input-area">
               <div class="select-container"></div>
@@ -976,7 +1021,7 @@ under the License.
             <span><fmt:message key="label.refresh"/></span>
           </div>
           <div id="update_ssl_button" class="button action main-action reduced-hide lock" title="Updates your Console Proxy SSL Certificate">
-            <span class="icon">&nbsp;</span>            
+            <span class="icon">&nbsp;</span>
             <span><fmt:message key="label.update.ssl.cert"/></span>
           </div>
         </div>
@@ -1050,7 +1095,7 @@ under the License.
               <span class="button view-all hosts"
                     view-all-title="<fmt:message key="label.virtual.routers"/>"
                     view-all-target="virtualRouters"><fmt:message key="label.view.all"/></span>
-            </li> 
+            </li>
           </ul>
         </div>
       </div>
@@ -1225,7 +1270,7 @@ under the License.
             <div class="title">
               <span></span>
             </div>
-            
+
              <div class="button fetch-latest">
                <span><fmt:message key="label.fetch.latest"/></span>
               </div>
@@ -1373,66 +1418,7 @@ under the License.
                 <div class="field timezone">
                   <div class="name"></div>
                   <div class="value">
-                    <select name="timezone">
-                      <option value="Etc/GMT+12">[UTC-12:00] GMT-12:00</option>
-                      <option value="Etc/GMT+11">[UTC-11:00] GMT-11:00</option>
-                      <option value="Pacific/Samoa">[UTC-11:00] Samoa Standard Time</option>
-                      <option value="Pacific/Honolulu">[UTC-10:00] Hawaii Standard Time</option>
-                      <option value="US/Alaska">[UTC-09:00] Alaska Standard Time</option>
-                      <option value="America/Los_Angeles">[UTC-08:00] Pacific Standard Time</option>
-                      <option value="Mexico/BajaNorte">[UTC-08:00] Baja California</option>
-                      <option value="US/Arizona">[UTC-07:00] Arizona</option>
-                      <option value="US/Mountain">[UTC-07:00] Mountain Standard Time</option>
-                      <option value="America/Chihuahua">[UTC-07:00] Chihuahua, La Paz</option>
-                      <option value="America/Chicago">[UTC-06:00] Central Standard Time</option>
-                      <option value="America/Costa_Rica">[UTC-06:00] Central America</option>
-                      <option value="America/Mexico_City">[UTC-06:00] Mexico City, Monterrey</option>
-                      <option value="Canada/Saskatchewan">[UTC-06:00] Saskatchewan</option>
-                      <option value="America/Bogota">[UTC-05:00] Bogota, Lima</option>
-                      <option value="America/New_York">[UTC-05:00] Eastern Standard Time</option>
-                      <option value="America/Caracas">[UTC-04:00] Venezuela Time</option>
-                      <option value="America/Asuncion">[UTC-04:00] Paraguay Time</option>
-                      <option value="America/Cuiaba">[UTC-04:00] Amazon Time</option>
-                      <option value="America/Halifax">[UTC-04:00] Atlantic Standard Time</option>
-                      <option value="America/La_Paz">[UTC-04:00] Bolivia Time</option>
-                      <option value="America/Santiago">[UTC-04:00] Chile Time</option>
-                      <option value="America/St_Johns">[UTC-03:30] Newfoundland Standard Time</option>
-                      <option value="America/Araguaina">[UTC-03:00] Brasilia Time</option>
-                      <option value="America/Argentina/Buenos_Aires">[UTC-03:00] Argentine Time</option>
-                      <option value="America/Cayenne">[UTC-03:00] French Guiana Time</option>
-                      <option value="America/Godthab">[UTC-03:00] Greenland Time</option>
-                      <option value="America/Montevideo">[UTC-03:00] Uruguay Time]</option>
-                      <option value="Etc/GMT+2">[UTC-02:00] GMT-02:00</option>
-                      <option value="Atlantic/Azores">[UTC-01:00] Azores Time</option>
-                      <option value="Atlantic/Cape_Verde">[UTC-01:00] Cape Verde Time</option>
-                      <option value="Africa/Casablanca">[UTC] Casablanca</option>
-                      <option value="Etc/UTC">[UTC] Coordinated Universal Time</option>
-                      <option value="Atlantic/Reykjavik">[UTC] Reykjavik</option>
-                      <option value="Europe/London">[UTC] Western European Time</option>
-                      <option value="CET">[UTC+01:00] Central European Time</option>
-                      <option value="Europe/Bucharest">[UTC+02:00] Eastern European Time</option>
-                      <option value="Africa/Johannesburg">[UTC+02:00] South Africa Standard Time</option>
-                      <option value="Asia/Beirut">[UTC+02:00] Beirut</option>
-                      <option value="Africa/Cairo">[UTC+02:00] Cairo</option>
-                      <option value="Asia/Jerusalem">[UTC+02:00] Israel Standard Time</option>
-                      <option value="Europe/Minsk">[UTC+02:00] Minsk</option>
-                      <option value="Europe/Moscow">[UTC+03:00] Moscow Standard Time</option>
-                      <option value="Africa/Nairobi">[UTC+03:00] Eastern African Time</option>
-                      <option value="Asia/Karachi">[UTC+05:00] Pakistan Time</option>
-                      <option value="Asia/Kolkata">[UTC+05:30] India Standard Time</option>
-                      <option value="Asia/Bangkok">[UTC+05:30] Indochina Time</option>
-                      <option value="Asia/Shanghai">[UTC+08:00] China Standard Time</option>
-                      <option value="Asia/Kuala_Lumpur">[UTC+08:00] Malaysia Time</option>
-                      <option value="Australia/Perth">[UTC+08:00] Western Standard Time (Australia)</option>
-                      <option value="Asia/Taipei">[UTC+08:00] Taiwan</option>
-                      <option value="Asia/Tokyo">[UTC+09:00] Japan Standard Time</option>
-                      <option value="Asia/Seoul">[UTC+09:00] Korea Standard Time</option>
-                      <option value="Australia/Adelaide">[UTC+09:30] Central Standard Time (South Australia)</option>
-                      <option value="Australia/Darwin">[UTC+09:30] Central Standard Time (Northern Territory)</option>
-                      <option value="Australia/Brisbane">[UTC+10:00] Eastern Standard Time (Queensland)</option>
-                      <option value="Australia/Canberra">[UTC+10:00] Eastern Standard Time (New South Wales)</option>
-                      <option value="Pacific/Guam">[UTC+10:00] Chamorro Standard Time</option>
-                      <option value="Pacific/Auckland">[UTC+12:00] New Zealand Standard Time</option>
+                    <select name="timezone">                      
                     </select>
                   </div>
                 </div>
@@ -1618,7 +1604,7 @@ under the License.
     <script src="lib/jquery.js" type="text/javascript"></script>
     <script src="lib/jquery.easing.js" type="text/javascript"></script>
     <script src="lib/jquery.validate.js" type="text/javascript"></script>
-    <script src="lib/jquery-ui/js/jquery-ui.js" type="text/javascript"></script>		
+    <script src="lib/jquery-ui/js/jquery-ui.js" type="text/javascript"></script>
     <script src="lib/date.js" type="text/javascript"></script>
     <script src="lib/jquery.cookies.js" type="text/javascript"></script>
     <script src="lib/jquery.md5.js" type="text/javascript" ></script>
@@ -1642,7 +1628,7 @@ under the License.
     <script type="text/javascript" src="scripts/ui/utils.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/ui/events.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/ui/dialog.js?t=<%=now%>"></script>
-    
+
     <script type="text/javascript" src="scripts/ui/widgets/multiEdit.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/ui/widgets/overlay.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/ui/widgets/dataTable.js?t=<%=now%>"></script>
@@ -1650,7 +1636,7 @@ under the License.
     <script type="text/javascript" src="scripts/ui/widgets/listView.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/ui/widgets/detailView.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/ui/widgets/treeView.js?t=<%=now%>"></script>
-    <script type="text/javascript" src="scripts/ui/widgets/notifications.js?t=<%=now%>"></script> 
+    <script type="text/javascript" src="scripts/ui/widgets/notifications.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/ui/widgets/tagger.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/ui/widgets/toolTip.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/cloud.core.callbacks.js?t=<%=now%>"></script>
@@ -1671,8 +1657,8 @@ under the License.
     <script type="text/javascript" src="scripts/dashboard.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/ui-custom/instanceWizard.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/instanceWizard.js?t=<%=now%>"></script>
-    <script type="text/javascript" src="scripts/affinity.js?t=<%=now%>"></script>  
-    <script type="text/javascript" src="scripts/ui-custom/affinity.js?t=<%=now%>"></script>  
+    <script type="text/javascript" src="scripts/affinity.js?t=<%=now%>"></script>
+    <script type="text/javascript" src="scripts/ui-custom/affinity.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/instances.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/events.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/regions.js?t=<%=now%>"></script>
@@ -1687,6 +1673,8 @@ under the License.
     <script type="text/javascript" src="scripts/ui-custom/uploadVolume.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/storage.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/templates.js?t=<%=now%>"></script>
+    <script type="text/javascript" src="scripts/accountsWizard.js?t=<%=now%>"></script>
+    <script type="text/javascript" src="scripts/ui-custom/accountsWizard.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/accounts.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/configuration.js?t=<%=now%>"></script>
     <script type="text/javascript" src="scripts/globalSettings.js?t=<%=now%>"></script>

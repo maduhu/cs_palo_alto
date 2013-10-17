@@ -5,9 +5,9 @@
 # to you under the Apache License, Version 2.0 (the
 # "License"); you may not use this file except in compliance
 # with the License.  You may obtain a copy of the License at
-# 
+#
 #   http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing,
 # software distributed under the License is distributed on an
 # "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -79,7 +79,7 @@ deleteSnapshot=15
 createSnapshotPolicy=15
 deleteSnapshotPolicies=15
 listSnapshotPolicies=15
-
+revertSnapshot=15
 
 #### template commands
 createTemplate=15
@@ -210,10 +210,9 @@ scaleSystemVm=1
 #### configuration commands
 updateConfiguration=1
 listConfigurations=1
-ldapConfig=1
-ldapRemove=1
 listCapabilities=15
 listDeploymentPlanners=1
+cleanVMReservations=1
 
 #### pod commands
 createPod=1
@@ -249,6 +248,14 @@ listSwifts=1
 addS3=1
 listS3s=1
 
+#### image store commands
+addImageStore=1
+listImageStores=1
+deleteImageStore=1
+createSecondaryStagingStore=1
+listSecondaryStagingStores=1
+deleteSecondaryStagingStore=1
+
 #### host commands
 addHost=3
 addCluster=1
@@ -268,6 +275,7 @@ releaseHostReservation=1
 #### VmWare DC
 addVmwareDc=1
 removeVmwareDc=1
+listVmwareDcs=1
 
 #### volume commands
 attachVolume=15
@@ -376,12 +384,12 @@ listProjectInvitations=15
 updateProjectInvitation=15
 deleteProjectInvitation=15
 
-#### 
+####
 createFirewallRule=15
 deleteFirewallRule=15
 listFirewallRules=15
 
-#### 
+####
 createEgressFirewallRule=15
 deleteEgressFirewallRule=15
 listEgressFirewallRules=15
@@ -606,6 +614,19 @@ revertToVMSnapshot=15
 
 #### Baremetal commands
 addBaremetalHost=1
+addBaremetalPxeKickStartServer=1
+addBaremetalPxePingServer=1
+addBaremetalDhcp=1
+listBaremetalDhcp=1
+listBaremetalPxeServers=1
+
+#### UCS commands
+addUcsManager=1
+listUcsManagers=1
+listUcsProfiles=1
+listUcsBlades=1
+associateUcsProfileToBlade=1
+removedeleteUcsManager=1
 
 #### New Load Balancer commands
 createLoadBalancer=15
@@ -661,3 +682,10 @@ listDedicatedZones=1
 listDedicatedPods=1
 listDedicatedClusters=1
 listDedicatedHosts=1
+
+### LDAP
+listLdapConfigurations=15
+addLdapConfiguration=3
+deleteLdapConfiguration=3
+listLdapUsers=3
+ldapCreateAccount=3

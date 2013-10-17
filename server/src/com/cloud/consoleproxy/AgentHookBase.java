@@ -19,7 +19,6 @@ package com.cloud.consoleproxy;
 
 import java.util.Date;
 import java.util.Random;
-import java.util.UUID;
 
 import org.apache.log4j.Logger;
 
@@ -34,10 +33,9 @@ import com.cloud.agent.api.GetVncPortCommand;
 import com.cloud.agent.api.StartupCommand;
 import com.cloud.agent.api.StartupProxyCommand;
 import com.cloud.agent.api.proxy.StartConsoleProxyAgentHttpHandlerCommand;
-import com.cloud.configuration.Config;
-import com.cloud.configuration.dao.ConfigurationDao;
 import com.cloud.exception.AgentUnavailableException;
 import com.cloud.exception.OperationTimedoutException;
+import com.cloud.host.Host;
 import com.cloud.host.HostVO;
 import com.cloud.host.Status;
 import com.cloud.host.dao.HostDao;
@@ -48,8 +46,11 @@ import com.cloud.servlet.ConsoleProxyServlet;
 import com.cloud.utils.Ternary;
 import com.cloud.vm.VirtualMachine;
 import com.cloud.vm.dao.VMInstanceDao;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+
+import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
 
 /**
  * Utility class to manage interactions with agent-based console access
@@ -79,6 +80,7 @@ public abstract class AgentHookBase implements AgentHook {
         this._ms = ms;
     }
 
+    @Override
     public AgentControlAnswer onConsoleAccessAuthentication(ConsoleAccessAuthenticationCommand cmd) {
         Long vmId = null;
 
@@ -194,24 +196,18 @@ public abstract class AgentHookBase implements AgentHook {
         return new ConsoleAccessAuthenticationAnswer(cmd, true);
     }
 
+    @Override
     public void startAgentHttpHandlerInVM(StartupProxyCommand startupCmd) {
         StartConsoleProxyAgentHttpHandlerCommand cmd = null;
-        if (_configDao.isPremium()) {
-            String storePassword = String.valueOf(_random.nextLong());
-            byte[] ksBits =
-                    _ksMgr.getKeystoreBits(ConsoleProxyManager.CERTIFICATE_NAME, ConsoleProxyManager.CERTIFICATE_NAME,
-                            storePassword);
+        String storePassword = String.valueOf(_random.nextLong());
+        byte[] ksBits = _ksMgr.getKeystoreBits(ConsoleProxyManager.CERTIFICATE_NAME, ConsoleProxyManager.CERTIFICATE_NAME, storePassword);
 
-            assert (ksBits != null);
-            if (ksBits == null) {
-                s_logger.error("Could not find and construct a valid SSL certificate");
-            }
-            cmd = new StartConsoleProxyAgentHttpHandlerCommand(ksBits, storePassword);
-            cmd.setEncryptorPassword(getEncryptorPassword());
-        } else {
-            cmd = new StartConsoleProxyAgentHttpHandlerCommand();
-            cmd.setEncryptorPassword(getEncryptorPassword());
+        assert (ksBits != null);
+        if (ksBits == null) {
+            s_logger.error("Could not find and construct a valid SSL certificate");
         }
+        cmd = new StartConsoleProxyAgentHttpHandlerCommand(ksBits, storePassword);
+        cmd.setEncryptorPassword(getEncryptorPassword());
 
         try {
 
@@ -241,33 +237,33 @@ public abstract class AgentHookBase implements AgentHook {
                             + startupCmd.getProxyVmId(), e);
         }
     }
-    
+
     private String getEncryptorPassword() {
     	String key;
     	String iv;
     	ConsoleProxyPasswordBasedEncryptor.KeyIVPair keyIvPair = null;
-    	
+
     	// if we failed after reset, something is definitely wrong
     	for(int i = 0; i < 2; i++) {
 	    	key = _ms.getEncryptionKey();
 	    	iv = _ms.getEncryptionIV();
-	    	
+
 	    	keyIvPair = new ConsoleProxyPasswordBasedEncryptor.KeyIVPair(key, iv);
-	    	
+
 	    	if(keyIvPair.getIvBytes() == null || keyIvPair.getIvBytes().length != 16 ||
 	    		keyIvPair.getKeyBytes() == null || keyIvPair.getKeyBytes().length != 16) {
-	    		
+
 	    		s_logger.warn("Console access AES KeyIV sanity check failed, reset and regenerate");
 	    		_ms.resetEncryptionKeyIV();
 	    	} else {
 	    		break;
 	    	}
     	}
-    	
+
 		Gson gson = new GsonBuilder().create();
 		return gson.toJson(keyIvPair);
     }
-     
+
 
     protected abstract HostVO findConsoleProxyHost(StartupProxyCommand cmd);
 
@@ -277,7 +273,7 @@ public abstract class AgentHookBase implements AgentHook {
     }
 
     @Override
-    public void onAgentConnect(HostVO host, StartupCommand cmd) {
+    public void onAgentConnect(Host host, StartupCommand cmd) {
         // no-op
     }
 

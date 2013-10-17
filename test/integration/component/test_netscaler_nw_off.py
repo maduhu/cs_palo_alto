@@ -62,7 +62,7 @@ class Services:
                                     "protocol": 'TCP',
                                 },
                          "netscaler_1": {
-                                "ipaddress": '192.168.100.213',
+                                "ipaddress": '10.147.60.27',
                                 "username": 'nsroot',
                                 "password": 'nsroot',
                                 "networkdevicetype": 'NetscalerVPXLoadBalancer',
@@ -117,7 +117,7 @@ class Services:
                                             "UserData": 'VirtualRouter',
                                             "StaticNat": 'VirtualRouter',
                                     },
-                                    "servicecapabilitylist": {
+                                    "serviceCapabilityList": {
                                         "SourceNat": {
                                             "SupportedSourceNatTypes": "peraccount"
                                         },
@@ -157,13 +157,35 @@ class Services:
                                     "publicport": 22,
                                     "openfirewall": False,
                          },
-                         "ostypeid": '01853327-513e-4508-9628-f1f55db1946f',
+                         "lbrule_port_2221": {
+                                    "name": "SSH",
+                                    "alg": "leastconn",
+                                    # Algorithm used for load balancing
+                                    "privateport": 22,
+                                    "publicport": 2221,
+                                    "openfirewall": False,
+                         },
+                         "natrule": {
+                                    "privateport": 22,
+                                    "publicport": 22,
+                                    "protocol": "TCP"
+                         },
+                         "natrule_port_66": {
+                                    "privateport": 22,
+                                    "publicport": 66,
+                                    "protocol": "TCP"
+                         },
+                         "fw_rule": {
+                                    "startport": 1,
+                                    "endport": 6000,
+                                    "cidr": '55.55.0.0/11',
+                                    # Any network (For creating FW rule)
+                         },
+                         "ostype": 'CentOS 5.3 (64-bit)',
                          # Cent OS 5.3 (64 bit)
                          "sleep": 60,
                          "timeout": 10,
-                         "mode": 'advanced'
                     }
-
 
 class TestAddMultipleNetScaler(cloudstackTestCase):
 
@@ -386,13 +408,12 @@ class TestAddMultipleNSDiffZone(cloudstackTestCase):
         for zone in zones:
             if zone.networktype == 'Advanced':
                 zone_list.append(zone)
-
         self.assertGreater(
                            len(zone_list),
                            1,
                            "Atleast 2 advanced mode zones should be present for this test"
                            )
-
+        zoneid=zone_list[0].id
         physical_networks = PhysicalNetwork.list(
                                                  self.apiclient,
                                                  zoneid=zone_list[0].id
@@ -402,43 +423,12 @@ class TestAddMultipleNSDiffZone(cloudstackTestCase):
                 True,
                 "There should be atleast one physical network for advanced zone"
                 )
-        physical_network = physical_networks[0]
         self.debug("Adding netscaler device: %s" %
                                     self.services["netscaler_1"]["ipaddress"])
-        netscaler = NetScaler.add(
-                                  self.apiclient,
-                                  self.services["netscaler_1"],
-                                  physicalnetworkid=physical_network.id
-                                  )
+        netscaler_1 = add_netscaler(self.apiclient, zoneid, self.services["netscaler_1"])
         self.cleanup.append(netscaler_1)
-        self.debug("Checking if Netscaler network service provider is enabled?")
 
-        nw_service_providers = NetworkServiceProvider.list(
-                                        self.apiclient,
-                                        name='Netscaler',
-                                        physicalnetworkid=physical_network.id
-                                        )
-        self.assertEqual(
-                         isinstance(nw_service_providers, list),
-                         True,
-                         "Network service providers list should not be empty"
-                         )
-        netscaler_provider = nw_service_providers[0]
-        if netscaler_provider.state != 'Enabled':
-            self.debug("Netscaler provider is not enabled. Enabling it..")
-            response = NetworkServiceProvider.update(
-                                          self.apiclient,
-                                          id=netscaler_provider.id,
-                                          state='Enabled'
-                                          )
-            self.assertEqual(
-                        response.state,
-                        "Enabled",
-                        "Network service provider should be in enabled state"
-                         )
-        else:
-            self.debug("Netscaler service provider is already enabled.")
-
+        physical_network = physical_networks[0]
         ns_list = NetScaler.list(
                                  self.apiclient,
                                  lbdeviceid=netscaler_1.lbdeviceid
@@ -470,6 +460,7 @@ class TestAddMultipleNSDiffZone(cloudstackTestCase):
                                                  self.apiclient,
                                                  zoneid=zone_list[1].id
                                                  )
+        zoneid=zone_list[1].id
         self.assertEqual(
                 isinstance(physical_networks, list),
                 True,
@@ -479,11 +470,7 @@ class TestAddMultipleNSDiffZone(cloudstackTestCase):
 
         self.debug("Adding netscaler device: %s" %
                                     self.services["netscaler_2"]["ipaddress"])
-        netscaler_2 = NetScaler.add(
-                                  self.apiclient,
-                                  self.services["netscaler_2"],
-                                  physicalnetworkid=physical_network.id
-                                  )
+        netscaler_2 = add_netscaler(self.apiclient, zoneid, self.services["netscaler_2"])
         self.cleanup.append(netscaler_2)
         ns_list = NetScaler.list(
                                  self.apiclient,
@@ -530,7 +517,7 @@ class TestNetScalerSharedMode(cloudstackTestCase):
         cls.template = get_template(
                             cls.api_client,
                             cls.zone.id,
-                            cls.services["ostypeid"]
+                            cls.services["ostype"]
                             )
 
         physical_networks = PhysicalNetwork.list(
@@ -606,11 +593,10 @@ class TestNetScalerSharedMode(cloudstackTestCase):
                                      )
         cls._cleanup = [
                         cls.service_offering,
-                        cls.network_offering,
                         cls.account_1,
                         cls.account_2,
                         cls.account_3,
-                        cls.account_5
+                        cls.account_5,
                         ]
         cls.cleanup_devices = [cls.netscaler_1]
         return
@@ -620,17 +606,6 @@ class TestNetScalerSharedMode(cloudstackTestCase):
         try:
             #Cleanup resources used
             cleanup_resources(cls.api_client, cls._cleanup)
-            interval = list_configurations(
-                                    cls.api_client,
-                                    name='network.gc.interval'
-                                    )
-            wait = list_configurations(
-                                    cls.api_client,
-                                    name='network.gc.wait'
-                                    )
-            # Sleep to ensure that all resources are deleted
-            time.sleep(int(interval[0].value) + int(wait[0].value))
-            cleanup_resources(cls.api_client, cls.cleanup_devices)
         except Exception as e:
             raise Exception("Warning: Exception during cleanup : %s" % e)
         return
@@ -689,21 +664,21 @@ class TestNetScalerSharedMode(cloudstackTestCase):
         self.network_1 = Network.create(
                                     self.apiclient,
                                     self.services["network"],
-                                    accountid=self.account_1.account.name,
-                                    domainid=self.account_1.account.domainid,
+                                    accountid=self.account_1.name,
+                                    domainid=self.account_1.domainid,
                                     networkofferingid=self.network_offering.id,
                                     zoneid=self.zone.id
                                     )
         self.debug("Created network with ID: %s" % self.network_1.id)
 
-        self.debug("Deploying VM in account: %s" % self.account_1.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_1.name)
 
         # Spawn an instance in that network
         virtual_machine_1 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_1.account.name,
-                                  domainid=self.account_1.account.domainid,
+                                  accountid=self.account_1.name,
+                                  domainid=self.account_1.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_1.id)]
                                   )
@@ -737,21 +712,21 @@ class TestNetScalerSharedMode(cloudstackTestCase):
         self.network_2 = Network.create(
                                 self.apiclient,
                                 self.services["network"],
-                                accountid=self.account_2.account.name,
-                                domainid=self.account_2.account.domainid,
+                                accountid=self.account_2.name,
+                                domainid=self.account_2.domainid,
                                 networkofferingid=self.network_offering.id,
                                 zoneid=self.zone.id
                                 )
         self.debug("Created network with ID: %s" % self.network_2.id)
 
-        self.debug("Deploying VM in account: %s" % self.account_2.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_2.name)
 
         # Spawn an instance in that network
         virtual_machine_2 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_2.account.name,
-                                  domainid=self.account_2.account.domainid,
+                                  accountid=self.account_2.name,
+                                  domainid=self.account_2.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_2.id)]
                                   )
@@ -784,21 +759,21 @@ class TestNetScalerSharedMode(cloudstackTestCase):
         self.network_3 = Network.create(
                             self.apiclient,
                             self.services["network"],
-                            accountid=self.account_3.account.name,
-                            domainid=self.account_3.account.domainid,
+                            accountid=self.account_3.name,
+                            domainid=self.account_3.domainid,
                             networkofferingid=self.network_offering.id,
                             zoneid=self.zone.id
                         )
         self.debug("Created network with ID: %s" % self.network_3.id)
-        self.debug("Deploying VM in account: %s" % self.account_3.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_3.name)
 
         with self.assertRaises(Exception):
             # Spawn an instance in that network
             virtual_machine_3 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_3.account.name,
-                                  domainid=self.account_3.account.domainid,
+                                  accountid=self.account_3.name,
+                                  domainid=self.account_3.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_3.id)]
                                   )
@@ -858,8 +833,8 @@ class TestNetScalerSharedMode(cloudstackTestCase):
                                                     self.network_offering.id)
         networks = Network.list(
                             self.apiclient,
-                            account=self.account_3.account.name,
-                            domainid=self.account_3.account.domainid,
+                            account=self.account_3.name,
+                            domainid=self.account_3.domainid,
                             zoneid=self.zone.id,
                             listall=True
                         )
@@ -867,19 +842,19 @@ class TestNetScalerSharedMode(cloudstackTestCase):
                          isinstance(networks, list),
                          True,
                          "Network should be present for the account: %s" %
-                                                self.account_3.account.name
+                                                self.account_3.name
                          )
         self.network_3 = networks[0]
         self.debug("Created network with ID: %s" % self.network_3.id)
 
-        self.debug("Deploying VM in account: %s" % self.account_3.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_3.name)
 
         # Spawn an instance in that network
         virtual_machine_3 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_3.account.name,
-                                  domainid=self.account_3.account.domainid,
+                                  accountid=self.account_3.name,
+                                  domainid=self.account_3.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_3.id)]
                                   )
@@ -924,21 +899,21 @@ class TestNetScalerSharedMode(cloudstackTestCase):
         self.network_4 = Network.create(
                             self.apiclient,
                             self.services["network"],
-                            accountid=self.account_4.account.name,
-                            domainid=self.account_4.account.domainid,
+                            accountid=self.account_4.name,
+                            domainid=self.account_4.domainid,
                             networkofferingid=self.network_offering.id,
                             zoneid=self.zone.id
                         )
         self.debug("Created network with ID: %s" % self.network_4.id)
 
-        self.debug("Deploying VM in account: %s" % self.account_4.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_4.name)
 
         # Spawn an instance in that network
         virtual_machine_4 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_4.account.name,
-                                  domainid=self.account_4.account.domainid,
+                                  accountid=self.account_4.name,
+                                  domainid=self.account_4.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_4.id)]
                                   )
@@ -971,22 +946,22 @@ class TestNetScalerSharedMode(cloudstackTestCase):
         self.network_5 = Network.create(
                             self.apiclient,
                             self.services["network"],
-                            accountid=self.account_5.account.name,
-                            domainid=self.account_5.account.domainid,
+                            accountid=self.account_5.name,
+                            domainid=self.account_5.domainid,
                             networkofferingid=self.network_offering.id,
                             zoneid=self.zone.id
                         )
         self.debug("Created network with ID: %s" % self.network_5.id)
 
-        self.debug("Deploying VM in account: %s" % self.account_5.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_5.name)
 
         with self.assertRaises(Exception):
             # Spawn an instance in that network
             virtual_machine_5 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_5.account.name,
-                                  domainid=self.account_5.account.domainid,
+                                  accountid=self.account_5.name,
+                                  domainid=self.account_5.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_5.id)]
                                   )
@@ -1006,9 +981,9 @@ class TestNetScalerSharedMode(cloudstackTestCase):
         # 2. Create an instance from another account
         # 3. Deploy instance should succeed
 
-        self.debug("Delete account: %s" % self.account_4.account.name)
+        self.debug("Delete account: %s" % self.account_4.name)
         self.account_4.delete(self.apiclient)
-        self.debug("Account: %s is deleted" % self.account_4.account.name)
+        self.debug("Account: %s is deleted" % self.account_4.name)
 
         interval = list_configurations(
                                     self.apiclient,
@@ -1028,21 +1003,21 @@ class TestNetScalerSharedMode(cloudstackTestCase):
         self.network_5 = Network.create(
                             self.apiclient,
                             self.services["network"],
-                            accountid=self.account_5.account.name,
-                            domainid=self.account_5.account.domainid,
+                            accountid=self.account_5.name,
+                            domainid=self.account_5.domainid,
                             networkofferingid=self.network_offering.id,
                             zoneid=self.zone.id
                         )
         self.debug("Created network with ID: %s" % self.network_5.id)
 
-        self.debug("Deploying VM in account: %s" % self.account_5.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_5.name)
 
         # Spawn an instance in that network
         virtual_machine_5 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_5.account.name,
-                                  domainid=self.account_5.account.domainid,
+                                  accountid=self.account_5.name,
+                                  domainid=self.account_5.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_5.id)]
                                   )
@@ -1087,7 +1062,7 @@ class TestNwOffDedicatedNetscaler(cloudstackTestCase):
         cls.template = get_template(
                             cls.api_client,
                             cls.zone.id,
-                            cls.services["ostypeid"]
+                            cls.services["ostype"]
                             )
 
         physical_networks = PhysicalNetwork.list(
@@ -1133,7 +1108,6 @@ class TestNwOffDedicatedNetscaler(cloudstackTestCase):
                                             )
         cls._cleanup = [
                         cls.service_offering,
-                        cls.network_offering,
                         cls.netscaler,
                         ]
         return
@@ -1219,8 +1193,8 @@ class TestNwOffDedicatedNetscaler(cloudstackTestCase):
         self.network_1 = Network.create(
                                     self.apiclient,
                                     self.services["network"],
-                                    accountid=self.account_1.account.name,
-                                    domainid=self.account_1.account.domainid,
+                                    accountid=self.account_1.name,
+                                    domainid=self.account_1.domainid,
                                     networkofferingid=self.network_offering.id,
                                     zoneid=self.zone.id
                                     )
@@ -1230,8 +1204,8 @@ class TestNwOffDedicatedNetscaler(cloudstackTestCase):
             VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_1.account.name,
-                                  domainid=self.account_1.account.domainid,
+                                  accountid=self.account_1.name,
+                                  domainid=self.account_1.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_1.id)]
                                   )
@@ -1254,7 +1228,7 @@ class TestNwOffNetscaler(cloudstackTestCase):
         cls.template = get_template(
                             cls.api_client,
                             cls.zone.id,
-                            cls.services["ostypeid"]
+                            cls.services["ostype"]
                             )
 
         physical_networks = PhysicalNetwork.list(
@@ -1313,8 +1287,6 @@ class TestNwOffNetscaler(cloudstackTestCase):
                                             )
         cls._cleanup = [
                         cls.service_offering,
-                        cls.network_offering,
-                        cls.network_offering_shared,
                         cls.netscaler_1,
                         cls.netscaler_2,
                         ]
@@ -1412,17 +1384,17 @@ class TestNwOffNetscaler(cloudstackTestCase):
         self.network = Network.create(
                                     self.apiclient,
                                     self.services["network"],
-                                    accountid=self.account_1.account.name,
-                                    domainid=self.account_1.account.domainid,
+                                    accountid=self.account_1.name,
+                                    domainid=self.account_1.domainid,
                                     networkofferingid=self.network_offering.id,
                                     zoneid=self.zone.id
                                     )
-        self.debug("Deploying VM in account: %s" % self.account_1.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_1.name)
         virtual_machine = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_1.account.name,
-                                  domainid=self.account_1.account.domainid,
+                                  accountid=self.account_1.name,
+                                  domainid=self.account_1.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network.id)]
                                   )
@@ -1433,8 +1405,8 @@ class TestNwOffNetscaler(cloudstackTestCase):
         self.network_2 = Network.create(
                                 self.apiclient,
                                 self.services["network"],
-                                accountid=self.account_2.account.name,
-                                domainid=self.account_2.account.domainid,
+                                accountid=self.account_2.name,
+                                domainid=self.account_2.domainid,
                                 networkofferingid=self.network_offering.id,
                                 zoneid=self.zone.id
                                )
@@ -1443,16 +1415,16 @@ class TestNwOffNetscaler(cloudstackTestCase):
             VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_2.account.name,
-                                  domainid=self.account_2.account.domainid,
+                                  accountid=self.account_2.name,
+                                  domainid=self.account_2.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_2.id)]
                                   )
         self.debug(
             "Attempt to create second network with dedicated network offering failed!")
-        self.debug("Deleting account: %s" % self.account_1.account.name)
+        self.debug("Deleting account: %s" % self.account_1.name)
         self.account_1.delete(self.apiclient)
-        self.debug("Account: %s deleted!" % self.account_1.account.name)
+        self.debug("Account: %s deleted!" % self.account_1.name)
         interval = list_configurations(
                                     self.apiclient,
                                     name='network.gc.interval'
@@ -1465,14 +1437,14 @@ class TestNwOffNetscaler(cloudstackTestCase):
         # Sleep to ensure that all resources are deleted
         time.sleep(int(interval[0].value) + int(wait[0].value))
 
-        self.debug("Deploying VM in account: %s" % self.account_2.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_2.name)
 
         # Spawn an instance in that network
         virtual_machine_2 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_2.account.name,
-                                  domainid=self.account_2.account.domainid,
+                                  accountid=self.account_2.name,
+                                  domainid=self.account_2.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_2.id)]
                                   )
@@ -1505,21 +1477,21 @@ class TestNwOffNetscaler(cloudstackTestCase):
         self.network_3 = Network.create(
                             self.apiclient,
                             self.services["network"],
-                            accountid=self.account_3.account.name,
-                            domainid=self.account_3.account.domainid,
+                            accountid=self.account_3.name,
+                            domainid=self.account_3.domainid,
                             networkofferingid=self.network_offering_shared.id,
                             zoneid=self.zone.id
                         )
         self.debug("Created network with ID: %s" % self.network_3.id)
 
-        self.debug("Deploying VM in account: %s" % self.account_3.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_3.name)
 
         # Spawn an instance in that network
         virtual_machine_3 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_3.account.name,
-                                  domainid=self.account_3.account.domainid,
+                                  accountid=self.account_3.name,
+                                  domainid=self.account_3.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_3.id)]
                                   )
@@ -1564,7 +1536,7 @@ class TestNwOffSToDUpgrade(cloudstackTestCase):
         cls.template = get_template(
                             cls.api_client,
                             cls.zone.id,
-                            cls.services["ostypeid"]
+                            cls.services["ostype"]
                             )
 
         physical_networks = PhysicalNetwork.list(
@@ -1624,8 +1596,6 @@ class TestNwOffSToDUpgrade(cloudstackTestCase):
                                             )
         cls._cleanup = [
                         cls.service_offering,
-                        cls.network_offering_dedicated,
-                        cls.network_offering_shared,
                         cls.netscaler_1,
                         cls.netscaler_2,
                         ]
@@ -1709,21 +1679,21 @@ class TestNwOffSToDUpgrade(cloudstackTestCase):
         self.network_1 = Network.create(
                             self.apiclient,
                             self.services["network"],
-                            accountid=self.account_1.account.name,
-                            domainid=self.account_1.account.domainid,
+                            accountid=self.account_1.name,
+                            domainid=self.account_1.domainid,
                             networkofferingid=self.network_offering_shared.id,
                             zoneid=self.zone.id
                             )
         self.debug("Created network with ID: %s" % self.network_1.id)
 
-        self.debug("Deploying VM in account: %s" % self.account_1.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_1.name)
 
         # Spawn an instance in that network
         virtual_machine_1 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_1.account.name,
-                                  domainid=self.account_1.account.domainid,
+                                  accountid=self.account_1.name,
+                                  domainid=self.account_1.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_1.id)]
                                   )
@@ -1757,21 +1727,21 @@ class TestNwOffSToDUpgrade(cloudstackTestCase):
         self.network_2 = Network.create(
                             self.apiclient,
                             self.services["network"],
-                            accountid=self.account_2.account.name,
-                            domainid=self.account_2.account.domainid,
+                            accountid=self.account_2.name,
+                            domainid=self.account_2.domainid,
                             networkofferingid=self.network_offering_shared.id,
                             zoneid=self.zone.id
                             )
         self.debug("Created network with ID: %s" % self.network_2.id)
 
-        self.debug("Deploying VM in account: %s" % self.account_2.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_2.name)
 
         # Spawn an instance in that network
         virtual_machine_2 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_2.account.name,
-                                  domainid=self.account_2.account.domainid,
+                                  accountid=self.account_2.name,
+                                  domainid=self.account_2.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_2.id)]
                                   )
@@ -1804,20 +1774,20 @@ class TestNwOffSToDUpgrade(cloudstackTestCase):
         self.network_3 = Network.create(
                             self.apiclient,
                             self.services["network"],
-                            accountid=self.account_3.account.name,
-                            domainid=self.account_3.account.domainid,
+                            accountid=self.account_3.name,
+                            domainid=self.account_3.domainid,
                             networkofferingid=self.network_offering_dedicated.id,
                             zoneid=self.zone.id
                         )
         self.debug("Created network with ID: %s" % self.network_3.id)
-        self.debug("Deploying VM in account: %s" % self.account_3.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_3.name)
 
         # Spawn an instance in that network
         virtual_machine_3 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_3.account.name,
-                                  domainid=self.account_3.account.domainid,
+                                  accountid=self.account_3.name,
+                                  domainid=self.account_3.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_3.id)]
                                   )
@@ -1855,7 +1825,7 @@ class TestNwOffSToDUpgrade(cloudstackTestCase):
                                   )
 
         self.debug("Stopping All VMs before upgrading network for account: %s" %
-                            self.account_1.account.name)
+                            self.account_1.name)
         virtual_machine_1.stop(self.apiclient)
 
         list_vm_response = VirtualMachine.list(
@@ -1910,7 +1880,7 @@ class TestNwOffSToDUpgrade(cloudstackTestCase):
                         )
 
         self.debug("Starting All VMs after upgrading network for account: %s" %
-                            self.account_1.account.name)
+                            self.account_1.name)
         virtual_machine_1.start(self.apiclient)
 
         list_vm_response = VirtualMachine.list(
@@ -1943,9 +1913,9 @@ class TestNwOffSToDUpgrade(cloudstackTestCase):
 
             public_ip = PublicIPAddress.create(
                                 self.apiclient,
-                                accountid=self.account_1.account.name,
+                                accountid=self.account_1.name,
                                 zoneid=self.zone.id,
-                                domainid=self.account_1.account.domainid,
+                                domainid=self.account_1.domainid,
                                 networkid=self.network_1.id
                                 )
             self.debug(
@@ -1956,7 +1926,7 @@ class TestNwOffSToDUpgrade(cloudstackTestCase):
                                     self.apiclient,
                                     self.services["lbrule"],
                                     ipaddressid=public_ip.ipaddress.id,
-                                    accountid=self.account_1.account.name,
+                                    accountid=self.account_1.name,
                                     networkid=self.network_1.id
                                 )
             self.debug("Created the load balancing rule for public IP: %s" %
@@ -1981,7 +1951,7 @@ class TestNwOffDToSUpgrade(cloudstackTestCase):
         cls.template = get_template(
                             cls.api_client,
                             cls.zone.id,
-                            cls.services["ostypeid"]
+                            cls.services["ostype"]
                             )
 
         physical_networks = PhysicalNetwork.list(
@@ -2041,8 +2011,6 @@ class TestNwOffDToSUpgrade(cloudstackTestCase):
                                             )
         cls._cleanup = [
                         cls.service_offering,
-                        cls.network_offering_dedicated,
-                        cls.network_offering_shared,
                         cls.netscaler_1,
                         cls.netscaler_2,
                         ]
@@ -2126,21 +2094,21 @@ class TestNwOffDToSUpgrade(cloudstackTestCase):
         self.network_1 = Network.create(
                             self.apiclient,
                             self.services["network"],
-                            accountid=self.account_1.account.name,
-                            domainid=self.account_1.account.domainid,
+                            accountid=self.account_1.name,
+                            domainid=self.account_1.domainid,
                             networkofferingid=self.network_offering_shared.id,
                             zoneid=self.zone.id
                             )
         self.debug("Created network with ID: %s" % self.network_1.id)
 
-        self.debug("Deploying VM in account: %s" % self.account_1.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_1.name)
 
         # Spawn an instance in that network
         virtual_machine_1 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_1.account.name,
-                                  domainid=self.account_1.account.domainid,
+                                  accountid=self.account_1.name,
+                                  domainid=self.account_1.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_1.id)]
                                   )
@@ -2174,21 +2142,21 @@ class TestNwOffDToSUpgrade(cloudstackTestCase):
         self.network_2 = Network.create(
                             self.apiclient,
                             self.services["network"],
-                            accountid=self.account_2.account.name,
-                            domainid=self.account_2.account.domainid,
+                            accountid=self.account_2.name,
+                            domainid=self.account_2.domainid,
                             networkofferingid=self.network_offering_shared.id,
                             zoneid=self.zone.id
                             )
         self.debug("Created network with ID: %s" % self.network_2.id)
 
-        self.debug("Deploying VM in account: %s" % self.account_2.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_2.name)
 
         # Spawn an instance in that network
         virtual_machine_2 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_2.account.name,
-                                  domainid=self.account_2.account.domainid,
+                                  accountid=self.account_2.name,
+                                  domainid=self.account_2.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_2.id)]
                                   )
@@ -2221,20 +2189,20 @@ class TestNwOffDToSUpgrade(cloudstackTestCase):
         self.network_3 = Network.create(
                             self.apiclient,
                             self.services["network"],
-                            accountid=self.account_3.account.name,
-                            domainid=self.account_3.account.domainid,
+                            accountid=self.account_3.name,
+                            domainid=self.account_3.domainid,
                             networkofferingid=self.network_offering_dedicated.id,
                             zoneid=self.zone.id
                         )
         self.debug("Created network with ID: %s" % self.network_3.id)
-        self.debug("Deploying VM in account: %s" % self.account_3.account.name)
+        self.debug("Deploying VM in account: %s" % self.account_3.name)
 
         # Spawn an instance in that network
         virtual_machine_3 = VirtualMachine.create(
                                   self.apiclient,
                                   self.services["virtual_machine"],
-                                  accountid=self.account_3.account.name,
-                                  domainid=self.account_3.account.domainid,
+                                  accountid=self.account_3.name,
+                                  domainid=self.account_3.domainid,
                                   serviceofferingid=self.service_offering.id,
                                   networkids=[str(self.network_3.id)]
                                   )
@@ -2262,7 +2230,7 @@ class TestNwOffDToSUpgrade(cloudstackTestCase):
                             "VM state should be running after deployment"
                         )
 
-        self.debug("Stopping all VMs in account: %s" % self.account_3.account.name)
+        self.debug("Stopping all VMs in account: %s" % self.account_3.name)
         virtual_machine_3.stop(self.apiclient)
 
         list_vm_response = VirtualMachine.list(
@@ -2315,7 +2283,7 @@ class TestNwOffDToSUpgrade(cloudstackTestCase):
                         self.network_offering_shared.id,
                         "Network offering ID should match with new offering ID"
                         )
-        self.debug("Starting instances in account: %s" % self.account_3.account.name)
+        self.debug("Starting instances in account: %s" % self.account_3.name)
         virtual_machine_3.start(self.apiclient)
 
         list_vm_response = VirtualMachine.list(
@@ -2347,9 +2315,9 @@ class TestNwOffDToSUpgrade(cloudstackTestCase):
 
             public_ip = PublicIPAddress.create(
                                 self.apiclient,
-                                accountid=self.account_3.account.name,
+                                accountid=self.account_3.name,
                                 zoneid=self.zone.id,
-                                domainid=self.account_3.account.domainid,
+                                domainid=self.account_3.domainid,
                                 networkid=self.network_3.id
                                 )
             self.debug(
@@ -2360,11 +2328,645 @@ class TestNwOffDToSUpgrade(cloudstackTestCase):
                                     self.apiclient,
                                     self.services["lbrule"],
                                     ipaddressid=public_ip.ipaddress.id,
-                                    accountid=self.account_3.account.name,
+                                    accountid=self.account_3.name,
                                     networkid=self.network_3.id
                                 )
             self.debug("Created the load balancing rule for public IP: %s" %
                                                 public_ip.ipaddress.ipaddress)
         except Exception as e:
             self.fail("Failed to create load balancing rule - %s" % e)
+        return
+
+class TestNOWithNetscaler(cloudstackTestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.api_client = super(
+                               TestNOWithNetscaler,
+                               cls
+                               ).getClsTestClient().getApiClient()
+
+        cls.services = Services().services
+        # Get Zone, Domain and templates
+        cls.domain = get_domain(cls.api_client, cls.services)
+        cls.zone = get_zone(cls.api_client, cls.services)
+        cls.services['mode'] = cls.zone.networktype
+        cls.template = get_template(
+                            cls.api_client,
+                            cls.zone.id,
+                            cls.services["ostype"]
+                            )
+
+        cls.services["virtual_machine"]["zoneid"] = cls.zone.id
+        cls.services["virtual_machine"]["template"] = cls.template.id
+        try:
+           cls.netscaler = add_netscaler(cls.api_client, cls.zone.id, cls.services["netscaler_1"])
+           cls._cleanup = [
+                    cls.netscaler
+                    ]
+           cls.service_offering = ServiceOffering.create(
+                                            cls.api_client,
+                                            cls.services["service_offering"]
+                                            )
+        except Exception as e:
+           cls.tearDownClass()
+           raise Exception ("Warning: Exception in setUpClass: %s" % e)
+        return
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            #Cleanup resources used
+            cleanup_resources(cls.api_client, cls._cleanup)
+        except Exception as e:
+            raise Exception("Warning: Exception during cleanup : %s" % e)
+        return
+
+    def setUp(self):
+        self.apiclient = self.testClient.getApiClient()
+        self.dbclient = self.testClient.getDbConnection()
+        self.account = Account.create(
+                                     self.apiclient,
+                                     self.services["account"],
+                                     admin=True,
+                                     domainid=self.domain.id
+                                     )
+        self.cleanup = []
+        return
+
+    def tearDown(self):
+        try:
+            self.account.delete(self.apiclient)
+            cleanup_resources(self.apiclient, self.cleanup)
+        except Exception as e:
+            raise Exception("Warning: Exception during cleanup : %s" % e)
+        return
+
+    @attr(tags = ["advancedns"])
+    def test_01_network_off_without_conserve_mode(self):
+        """Test Nw off with Conserve mode off, VR-All services, LB-netscaler
+        """
+
+
+        # Validate the following
+        # 1. Create a Network from the above network offering and deploy a VM.
+        # 2. On source NAT ipaddress, we should NOT be allowed to add LB rule
+        # 3. On source NAT ipaddress, we should NOT be allowed to add PF rule
+        # 4. On an ipaddress that has PF rules, we should NOT be allowed to
+        #    add a LB rules.
+        # 5. On an ipaddress that has Lb rules , we should NOT allow firewall
+        #    rules to be programmed.
+        # 6. On an ipaddress that has Lb rules , we should NOT allow PF rules
+        #    to be programmed.
+        # 7. We should be allowed to program multiple PF rules on the same Ip
+        #    address on different public ports.
+        # 8. We should be allowed to program multiple LB rules on the same Ip
+        #    address for different public port ranges.
+        # 9. On source NAT ipaddress, we should NOT be allowed to Enable VPN.
+
+        # Create a network offering with all virtual router services enabled
+        self.debug(
+            "Creating n/w offering with all services in VR, LB in NS & conserve mode:ON"
+            )
+        self.network_offering = NetworkOffering.create(
+                                            self.api_client,
+                                            self.services["network_offering"],
+                                            conservemode=False
+                                            )
+        self.cleanup.append(self.network_offering)
+
+        self.debug("Created n/w offering with ID: %s" %
+                                                    self.network_offering.id)
+        # Enable Network offering
+        self.network_offering.update(self.apiclient, state='Enabled')
+
+        # Creating network using the network offering created
+        self.debug("Creating network with network offering: %s" %
+                                                    self.network_offering.id)
+        self.network = Network.create(
+                                    self.apiclient,
+                                    self.services["network"],
+                                    accountid=self.account.name,
+                                    domainid=self.account.domainid,
+                                    networkofferingid=self.network_offering.id,
+                                    zoneid=self.zone.id
+                                    )
+        self.debug("Created network with ID: %s" % self.network.id)
+
+        self.debug("Deploying VM in account: %s" % self.account.name)
+
+        # Spawn an instance in that network
+        virtual_machine = VirtualMachine.create(
+                                  self.apiclient,
+                                  self.services["virtual_machine"],
+                                  accountid=self.account.name,
+                                  domainid=self.account.domainid,
+                                  serviceofferingid=self.service_offering.id,
+                                  networkids=[str(self.network.id)]
+                                  )
+        self.debug("Deployed VM in network: %s" % self.network.id)
+
+        src_nat_list = PublicIPAddress.list(
+                                        self.apiclient,
+                                        associatednetworkid=self.network.id,
+                                        account=self.account.name,
+                                        domainid=self.account.domainid,
+                                        listall=True,
+                                        issourcenat=True,
+                                        )
+        self.assertEqual(
+                         isinstance(src_nat_list, list),
+                         True,
+                         "List Public IP should return a valid source NAT"
+                         )
+        self.assertNotEqual(
+                    len(src_nat_list),
+                    0,
+                    "Length of response from listPublicIp should not be 0"
+                    )
+
+        src_nat = src_nat_list[0]
+
+        self.debug("Trying to create LB rule on source NAT IP: %s" %
+                                                        src_nat.ipaddress)
+        # Create Load Balancer rule with source NAT
+        with self.assertRaises(Exception):
+            LoadBalancerRule.create(
+                                    self.apiclient,
+                                    self.services["lbrule"],
+                                    ipaddressid=src_nat.id,
+                                    accountid=self.account.name
+                                )
+
+        self.debug(
+            "Trying to create a port forwarding rule in source NAT: %s" %
+                                                            src_nat.ipaddress)
+        #Create NAT rule
+        with self.assertRaises(Exception):
+            NATRule.create(
+                           self.apiclient,
+                           virtual_machine,
+                           self.services["natrule"],
+                           ipaddressid=src_nat.id
+                           )
+        self.debug("Creating firewall rule on source NAT: %s" %
+                                                        src_nat.ipaddress)
+        #Create Firewall rule on source NAT
+        fw_rule = FireWallRule.create(
+                            self.apiclient,
+                            ipaddressid=src_nat.id,
+                            protocol='TCP',
+                            cidrlist=[self.services["fw_rule"]["cidr"]],
+                            startport=self.services["fw_rule"]["startport"],
+                            endport=self.services["fw_rule"]["endport"]
+                            )
+
+        self.debug("Created firewall rule: %s" % fw_rule.id)
+
+        fw_rules = FireWallRule.list(
+                                     self.apiclient,
+                                     id=fw_rule.id
+                                    )
+        self.assertEqual(
+                         isinstance(fw_rules, list),
+                         True,
+                         "List fw rules should return a valid firewall rules"
+                         )
+
+        self.assertNotEqual(
+                            len(fw_rules),
+                            0,
+                            "Length of fw rules response should not be zero"
+                            )
+
+        self.debug("Associating public IP for network: %s" % self.network.id)
+        ip_with_nat_rule = PublicIPAddress.create(
+                                    self.apiclient,
+                                    accountid=self.account.name,
+                                    zoneid=self.zone.id,
+                                    domainid=self.account.domainid,
+                                    networkid=self.network.id
+                                    )
+
+        self.debug("Associated %s with network %s" % (
+                                        ip_with_nat_rule.ipaddress,
+                                        self.network.id
+                                        ))
+        self.debug("Creating PF rule for IP address: %s" %
+                                        ip_with_nat_rule.ipaddress)
+        NATRule.create(
+                         self.apiclient,
+                         virtual_machine,
+                         self.services["natrule"],
+                         ipaddressid=ip_with_nat_rule.ipaddress.id
+                      )
+
+        self.debug("Trying to create LB rule on IP with NAT: %s" %
+                                    ip_with_nat_rule.ipaddress)
+
+        # Create Load Balancer rule on IP already having NAT rule
+        with self.assertRaises(Exception):
+                LoadBalancerRule.create(
+                                    self.apiclient,
+                                    self.services["lbrule"],
+                                    ipaddressid=ip_with_nat_rule.ipaddress.id,
+                                    accountid=self.account.name
+                                    )
+        self.debug("Creating PF rule with public port: 66")
+
+        nat_rule = NATRule.create(
+                         self.apiclient,
+                         virtual_machine,
+                         self.services["natrule_port_66"],
+                         ipaddressid=ip_with_nat_rule.ipaddress.id
+                      )
+
+        # Check if NAT rule created successfully
+        nat_rules = NATRule.list(
+                                 self.apiclient,
+                                 id=nat_rule.id
+                                 )
+
+        self.assertEqual(
+                         isinstance(nat_rules, list),
+                         True,
+                         "List NAT rules should return valid list"
+                         )
+
+        self.debug("Associating public IP for network: %s" % self.network.id)
+        ip_with_lb_rule = PublicIPAddress.create(
+                                self.apiclient,
+                                accountid=self.account.name,
+                                zoneid=self.zone.id,
+                                domainid=self.account.domainid,
+                                networkid=self.network.id
+                                )
+        self.debug("Associated %s with network %s" % (
+                                        ip_with_lb_rule.ipaddress,
+                                        self.network.id
+                                        ))
+        self.debug("Creating LB rule for IP address: %s" %
+                                        ip_with_lb_rule.ipaddress)
+
+        LoadBalancerRule.create(
+                                    self.apiclient,
+                                    self.services["lbrule"],
+                                    ipaddressid=ip_with_lb_rule.ipaddress.id,
+                                    accountid=self.account.name,
+                                    networkid=self.network.id
+                                )
+
+        self.debug("Trying to create PF rule on IP with LB rule: %s" %
+                                        ip_with_nat_rule.ipaddress)
+
+        with self.assertRaises(Exception):
+            NATRule.create(
+                         self.apiclient,
+                         virtual_machine,
+                         self.services["natrule"],
+                         ipaddressid=ip_with_lb_rule.ipaddress.id
+                      )
+
+        self.debug("Trying to create FW rule on IP with LB rule")
+        with self.assertRaises(Exception):
+            FireWallRule.create(
+                            self.apiclient,
+                            ipaddressid=src_nat.id,
+                            protocol='TCP',
+                            cidrlist=[self.services["fw_rule"]["cidr"]],
+                            startport=self.services["fw_rule"]["startport"],
+                            endport=self.services["fw_rule"]["endport"]
+                            )
+
+        self.debug("Creating LB rule with public port: 2221")
+        lb_rule = LoadBalancerRule.create(
+                                    self.apiclient,
+                                    self.services["lbrule_port_2221"],
+                                    ipaddressid=ip_with_lb_rule.ipaddress.id,
+                                    accountid=self.account.name,
+                                    networkid=self.network.id
+                                )
+
+        # Check if NAT rule created successfully
+        lb_rules = LoadBalancerRule.list(
+                                         self.apiclient,
+                                         id=lb_rule.id
+                                         )
+
+        self.assertEqual(
+                         isinstance(lb_rules, list),
+                         True,
+                         "List LB rules should return valid list"
+                         )
+
+        # User should be able to enable VPN on source NAT
+        self.debug("Enabling VPN on source NAT IP: %s" % src_nat.ipaddress)
+        # Assign VPN to source NAT
+        with self.assertRaises(Exception):
+            Vpn.create(
+                        self.apiclient,
+                        src_nat.id,
+                        account=self.account.name,
+                        domainid=self.account.domainid
+                        )
+        return
+
+    @attr(tags = ["advancedns"])
+    def test_02_network_off_with_conserve_mode_netscaler(self):
+        """Test NW off with Conserve mode ON, LB-Netscaler and VR-All services
+        """
+
+
+        # Validate the following
+        # 1. Create a Network from the above network offering and deploy a VM.
+        # 2. On source NAT ipaddress, we should NOT be allowed to add LB rule
+        # 3. On source NAT ipaddress, we should be allowed to add PF rule and
+        #    Fierwall rules.
+        # 4. On an ipaddress that has PF rules, we should NOT be allowed to
+        #    add a LB rules.
+        # 5. On an ipaddress that has Lb rules , we should NOT allow firewall
+        #    rules to be programmed.
+        # 6. On an ipaddress that has Lb rules , we should NOT allow PF rules
+        #    to be programmed.
+        # 7. We should be allowed to program multiple PF rules on the same Ip
+        #    address on different public ports.
+        # 8. We should be allowed to program multiple LB rules on the same Ip
+        #    address for different public port ranges.
+        # 9. On source NAT ipaddress, we should be allowed to Enable VPN.
+
+        # Create a network offering with all virtual router services enabled
+        self.debug(
+            "Creating n/w offering with all services in VR & conserve mode:ON"
+            )
+        self.network_offering = NetworkOffering.create(
+                                            self.api_client,
+                                            self.services["network_offering"],
+                                            conservemode=True
+                                            )
+        self.cleanup.append(self.network_offering)
+
+        self.debug("Created n/w offering with ID: %s" %
+                                                    self.network_offering.id)
+        # Enable Network offering
+        self.network_offering.update(self.apiclient, state='Enabled')
+
+        # Creating network using the network offering created
+        self.debug("Creating network with network offering: %s" %
+                                                    self.network_offering.id)
+        self.network = Network.create(
+                                    self.apiclient,
+                                    self.services["network"],
+                                    accountid=self.account.name,
+                                    domainid=self.account.domainid,
+                                    networkofferingid=self.network_offering.id,
+                                    zoneid=self.zone.id
+                                    )
+        self.debug("Created network with ID: %s" % self.network.id)
+
+        self.debug("Deploying VM in account: %s" % self.account.name)
+
+        # Spawn an instance in that network
+        virtual_machine = VirtualMachine.create(
+                                  self.apiclient,
+                                  self.services["virtual_machine"],
+                                  accountid=self.account.name,
+                                  domainid=self.account.domainid,
+                                  serviceofferingid=self.service_offering.id,
+                                  networkids=[str(self.network.id)]
+                                  )
+        self.debug("Deployed VM in network: %s" % self.network.id)
+
+        src_nat_list = PublicIPAddress.list(
+                                        self.apiclient,
+                                        associatednetworkid=self.network.id,
+                                        account=self.account.name,
+                                        domainid=self.account.domainid,
+                                        listall=True,
+                                        issourcenat=True,
+                                        )
+        self.assertEqual(
+                         isinstance(src_nat_list, list),
+                         True,
+                         "List Public IP should return a valid source NAT"
+                         )
+        self.assertNotEqual(
+                    len(src_nat_list),
+                    0,
+                    "Length of response from listPublicIp should not be 0"
+                    )
+
+        src_nat = src_nat_list[0]
+
+        self.debug("Trying to create LB rule on source NAT IP: %s" %
+                                                        src_nat.ipaddress)
+        # Create Load Balancer rule with source NAT
+        with self.assertRaises(Exception):
+            LoadBalancerRule.create(
+                                    self.apiclient,
+                                    self.services["lbrule"],
+                                    ipaddressid=src_nat.id,
+                                    accountid=self.account.name
+                                )
+
+        self.debug(
+            "Trying to create a port forwarding rule in source NAT: %s" %
+                                                            src_nat.ipaddress)
+        #Create NAT rule
+        nat_rule = NATRule.create(
+                           self.apiclient,
+                           virtual_machine,
+                           self.services["natrule"],
+                           ipaddressid=src_nat.id
+                           )
+        self.debug("Created PF rule on source NAT: %s" % src_nat.ipaddress)
+
+        nat_rules = NATRule.list(
+                                    self.apiclient,
+                                    id=nat_rule.id
+                                )
+        self.assertEqual(
+                         isinstance(nat_rules, list),
+                         True,
+                         "List NAT should return a valid port forwarding rules"
+                         )
+        self.assertNotEqual(
+                    len(nat_rules),
+                    0,
+                    "Length of response from listLbRules should not be 0"
+                    )
+        self.debug("Creating firewall rule on source NAT: %s" %
+                                                        src_nat.ipaddress)
+        #Create Firewall rule on source NAT
+        fw_rule = FireWallRule.create(
+                            self.apiclient,
+                            ipaddressid=src_nat.id,
+                            protocol='TCP',
+                            cidrlist=[self.services["fw_rule"]["cidr"]],
+                            startport=self.services["fw_rule"]["startport"],
+                            endport=self.services["fw_rule"]["endport"]
+                            )
+        self.debug("Created firewall rule: %s" % fw_rule.id)
+
+        fw_rules = FireWallRule.list(
+                                     self.apiclient,
+                                     id=fw_rule.id
+                                    )
+        self.assertEqual(
+                         isinstance(fw_rules, list),
+                         True,
+                         "List fw rules should return a valid firewall rules"
+                         )
+
+        self.assertNotEqual(
+                            len(fw_rules),
+                            0,
+                            "Length of fw rules response should not be zero"
+                            )
+        self.debug("Associating public IP for network: %s" % self.network.id)
+        ip_with_nat_rule = PublicIPAddress.create(
+                                    self.apiclient,
+                                    accountid=self.account.name,
+                                    zoneid=self.zone.id,
+                                    domainid=self.account.domainid,
+                                    networkid=self.network.id
+                                    )
+
+        self.debug("Associated %s with network %s" % (
+                                        ip_with_nat_rule.ipaddress,
+                                        self.network.id
+                                        ))
+        self.debug("Creating PF rule for IP address: %s" %
+                                        ip_with_nat_rule.ipaddress)
+        NATRule.create(
+                         self.apiclient,
+                         virtual_machine,
+                         self.services["natrule"],
+                         ipaddressid=ip_with_nat_rule.ipaddress.id
+                      )
+
+        self.debug("Trying to create LB rule on IP with NAT: %s" %
+                                    ip_with_nat_rule.ipaddress)
+
+        # Create Load Balancer rule on IP already having NAT rule
+        with self.assertRaises(Exception):
+                LoadBalancerRule.create(
+                                    self.apiclient,
+                                    self.services["lbrule"],
+                                    ipaddressid=ip_with_nat_rule.ipaddress.id,
+                                    accountid=self.account.name
+                                    )
+        self.debug("Creating PF rule with public port: 66")
+
+        nat_rule = NATRule.create(
+                         self.apiclient,
+                         virtual_machine,
+                         self.services["natrule_port_66"],
+                         ipaddressid=ip_with_nat_rule.ipaddress.id
+                      )
+
+        # Check if NAT rule created successfully
+        nat_rules = NATRule.list(
+                                 self.apiclient,
+                                 id=nat_rule.id
+                                 )
+
+        self.assertEqual(
+                         isinstance(nat_rules, list),
+                         True,
+                         "List NAT rules should return valid list"
+                         )
+
+        self.debug("Associating public IP for network: %s" % self.network.id)
+        ip_with_lb_rule = PublicIPAddress.create(
+                                self.apiclient,
+                                accountid=self.account.name,
+                                zoneid=self.zone.id,
+                                domainid=self.account.domainid,
+                                networkid=self.network.id
+                                )
+        self.debug("Associated %s with network %s" % (
+                                        ip_with_lb_rule.ipaddress,
+                                        self.network.id
+                                        ))
+        self.debug("Creating LB rule for IP address: %s" %
+                                        ip_with_lb_rule.ipaddress)
+
+        LoadBalancerRule.create(
+                                    self.apiclient,
+                                    self.services["lbrule"],
+                                    ipaddressid=ip_with_lb_rule.ipaddress.id,
+                                    accountid=self.account.name,
+                                    networkid=self.network.id
+                                )
+
+        self.debug("Trying to create PF rule on IP with LB rule: %s" %
+                                        ip_with_nat_rule.ipaddress)
+
+        with self.assertRaises(Exception):
+            NATRule.create(
+                         self.apiclient,
+                         virtual_machine,
+                         self.services["natrule"],
+                         ipaddressid=ip_with_lb_rule.ipaddress.id
+                      )
+
+        self.debug("Trying to create FW rule on IP with LB rule")
+        with self.assertRaises(Exception):
+            FireWallRule.create(
+                            self.apiclient,
+                            ipaddressid=src_nat.id,
+                            protocol='TCP',
+                            cidrlist=[self.services["fw_rule"]["cidr"]],
+                            startport=self.services["fw_rule"]["startport"],
+                            endport=self.services["fw_rule"]["endport"]
+                            )
+
+        self.debug("Creating LB rule with public port: 2221")
+        lb_rule = LoadBalancerRule.create(
+                                    self.apiclient,
+                                    self.services["lbrule_port_2221"],
+                                    ipaddressid=ip_with_lb_rule.ipaddress.id,
+                                    accountid=self.account.name,
+                                    networkid=self.network.id
+                                )
+
+        # Check if NAT rule created successfully
+        lb_rules = LoadBalancerRule.list(
+                                         self.apiclient,
+                                         id=lb_rule.id
+                                         )
+
+        self.assertEqual(
+                         isinstance(lb_rules, list),
+                         True,
+                         "List LB rules should return valid list"
+                         )
+
+        # User should be able to enable VPN on source NAT
+        self.debug("Created VPN with source NAT IP: %s" % src_nat.ipaddress)
+        # Assign VPN to source NAT
+        vpn = Vpn.create(
+                        self.apiclient,
+                        src_nat.id,
+                        account=self.account.name,
+                        domainid=self.account.domainid
+                        )
+
+        vpns = Vpn.list(
+                        self.apiclient,
+                        publicipid=src_nat.id,
+                        listall=True,
+                        )
+
+        self.assertEqual(
+                         isinstance(vpns, list),
+                         True,
+                         "List VPNs should return a valid VPN list"
+                         )
+
+        self.assertNotEqual(
+                            len(vpns),
+                            0,
+                            "Length of list VNP response should not be zero"
+                            )
         return

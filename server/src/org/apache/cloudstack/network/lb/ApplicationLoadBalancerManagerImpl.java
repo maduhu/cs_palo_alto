@@ -5,7 +5,7 @@
 // to you under the Apache License, Version 2.0 (the
 // "License"); you may not use this file except in compliance
 // with the License.  You may obtain a copy of the License at
-// 
+//
 //   http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing,
@@ -24,12 +24,15 @@ import java.util.Map;
 import javax.ejb.Local;
 import javax.inject.Inject;
 
-import org.apache.cloudstack.acl.SecurityChecker.AccessType;
-import org.apache.cloudstack.api.command.user.loadbalancer.ListApplicationLoadBalancersCmd;
-import org.apache.cloudstack.lb.ApplicationLoadBalancerRuleVO;
-import org.apache.cloudstack.lb.dao.ApplicationLoadBalancerRuleDao;
 import org.apache.log4j.Logger;
 import org.springframework.stereotype.Component;
+
+import org.apache.cloudstack.acl.SecurityChecker.AccessType;
+import org.apache.cloudstack.api.command.user.loadbalancer.ListApplicationLoadBalancersCmd;
+import org.apache.cloudstack.context.CallContext;
+import org.apache.cloudstack.engine.orchestration.service.NetworkOrchestrationService;
+import org.apache.cloudstack.lb.ApplicationLoadBalancerRuleVO;
+import org.apache.cloudstack.lb.dao.ApplicationLoadBalancerRuleDao;
 
 import com.cloud.event.ActionEvent;
 import com.cloud.event.EventTypes;
@@ -39,10 +42,10 @@ import com.cloud.exception.InsufficientVirtualNetworkCapcityException;
 import com.cloud.exception.InvalidParameterValueException;
 import com.cloud.exception.NetworkRuleConflictException;
 import com.cloud.exception.UnsupportedServiceException;
+import com.cloud.network.IpAddressManager;
 import com.cloud.network.Network;
 import com.cloud.network.Network.Capability;
 import com.cloud.network.Network.Service;
-import com.cloud.network.NetworkManager;
 import com.cloud.network.NetworkModel;
 import com.cloud.network.Networks.TrafficType;
 import com.cloud.network.dao.FirewallRulesDao;
@@ -51,6 +54,7 @@ import com.cloud.network.lb.LoadBalancingRule.LbDestination;
 import com.cloud.network.lb.LoadBalancingRule.LbHealthCheckPolicy;
 import com.cloud.network.lb.LoadBalancingRule.LbStickinessPolicy;
 import com.cloud.network.lb.LoadBalancingRulesManager;
+import com.cloud.network.lb.LoadBalancingRulesService;
 import com.cloud.network.rules.FirewallRule.State;
 import com.cloud.network.rules.LoadBalancerContainer.Scheme;
 import com.cloud.projects.Project.ListProjectResourcesCriteria;
@@ -59,7 +63,6 @@ import com.cloud.tags.ResourceTagVO;
 import com.cloud.tags.dao.ResourceTagDao;
 import com.cloud.user.Account;
 import com.cloud.user.AccountManager;
-import com.cloud.user.UserContext;
 import com.cloud.utils.Pair;
 import com.cloud.utils.Ternary;
 import com.cloud.utils.component.ManagerBase;
@@ -84,7 +87,11 @@ public class ApplicationLoadBalancerManagerImpl extends ManagerBase implements A
     @Inject LoadBalancingRulesManager _lbMgr;
     @Inject FirewallRulesDao _firewallDao;
     @Inject ResourceTagDao _resourceTagDao;
-    @Inject NetworkManager _ntwkMgr;
+    @Inject NetworkOrchestrationService _ntwkMgr;
+    @Inject
+    IpAddressManager _ipAddrMgr;
+    @Inject
+    LoadBalancingRulesService _lbService;
     
     
     @Override
@@ -99,7 +106,7 @@ public class ApplicationLoadBalancerManagerImpl extends ManagerBase implements A
             throw new InvalidParameterValueException("Can't find guest network by id");
         }
         
-        Account caller = UserContext.current().getCaller();
+        Account caller = CallContext.current().getCallingAccount();
         _accountMgr.checkAccess(caller, AccessType.UseNetwork, false, guestNtwk);
         
         Network sourceIpNtwk = _networkModel.getNetwork(sourceIpNetworkId);
@@ -166,7 +173,7 @@ public class ApplicationLoadBalancerManagerImpl extends ManagerBase implements A
             }
             s_logger.debug("Load balancer " + newRule.getId() + " for Ip address " + newRule.getSourceIp().addr() + ", source port "
                     + newRule.getSourcePortStart() + ", instance port " + newRule.getDefaultPortStart() + " is added successfully.");
-            UserContext.current().setEventDetails("Load balancer Id: " + newRule.getId());
+            CallContext.current().setEventDetails("Load balancer Id: " + newRule.getId());
             Network ntwk = _networkModel.getNetwork(newRule.getNetworkId());
             UsageEventUtils.publishUsageEvent(EventTypes.EVENT_LOAD_BALANCER_CREATE, newRule.getAccountId(),
                     ntwk.getDataCenterId(), newRule.getId(), null, LoadBalancingRule.class.getName(),
@@ -237,7 +244,7 @@ public class ApplicationLoadBalancerManagerImpl extends ManagerBase implements A
      * @return
      * @throws InsufficientVirtualNetworkCapcityException
      */
-    protected Ip getSourceIp(Scheme scheme, Network sourceIpNtwk, String requestedIp) throws InsufficientVirtualNetworkCapcityException {       
+    protected Ip getSourceIp(Scheme scheme, Network sourceIpNtwk, String requestedIp) throws InsufficientVirtualNetworkCapcityException {
         
         if (requestedIp != null) {
             if (_lbDao.countBySourceIp(new Ip(requestedIp), sourceIpNtwk.getId()) > 0)  {
@@ -283,7 +290,7 @@ public class ApplicationLoadBalancerManagerImpl extends ManagerBase implements A
      * @return
      */
     protected String allocateSourceIpForInternalLbRule(Network sourceIpNtwk, String requestedIp) {
-        return _ntwkMgr.acquireGuestIpAddress(sourceIpNtwk, requestedIp);
+        return _ipAddrMgr.acquireGuestIpAddress(sourceIpNtwk, requestedIp);
     }
 
     
@@ -343,7 +350,7 @@ public class ApplicationLoadBalancerManagerImpl extends ManagerBase implements A
     protected Network validateSourceIpNtwkForInternalLbRule(Network sourceIpNtwk) {
         if (sourceIpNtwk.getTrafficType() != TrafficType.Guest) {
             throw new InvalidParameterValueException("Only traffic type " + TrafficType.Guest + " is supported");
-        } 
+        }
         
         //Can't create the LB rule if the network's cidr is NULL
         String ntwkCidr = sourceIpNtwk.getCidr();
@@ -358,7 +365,7 @@ public class ApplicationLoadBalancerManagerImpl extends ManagerBase implements A
     
     @Override
     public boolean deleteApplicationLoadBalancer(long id) {
-        return _lbMgr.deleteLoadBalancerRule(id, true);
+        return _lbService.deleteLoadBalancerRule(id, true);
     }
 
     @Override
@@ -373,7 +380,7 @@ public class ApplicationLoadBalancerManagerImpl extends ManagerBase implements A
         
         Map<String, String> tags = cmd.getTags();
 
-        Account caller = UserContext.current().getCaller();
+        Account caller = CallContext.current().getCallingAccount();
         List<Long> permittedAccounts = new ArrayList<Long>();
 
         Ternary<Long, Boolean, ListProjectResourcesCriteria> domainIdRecursiveListProject = new Ternary<Long, Boolean, ListProjectResourcesCriteria>(
@@ -443,7 +450,7 @@ public class ApplicationLoadBalancerManagerImpl extends ManagerBase implements A
         }
         
         if (networkId != null) {
-            sc.setParameters("networkId", networkId);    
+            sc.setParameters("networkId", networkId);
         }
         
         if (tags != null && !tags.isEmpty()) {
@@ -502,13 +509,13 @@ public class ApplicationLoadBalancerManagerImpl extends ManagerBase implements A
                         + lbRule.getXid());
             }
 
-          if ((lbRule.getSourcePortStart().intValue() <= newLbRule.getSourcePortStart().intValue() 
+          if ((lbRule.getSourcePortStart().intValue() <= newLbRule.getSourcePortStart().intValue()
                   && lbRule.getSourcePortEnd().intValue() >= newLbRule.getSourcePortStart().intValue())
-                  || (lbRule.getSourcePortStart().intValue() <= newLbRule.getSourcePortEnd().intValue() 
+                  || (lbRule.getSourcePortStart().intValue() <= newLbRule.getSourcePortEnd().intValue()
                   && lbRule.getSourcePortEnd().intValue() >= newLbRule.getSourcePortEnd().intValue())
-                  || (newLbRule.getSourcePortStart().intValue() <= lbRule.getSourcePortStart().intValue() 
+                  || (newLbRule.getSourcePortStart().intValue() <= lbRule.getSourcePortStart().intValue()
                   && newLbRule.getSourcePortEnd().intValue() >= lbRule.getSourcePortStart().intValue())
-                  || (newLbRule.getSourcePortStart().intValue() <= lbRule.getSourcePortEnd().intValue() 
+                  || (newLbRule.getSourcePortStart().intValue() <= lbRule.getSourcePortEnd().intValue()
                   && newLbRule.getSourcePortEnd().intValue() >= lbRule.getSourcePortEnd().intValue())) {
 
 

@@ -5,7 +5,7 @@
 // to you under the Apache License, Version 2.0 (the
 // "License"); you may not use this file except in compliance
 // with the License.  You may obtain a copy of the License at
-// 
+//
 //   http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing,
@@ -25,15 +25,17 @@ import java.util.Set;
 import javax.ejb.Local;
 import javax.inject.Inject;
 
+import org.apache.log4j.Logger;
+
+import com.google.gson.Gson;
+
 import org.apache.cloudstack.api.command.admin.router.ConfigureVirtualRouterElementCmd;
 import org.apache.cloudstack.api.command.admin.router.CreateVirtualRouterElementCmd;
 import org.apache.cloudstack.api.command.admin.router.ListVirtualRouterElementsCmd;
-import org.apache.log4j.Logger;
+import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
 
-import com.cloud.agent.api.PvlanSetupCommand;
 import com.cloud.agent.api.to.LoadBalancerTO;
 import com.cloud.configuration.ConfigurationManager;
-import com.cloud.configuration.dao.ConfigurationDao;
 import com.cloud.dc.DataCenter;
 import com.cloud.dc.DataCenter.NetworkType;
 import com.cloud.deploy.DeployDestination;
@@ -50,13 +52,12 @@ import com.cloud.network.Network.Service;
 import com.cloud.network.NetworkMigrationResponder;
 import com.cloud.network.NetworkModel;
 import com.cloud.network.Networks;
-import com.cloud.network.Networks.BroadcastDomainType;
 import com.cloud.network.Networks.TrafficType;
 import com.cloud.network.PhysicalNetworkServiceProvider;
 import com.cloud.network.PublicIpAddress;
 import com.cloud.network.RemoteAccessVpn;
 import com.cloud.network.VirtualRouterProvider;
-import com.cloud.network.VirtualRouterProvider.VirtualRouterProviderType;
+import com.cloud.network.VirtualRouterProvider.Type;
 import com.cloud.network.VpnUser;
 import com.cloud.network.dao.IPAddressDao;
 import com.cloud.network.dao.LoadBalancerDao;
@@ -77,46 +78,30 @@ import com.cloud.network.rules.StaticNat;
 import com.cloud.offering.NetworkOffering;
 import com.cloud.offerings.NetworkOfferingVO;
 import com.cloud.offerings.dao.NetworkOfferingDao;
+import com.cloud.user.Account;
 import com.cloud.user.AccountManager;
-import com.cloud.uservm.UserVm;
 import com.cloud.utils.Pair;
 import com.cloud.utils.component.AdapterBase;
+import com.cloud.utils.db.QueryBuilder;
 import com.cloud.utils.db.SearchCriteria.Op;
-import com.cloud.utils.db.SearchCriteria2;
-import com.cloud.utils.db.SearchCriteriaService;
 import com.cloud.utils.exception.CloudRuntimeException;
 import com.cloud.vm.DomainRouterVO;
 import com.cloud.vm.NicProfile;
-import com.cloud.vm.NicVO;
 import com.cloud.vm.ReservationContext;
 import com.cloud.vm.UserVmManager;
 import com.cloud.vm.UserVmVO;
 import com.cloud.vm.VirtualMachine;
 import com.cloud.vm.VirtualMachine.State;
-import com.cloud.vm.VirtualMachine.Type;
 import com.cloud.vm.VirtualMachineProfile;
 import com.cloud.vm.dao.DomainRouterDao;
 import com.cloud.vm.dao.UserVmDao;
-import com.google.gson.Gson;
-import org.apache.cloudstack.api.command.admin.router.ConfigureVirtualRouterElementCmd;
-import org.apache.cloudstack.api.command.admin.router.CreateVirtualRouterElementCmd;
-import org.apache.cloudstack.api.command.admin.router.ListVirtualRouterElementsCmd;
-import org.apache.log4j.Logger;
 
-import javax.ejb.Local;
-import javax.inject.Inject;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-@Local(value = {NetworkElement.class, FirewallServiceProvider.class, 
-		        DhcpServiceProvider.class, UserDataServiceProvider.class, 
+@Local(value = {NetworkElement.class, FirewallServiceProvider.class,
+		        DhcpServiceProvider.class, UserDataServiceProvider.class,
 		        StaticNatServiceProvider.class, LoadBalancingServiceProvider.class,
 		        PortForwardingServiceProvider.class, IpDeployer.class,
 		        RemoteAccessVPNServiceProvider.class, NetworkMigrationResponder.class} )
-public class VirtualRouterElement extends AdapterBase implements VirtualRouterElementService, DhcpServiceProvider, 
+public class VirtualRouterElement extends AdapterBase implements VirtualRouterElementService, DhcpServiceProvider,
     UserDataServiceProvider, SourceNatServiceProvider, StaticNatServiceProvider, FirewallServiceProvider,
         LoadBalancingServiceProvider, PortForwardingServiceProvider, RemoteAccessVPNServiceProvider, IpDeployer,
         NetworkMigrationResponder {
@@ -179,7 +164,7 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
             }
         } else {
             if (!_networkMgr.isProviderSupportServiceInNetwork(network.getId(), service, getProvider())) {
-                s_logger.trace("Element " + getProvider().getName() + " doesn't support service " + service.getName() 
+                s_logger.trace("Element " + getProvider().getName() + " doesn't support service " + service.getName()
                         + " in the network " + network);
                 return false;
             }
@@ -200,19 +185,19 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
         Map<VirtualMachineProfile.Param, Object> params = new HashMap<VirtualMachineProfile.Param, Object>(1);
         params.put(VirtualMachineProfile.Param.ReProgramGuestNetworks, true);
 
-        List<DomainRouterVO> routers = _routerMgr.deployVirtualRouterInGuestNetwork(network, dest, 
-                _accountMgr.getAccount(network.getAccountId()), params, 
+        List<DomainRouterVO> routers = _routerMgr.deployVirtualRouterInGuestNetwork(network, dest,
+                _accountMgr.getAccount(network.getAccountId()), params,
                 offering.getRedundantRouter());
         if ((routers == null) || (routers.size() == 0)) {
             throw new ResourceUnavailableException("Can't find at least one running router!",
                     DataCenter.class, network.getDataCenterId());
         }
         
-        return true;       
+        return true;
     }
 
     @Override
-    public boolean prepare(Network network, NicProfile nic, VirtualMachineProfile<? extends VirtualMachine> vm, 
+    public boolean prepare(Network network, NicProfile nic, VirtualMachineProfile vm,
             DeployDestination dest, ReservationContext context)
             throws ConcurrentOperationException, InsufficientCapacityException, ResourceUnavailableException {
         if (vm.getType() != VirtualMachine.Type.User || vm.getHypervisorType() == HypervisorType.BareMetal) {
@@ -232,15 +217,15 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
         }
 
         @SuppressWarnings("unchecked")
-        VirtualMachineProfile<UserVm> uservm = (VirtualMachineProfile<UserVm>) vm;
-        List<DomainRouterVO> routers = _routerMgr.deployVirtualRouterInGuestNetwork(network, dest, 
+        VirtualMachineProfile uservm = vm;
+        List<DomainRouterVO> routers = _routerMgr.deployVirtualRouterInGuestNetwork(network, dest,
                 _accountMgr.getAccount(network.getAccountId()),
                 uservm.getParameters(), offering.getRedundantRouter());
         if ((routers == null) || (routers.size() == 0)) {
             throw new ResourceUnavailableException("Can't find at least one running router!",
                     DataCenter.class, network.getDataCenterId());
         }
-        return true;      
+        return true;
     }
 
     @Override
@@ -319,11 +304,11 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
                         expire = value;
                 }
                 if ((expire != null) && !containsOnlyNumbers(expire, timeEndChar)) {
-                    throw new InvalidParameterValueException("Failed LB in validation rule id: " + rule.getId() + 
+                    throw new InvalidParameterValueException("Failed LB in validation rule id: " + rule.getId() +
                             " Cause: expire is not in timeformat: " + expire);
                 }
                 if ((tablesize != null) && !containsOnlyNumbers(tablesize, "kmg")) {
-                    throw new InvalidParameterValueException("Failed LB in validation rule id: " + rule.getId() + 
+                    throw new InvalidParameterValueException("Failed LB in validation rule id: " + rule.getId() +
                             " Cause: tablesize is not in size format: " + tablesize);
 
                 }
@@ -350,11 +335,11 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
                 }
 
                 if ((length != null) && (!containsOnlyNumbers(length, null))) {
-                    throw new InvalidParameterValueException("Failed LB in validation rule id: " + rule.getId() + 
+                    throw new InvalidParameterValueException("Failed LB in validation rule id: " + rule.getId() +
                             " Cause: length is not a number: " + length);
                 }
                 if ((holdTime != null) && (!containsOnlyNumbers(holdTime, timeEndChar) && !containsOnlyNumbers(holdTime, null))) {
-                    throw new InvalidParameterValueException("Failed LB in validation rule id: " + rule.getId() + 
+                    throw new InvalidParameterValueException("Failed LB in validation rule id: " + rule.getId() +
                             " Cause: holdtime is not in timeformat: " + holdTime);
                 }
             }
@@ -385,7 +370,7 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
             
             List<DomainRouterVO> routers = _routerDao.listByNetworkAndRole(network.getId(), Role.VIRTUAL_ROUTER);
             if (routers == null || routers.isEmpty()) {
-                s_logger.debug("Virtual router elemnt doesn't need to apply firewall rules on the backend; virtual " +
+                s_logger.debug("Virtual router elemnt doesn't need to apply lb rules on the backend; virtual " +
                 		"router doesn't exist in the network " + network.getId());
                 return true;
             }
@@ -413,7 +398,7 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
             }
             return _routerMgr.applyVpnUsers(network, users, routers);
         } else {
-            s_logger.debug("Element " + this.getName() + " doesn't handle applyVpnUsers command");
+            s_logger.debug("Element " + getName() + " doesn't handle applyVpnUsers command");
             return null;
         }
     }
@@ -429,7 +414,7 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
             }
             return _routerMgr.startRemoteAccessVpn(network, vpn, routers);
         } else {
-            s_logger.debug("Element " + this.getName() + " doesn't handle createVpn command");
+            s_logger.debug("Element " + getName() + " doesn't handle createVpn command");
             return false;
         }
     }
@@ -445,13 +430,13 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
             }
             return _routerMgr.deleteRemoteAccessVpn(network, vpn, routers);
         } else {
-            s_logger.debug("Element " + this.getName() + " doesn't handle removeVpn command");
+            s_logger.debug("Element " + getName() + " doesn't handle removeVpn command");
             return false;
         }
     }
 
     @Override
-    public boolean applyIps(Network network, List<? extends PublicIpAddress> ipAddress, Set<Service> services) 
+    public boolean applyIps(Network network, List<? extends PublicIpAddress> ipAddress, Set<Service> services)
             throws ResourceUnavailableException {
         boolean canHandle = true;
         for (Service service : services) {
@@ -614,7 +599,10 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
         capabilities.put(Service.Dns, dnsCapabilities);
 
         capabilities.put(Service.UserData, null);
-        capabilities.put(Service.Dhcp, null);
+
+        Map<Capability, String> dhcpCapabilities = new HashMap<Capability, String>();
+        dhcpCapabilities.put(Capability.DhcpAccrossMultipleSubnets, "true");
+        capabilities.put(Service.Dhcp, dhcpCapabilities);
 
         capabilities.put(Service.Gateway, null);
 
@@ -646,7 +634,7 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
     }
 
     @Override
-    public boolean shutdown(Network network, ReservationContext context, boolean cleanup) 
+    public boolean shutdown(Network network, ReservationContext context, boolean cleanup)
             throws ConcurrentOperationException, ResourceUnavailableException {
         List<DomainRouterVO> routers = _routerDao.listByNetworkAndRole(network.getId(), Role.VIRTUAL_ROUTER);
         if (routers == null || routers.isEmpty()) {
@@ -675,14 +663,17 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
             return true;
         }
         boolean result = true;
+        // NOTE that we need to pass caller account to destroyRouter, otherwise it will fail permission check there. Context passed in from deleteNetwork is the network account, 
+        // not caller account
+        Account callerAccount = _accountMgr.getAccount(context.getCaller().getAccountId());        
         for (DomainRouterVO router : routers) {
-            result = result && (_routerMgr.destroyRouter(router.getId(), context.getAccount(), context.getCaller().getId()) != null);
+            result = result && (_routerMgr.destroyRouter(router.getId(), callerAccount, context.getCaller().getId()) != null);
         }
         return result;
     }
 
     @Override
-    public boolean savePassword(Network network, NicProfile nic, VirtualMachineProfile<? extends VirtualMachine> vm) 
+    public boolean savePassword(Network network, NicProfile nic, VirtualMachineProfile vm)
             throws ResourceUnavailableException {
         if (!canHandle(network, null)) {
             return false;
@@ -694,13 +685,13 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
         }
 
         @SuppressWarnings("unchecked")
-        VirtualMachineProfile<UserVm> uservm = (VirtualMachineProfile<UserVm>) vm;
+        VirtualMachineProfile uservm = vm;
 
         return _routerMgr.savePasswordToRouter(network, nic, uservm, routers);
     }
 
     @Override
-    public boolean saveSSHKey(Network network, NicProfile nic, VirtualMachineProfile<? extends VirtualMachine> vm, String SSHPublicKey)
+    public boolean saveSSHKey(Network network, NicProfile nic, VirtualMachineProfile vm, String SSHPublicKey)
             throws ResourceUnavailableException {
         if (!canHandle(network, null)) {
             return false;
@@ -712,13 +703,13 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
         }
 
         @SuppressWarnings("unchecked")
-        VirtualMachineProfile<UserVm> uservm = (VirtualMachineProfile<UserVm>) vm;
+        VirtualMachineProfile uservm = vm;
 
         return _routerMgr.saveSSHPublicKeyToRouter(network, nic, uservm, routers, SSHPublicKey);
     }
 
     @Override
-    public boolean saveUserData(Network network, NicProfile nic, VirtualMachineProfile<? extends VirtualMachine> vm)
+    public boolean saveUserData(Network network, NicProfile nic, VirtualMachineProfile vm)
             throws ResourceUnavailableException {
         if (!canHandle(network, null)) {
             return false;
@@ -730,7 +721,7 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
         }
 
         @SuppressWarnings("unchecked")
-        VirtualMachineProfile<UserVm> uservm = (VirtualMachineProfile<UserVm>) vm;
+        VirtualMachineProfile uservm = vm;
 
         return _routerMgr.saveUserDataToRouter(network, nic, uservm, routers);
     }
@@ -747,7 +738,7 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
     @Override
     public VirtualRouterProvider configure(ConfigureVirtualRouterElementCmd cmd) {
         VirtualRouterProviderVO element = _vrProviderDao.findById(cmd.getId());
-        if (element == null || !(element.getType() == VirtualRouterProviderType.VirtualRouter || element.getType() == VirtualRouterProviderType.VPCVirtualRouter)) {
+        if (element == null || !(element.getType() == Type.VirtualRouter || element.getType() == Type.VPCVirtualRouter)) {
             s_logger.debug("Can't find Virtual Router element with network service provider id " + cmd.getId());
             return null;
         }
@@ -759,10 +750,10 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
     }
 
     @Override
-    public VirtualRouterProvider addElement(Long nspId, VirtualRouterProviderType providerType) {
-        if (!(providerType == VirtualRouterProviderType.VirtualRouter || providerType == VirtualRouterProviderType.VPCVirtualRouter)) {
-            throw new InvalidParameterValueException("Element " + this.getName() + " supports only providerTypes: " + 
-        VirtualRouterProviderType.VirtualRouter.toString() + " and " + VirtualRouterProviderType.VPCVirtualRouter);
+    public VirtualRouterProvider addElement(Long nspId, Type providerType) {
+        if (!(providerType == Type.VirtualRouter || providerType == Type.VPCVirtualRouter)) {
+            throw new InvalidParameterValueException("Element " + getName() + " supports only providerTypes: " +
+        Type.VirtualRouter.toString() + " and " + Type.VPCVirtualRouter);
         }
         VirtualRouterProviderVO element = _vrProviderDao.findByNspIdAndType(nspId, providerType);
         if (element != null) {
@@ -796,7 +787,7 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
 
     @Override
     public boolean isReady(PhysicalNetworkServiceProvider provider) {
-        VirtualRouterProviderVO element = _vrProviderDao.findByNspIdAndType(provider.getId(), 
+        VirtualRouterProviderVO element = _vrProviderDao.findByNspIdAndType(provider.getId(),
                 getVirtualRouterProvider());
         if (element == null) {
             return false;
@@ -805,10 +796,10 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
     }
 
     @Override
-    public boolean shutdownProviderInstances(PhysicalNetworkServiceProvider provider, ReservationContext context) 
+    public boolean shutdownProviderInstances(PhysicalNetworkServiceProvider provider, ReservationContext context)
             throws ConcurrentOperationException,
             ResourceUnavailableException {
-        VirtualRouterProviderVO element = _vrProviderDao.findByNspIdAndType(provider.getId(), 
+        VirtualRouterProviderVO element = _vrProviderDao.findByNspIdAndType(provider.getId(),
                 getVirtualRouterProvider());
         if (element == null) {
             return true;
@@ -831,35 +822,35 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
     }
 
     public Long getIdByNspId(Long nspId) {
-        VirtualRouterProviderVO vr = _vrProviderDao.findByNspIdAndType(nspId, VirtualRouterProviderType.VirtualRouter);
+        VirtualRouterProviderVO vr = _vrProviderDao.findByNspIdAndType(nspId, Type.VirtualRouter);
         return vr.getId();
     }
 
     @Override
     public VirtualRouterProvider getCreatedElement(long id) {
         VirtualRouterProvider provider = _vrProviderDao.findById(id);
-        if (!(provider.getType() == VirtualRouterProviderType.VirtualRouter || provider.getType() == VirtualRouterProviderType.VPCVirtualRouter)) {
+        if (!(provider.getType() == Type.VirtualRouter || provider.getType() == Type.VPCVirtualRouter)) {
             throw new InvalidParameterValueException("Unable to find provider by id");
         }
         return provider;
     }
 
     @Override
-    public boolean release(Network network, NicProfile nic, VirtualMachineProfile<? extends VirtualMachine> vm,
+    public boolean release(Network network, NicProfile nic, VirtualMachineProfile vm,
             ReservationContext context) throws ConcurrentOperationException,
             ResourceUnavailableException {
         return true;
     }
 
     @Override
-    public  boolean configDhcpSupportForSubnet(Network network, NicProfile nic, VirtualMachineProfile<? extends VirtualMachine> vm,
+    public  boolean configDhcpSupportForSubnet(Network network, NicProfile nic, VirtualMachineProfile vm,
                                                DeployDestination dest, ReservationContext context) throws ConcurrentOperationException, InsufficientCapacityException, ResourceUnavailableException {
         if (canHandle(network, Service.Dhcp)) {
             if (vm.getType() != VirtualMachine.Type.User) {
                 return false;
             }
             @SuppressWarnings("unchecked")
-            VirtualMachineProfile<UserVm> uservm = (VirtualMachineProfile<UserVm>) vm;
+            VirtualMachineProfile uservm = vm;
 
             List<DomainRouterVO> routers = getRouters(network, dest);
 
@@ -873,30 +864,24 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
     }
 
     @Override
-    public boolean removeDhcpSupportForSubnet(Network network) {
+    public boolean removeDhcpSupportForSubnet(Network network) throws ResourceUnavailableException{
         if (canHandle(network, Service.Dhcp)) {
             List<DomainRouterVO> routers = _routerDao.listByNetworkAndRole(network.getId(), Role.VIRTUAL_ROUTER);
-           try {
-               if ((routers == null) || (routers.size() == 0)) {
+            if ((routers == null) || (routers.size() == 0)) {
                    throw new ResourceUnavailableException("Can't find at least one router!", DataCenter.class, network.getDataCenterId());
-               }
-           }
-           catch (ResourceUnavailableException e) {
-               s_logger.debug("could not find any router on this network");
-           }
+            }
            try {
                 return _routerMgr.removeDhcpSupportForSubnet(network, routers);
            }
            catch (ResourceUnavailableException e) {
                 s_logger.debug("Router resource unavailable ");
            }
-
         }
         return false;
     }
 
     @Override
-    public boolean addDhcpEntry(Network network, NicProfile nic, VirtualMachineProfile<? extends VirtualMachine> vm, 
+    public boolean addDhcpEntry(Network network, NicProfile nic, VirtualMachineProfile vm,
             DeployDestination dest, ReservationContext context)
             throws ConcurrentOperationException, InsufficientCapacityException, ResourceUnavailableException {
         if (canHandle(network, Service.Dhcp)) {
@@ -905,7 +890,7 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
             }
 
             @SuppressWarnings("unchecked")
-            VirtualMachineProfile<UserVm> uservm = (VirtualMachineProfile<UserVm>) vm;
+            VirtualMachineProfile uservm = vm;
 
             List<DomainRouterVO> routers = getRouters(network, dest);
 
@@ -919,7 +904,7 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
     }
 
     @Override
-    public boolean addPasswordAndUserdata(Network network, NicProfile nic, VirtualMachineProfile<? extends VirtualMachine> vm,
+    public boolean addPasswordAndUserdata(Network network, NicProfile nic, VirtualMachineProfile vm,
             DeployDestination dest, ReservationContext context)
             throws ConcurrentOperationException, InsufficientCapacityException, ResourceUnavailableException {
         if (canHandle(network, Service.UserData)) {
@@ -933,7 +918,7 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
             }
 
             @SuppressWarnings("unchecked")
-            VirtualMachineProfile<UserVm> uservm = (VirtualMachineProfile<UserVm>) vm;
+            VirtualMachineProfile uservm = vm;
 
             List<DomainRouterVO> routers = getRouters(network, dest);
 
@@ -951,7 +936,7 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
         if (_networkMgr.isProviderSupportServiceInNetwork(network.getId(), Service.SourceNat, getProvider())) {
             publicNetwork = true;
         }
-        boolean isPodBased = (dest.getDataCenter().getNetworkType() == NetworkType.Basic 
+        boolean isPodBased = (dest.getDataCenter().getNetworkType() == NetworkType.Basic
                 || _networkMgr.isSecurityGroupSupportedInNetwork(network)) &&
                 network.getTrafficType() == TrafficType.Guest;
 
@@ -985,19 +970,19 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
         Long nspId = cmd.getNspId();
         Boolean enabled = cmd.getEnabled();
 
-        SearchCriteriaService<VirtualRouterProviderVO, VirtualRouterProviderVO> sc = SearchCriteria2.create(VirtualRouterProviderVO.class);
+        QueryBuilder<VirtualRouterProviderVO> sc = QueryBuilder.create(VirtualRouterProviderVO.class);
         if (id != null) {
-            sc.addAnd(sc.getEntity().getId(), Op.EQ, id);
+            sc.and(sc.entity().getId(), Op.EQ, id);
         }
         if (nspId != null) {
-            sc.addAnd(sc.getEntity().getNspId(), Op.EQ, nspId);
+            sc.and(sc.entity().getNspId(), Op.EQ, nspId);
         }
         if (enabled != null) {
-            sc.addAnd(sc.getEntity().isEnabled(), Op.EQ, enabled);
+            sc.and(sc.entity().isEnabled(), Op.EQ, enabled);
         }
         
         //return only VR and VPC VR
-        sc.addAnd(sc.getEntity().getType(), Op.IN, VirtualRouterProvider.VirtualRouterProviderType.VPCVirtualRouter, VirtualRouterProvider.VirtualRouterProviderType.VirtualRouter);
+        sc.and(sc.entity().getType(), Op.IN, VirtualRouterProvider.Type.VPCVirtualRouter, VirtualRouterProvider.Type.VirtualRouter);
         
         return sc.list();
     }
@@ -1005,7 +990,7 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
     @Override
     public boolean verifyServicesCombination(Set<Service> services) {
         if (!services.contains(Service.SourceNat)) {
-            if (services.contains(Service.StaticNat) || services.contains(Service.Firewall) || services.contains(Service.Lb) || 
+            if (services.contains(Service.StaticNat) || services.contains(Service.Firewall) || services.contains(Service.Lb) ||
                     services.contains(Service.PortForwarding) || services.contains(Service.Vpn)) {
                 String servicesList = "[";
                 for (Service service : services) {
@@ -1024,8 +1009,8 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
         return this;
     }
 
-    protected VirtualRouterProviderType getVirtualRouterProvider() {
-        return VirtualRouterProviderType.VirtualRouter;
+    protected VirtualRouterProvider.Type getVirtualRouterProvider() {
+        return VirtualRouterProvider.Type.VirtualRouter;
     }
 
 	@Override
@@ -1035,13 +1020,13 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
 		return null;
 	}
 	private boolean canHandleLbRules(List<LoadBalancingRule> rules) {
-	    Map<Capability, String> lbCaps = this.getCapabilities().get(Service.Lb);
+	    Map<Capability, String> lbCaps = getCapabilities().get(Service.Lb);
 	    if (!lbCaps.isEmpty()) {
 	        String schemeCaps = lbCaps.get(Capability.LbSchemes);
 	        if (schemeCaps != null) {
 	            for (LoadBalancingRule rule : rules) {
 	                if (!schemeCaps.contains(rule.getScheme().toString())) {
-	                    s_logger.debug("Scheme " + rules.get(0).getScheme() + " is not supported by the provider " + this.getName());
+	                    s_logger.debug("Scheme " + rules.get(0).getScheme() + " is not supported by the provider " + getName());
 	                    return false;
 	                }
 	            }
@@ -1052,16 +1037,16 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
 
 	@Override
 	public boolean prepareMigration(NicProfile nic, Network network,
-			VirtualMachineProfile<? extends VirtualMachine> vm,
+			VirtualMachineProfile vm,
 			DeployDestination dest, ReservationContext context) {
 		if (nic.getBroadcastType() != Networks.BroadcastDomainType.Pvlan) {
 			return true;
 		}
-		if (vm.getType() == Type.DomainRouter) {
+        if (vm.getType() == VirtualMachine.Type.DomainRouter) {
 			assert vm instanceof DomainRouterVO;
 			DomainRouterVO router = (DomainRouterVO)vm.getVirtualMachine();
 			_routerMgr.setupDhcpForPvlan(false, router, router.getHostId(), nic);
-		} else if (vm.getType() == Type.User){
+        } else if (vm.getType() == VirtualMachine.Type.User) {
 			assert vm instanceof UserVmVO;
 			UserVmVO userVm = (UserVmVO)vm.getVirtualMachine();
 			_userVmMgr.setupVmForPvlan(false, userVm.getHostId(), nic);
@@ -1071,16 +1056,16 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
 
 	@Override
 	public void rollbackMigration(NicProfile nic, Network network,
-			VirtualMachineProfile<? extends VirtualMachine> vm,
+			VirtualMachineProfile vm,
 			ReservationContext src, ReservationContext dst) {
 		if (nic.getBroadcastType() != Networks.BroadcastDomainType.Pvlan) {
 			return;
 		}
-		if (vm.getType() == Type.DomainRouter) {
+        if (vm.getType() == VirtualMachine.Type.DomainRouter) {
 			assert vm instanceof DomainRouterVO;
 			DomainRouterVO router = (DomainRouterVO)vm.getVirtualMachine();
 			_routerMgr.setupDhcpForPvlan(true, router, router.getHostId(), nic);
-		} else if (vm.getType() == Type.User){
+        } else if (vm.getType() == VirtualMachine.Type.User) {
 			assert vm instanceof UserVmVO;
 			UserVmVO userVm = (UserVmVO)vm.getVirtualMachine();
 			_userVmMgr.setupVmForPvlan(true, userVm.getHostId(), nic);
@@ -1089,16 +1074,16 @@ public class VirtualRouterElement extends AdapterBase implements VirtualRouterEl
 
 	@Override
 	public void commitMigration(NicProfile nic, Network network,
-			VirtualMachineProfile<? extends VirtualMachine> vm,
+			VirtualMachineProfile vm,
 			ReservationContext src, ReservationContext dst) {
 		if (nic.getBroadcastType() != Networks.BroadcastDomainType.Pvlan) {
 			return;
 		}
-		if (vm.getType() == Type.DomainRouter) {
+        if (vm.getType() == VirtualMachine.Type.DomainRouter) {
 			assert vm instanceof DomainRouterVO;
 			DomainRouterVO router = (DomainRouterVO)vm.getVirtualMachine();
 			_routerMgr.setupDhcpForPvlan(true, router, router.getHostId(), nic);
-		} else if (vm.getType() == Type.User){
+        } else if (vm.getType() == VirtualMachine.Type.User) {
 			assert vm instanceof UserVmVO;
 			UserVmVO userVm = (UserVmVO)vm.getVirtualMachine();
 			_userVmMgr.setupVmForPvlan(true, userVm.getHostId(), nic);

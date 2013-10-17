@@ -28,9 +28,11 @@ import javax.ejb.Local;
 import javax.inject.Inject;
 import javax.naming.ConfigurationException;
 
-import org.apache.cloudstack.network.ExternalNetworkDeviceManager.NetworkDevice;
 import org.apache.log4j.Logger;
 import org.springframework.stereotype.Component;
+
+import org.apache.cloudstack.engine.orchestration.service.NetworkOrchestrationService;
+import org.apache.cloudstack.network.ExternalNetworkDeviceManager.NetworkDevice;
 
 import com.cloud.agent.AgentManager;
 import com.cloud.agent.api.ConfigurePortForwardingRulesOnLogicalRouterAnswer;
@@ -74,11 +76,11 @@ import com.cloud.host.HostVO;
 import com.cloud.host.dao.HostDao;
 import com.cloud.host.dao.HostDetailsDao;
 import com.cloud.network.IpAddress;
+import com.cloud.network.IpAddressManager;
 import com.cloud.network.Network;
 import com.cloud.network.Network.Capability;
 import com.cloud.network.Network.Provider;
 import com.cloud.network.Network.Service;
-import com.cloud.network.NetworkManager;
 import com.cloud.network.NetworkModel;
 import com.cloud.network.Networks;
 import com.cloud.network.Networks.BroadcastDomainType;
@@ -117,37 +119,36 @@ import com.cloud.utils.net.NetUtils;
 import com.cloud.vm.NicProfile;
 import com.cloud.vm.NicVO;
 import com.cloud.vm.ReservationContext;
-import com.cloud.vm.VirtualMachine;
 import com.cloud.vm.VirtualMachineProfile;
 import com.cloud.vm.dao.NicDao;
 
 @Component
-@Local(value = {NetworkElement.class, ConnectivityProvider.class, 
-        SourceNatServiceProvider.class, StaticNatServiceProvider.class, 
+@Local(value = {NetworkElement.class, ConnectivityProvider.class,
+        SourceNatServiceProvider.class, StaticNatServiceProvider.class,
         PortForwardingServiceProvider.class, IpDeployer.class} )
 public class NiciraNvpElement extends AdapterBase implements
-ConnectivityProvider, SourceNatServiceProvider,
-PortForwardingServiceProvider, StaticNatServiceProvider,
-NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
+        ConnectivityProvider, SourceNatServiceProvider,
+        PortForwardingServiceProvider, StaticNatServiceProvider,
+        NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
     private static final Logger s_logger = Logger
             .getLogger(NiciraNvpElement.class);
 
     private static final Map<Service, Map<Capability, String>> capabilities = setCapabilities();
 
-    @Inject 
+    @Inject
     NicDao _nicDao;
-    @Inject 
-    ResourceManager _resourceMgr;    
+    @Inject
+    ResourceManager _resourceMgr;
     @Inject
     PhysicalNetworkDao _physicalNetworkDao;
     @Inject
     PhysicalNetworkServiceProviderDao _physicalNetworkServiceProviderDao;
     @Inject
     NiciraNvpDao _niciraNvpDao;
-    @Inject 
+    @Inject
     HostDetailsDao _hostDetailsDao;
     @Inject
-    HostDao _hostDao;  
+    HostDao _hostDao;
     @Inject
     AgentManager _agentMgr;
     @Inject
@@ -157,7 +158,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
     @Inject
     NetworkDao _networkDao;
     @Inject
-    NetworkManager _networkManager;
+    NetworkOrchestrationService _networkManager;
     @Inject
     NetworkModel _networkModel;
     @Inject
@@ -166,6 +167,8 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
     NetworkServiceMapDao _ntwkSrvcDao;
     @Inject
     VlanDao _vlanDao;
+    @Inject
+    IpAddressManager _ipAddrMgr;
 
     @Override
     public Map<Service, Map<Capability, String>> getCapabilities() {
@@ -199,7 +202,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
             return false;
         }
 
-        return true;        
+        return true;
     }
 
     @Override
@@ -213,8 +216,8 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
     @Override
     public boolean implement(Network network, NetworkOffering offering,
             DeployDestination dest, ReservationContext context)
-                    throws ConcurrentOperationException, ResourceUnavailableException,
-                    InsufficientCapacityException {
+            throws ConcurrentOperationException, ResourceUnavailableException,
+            InsufficientCapacityException {
         s_logger.debug("entering NiciraNvpElement implement function for network "
                 + network.getDisplayText()
                 + " (state "
@@ -259,7 +262,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
                 network.getId(), Service.SourceNat, Provider.NiciraNvp)) {
             s_logger.debug("Apparently we are supposed to provide SourceNat on this network");
 
-            PublicIp sourceNatIp = _networkManager
+            PublicIp sourceNatIp = _ipAddrMgr
                     .assignSourceNatIpAddressToGuestNetwork(owner, network);
             String publicCidr = sourceNatIp.getAddress().addr() + "/"
                     + NetUtils.getCidrSize(sourceNatIp.getVlanNetmask());
@@ -270,13 +273,13 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
 
             CreateLogicalRouterCommand cmd = new CreateLogicalRouterCommand(
                     niciraNvpHost.getDetail("l3gatewayserviceuuid"), vlanid,
-                    network.getBroadcastUri().getSchemeSpecificPart(),
+                    BroadcastDomainType.getValue(network.getBroadcastUri()),
                     "router-" + network.getDisplayText(), publicCidr,
                     sourceNatIp.getGateway(), internalCidr, context
-                    .getDomain().getName()
-                    + "-"
-                    + context.getAccount().getAccountName());
-            CreateLogicalRouterAnswer answer = (CreateLogicalRouterAnswer) _agentMgr
+                            .getDomain().getName()
+                            + "-"
+                            + context.getAccount().getAccountName());
+            CreateLogicalRouterAnswer answer = (CreateLogicalRouterAnswer)_agentMgr
                     .easySend(niciraNvpHost.getId(), cmd);
             if (answer.getResult() == false) {
                 s_logger.error("Failed to create Logical Router for network "
@@ -290,13 +293,12 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
             _niciraNvpRouterMappingDao.persist(routermapping);
         }
 
-
         return true;
     }
 
     @Override
     public boolean prepare(Network network, NicProfile nic,
-            VirtualMachineProfile<? extends VirtualMachine> vm,
+            VirtualMachineProfile vm,
             DeployDestination dest, ReservationContext context)
                     throws ConcurrentOperationException, ResourceUnavailableException,
                     InsufficientCapacityException {
@@ -328,7 +330,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
             FindLogicalSwitchPortCommand findCmd = new FindLogicalSwitchPortCommand(
                     existingNicMap.getLogicalSwitchUuid(),
                     existingNicMap.getLogicalSwitchPortUuid());
-            FindLogicalSwitchPortAnswer answer = (FindLogicalSwitchPortAnswer) _agentMgr
+            FindLogicalSwitchPortAnswer answer = (FindLogicalSwitchPortAnswer)_agentMgr
                     .easySend(niciraNvpHost.getId(), findCmd);
 
             if (answer.getResult()) {
@@ -336,11 +338,11 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
                         + nic.getName() + " with uuid "
                         + existingNicMap.getLogicalSwitchPortUuid());
                 UpdateLogicalSwitchPortCommand cmd = new UpdateLogicalSwitchPortCommand(
-                        existingNicMap.getLogicalSwitchPortUuid(), network
-                        .getBroadcastUri().getSchemeSpecificPart(),
+                        existingNicMap.getLogicalSwitchPortUuid(),
+                        BroadcastDomainType.getValue(network.getBroadcastUri()),
                         nicVO.getUuid(), context.getDomain().getName() + "-"
                                 + context.getAccount().getAccountName(),
-                                nic.getName());
+                        nic.getName());
                 _agentMgr.easySend(niciraNvpHost.getId(), cmd);
                 return true;
             } else {
@@ -352,10 +354,10 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
         }
 
         CreateLogicalSwitchPortCommand cmd = new CreateLogicalSwitchPortCommand(
-                network.getBroadcastUri().getSchemeSpecificPart(),
+                BroadcastDomainType.getValue(network.getBroadcastUri()),
                 nicVO.getUuid(), context.getDomain().getName() + "-"
                         + context.getAccount().getAccountName(), nic.getName());
-        CreateLogicalSwitchPortAnswer answer = (CreateLogicalSwitchPortAnswer) _agentMgr
+        CreateLogicalSwitchPortAnswer answer = (CreateLogicalSwitchPortAnswer)_agentMgr
                 .easySend(niciraNvpHost.getId(), cmd);
 
         if (answer == null || !answer.getResult()) {
@@ -363,8 +365,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
             return false;
         }
 
-        NiciraNvpNicMappingVO nicMap = new NiciraNvpNicMappingVO(network
-                .getBroadcastUri().getSchemeSpecificPart(),
+        NiciraNvpNicMappingVO nicMap = new NiciraNvpNicMappingVO(BroadcastDomainType.getValue(network.getBroadcastUri()),
                 answer.getLogicalSwitchPortUuid(), nicVO.getUuid());
         _niciraNvpNicMappingDao.persist(nicMap);
 
@@ -373,7 +374,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
 
     @Override
     public boolean release(Network network, NicProfile nic,
-            VirtualMachineProfile<? extends VirtualMachine> vm,
+            VirtualMachineProfile vm,
             ReservationContext context) throws ConcurrentOperationException,
             ResourceUnavailableException {
 
@@ -408,7 +409,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
         DeleteLogicalSwitchPortCommand cmd = new DeleteLogicalSwitchPortCommand(
                 nicMap.getLogicalSwitchUuid(),
                 nicMap.getLogicalSwitchPortUuid());
-        DeleteLogicalSwitchPortAnswer answer = (DeleteLogicalSwitchPortAnswer) _agentMgr
+        DeleteLogicalSwitchPortAnswer answer = (DeleteLogicalSwitchPortAnswer)_agentMgr
                 .easySend(niciraNvpHost.getId(), cmd);
 
         if (answer == null || !answer.getResult()) {
@@ -456,7 +457,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
 
             DeleteLogicalRouterCommand cmd = new DeleteLogicalRouterCommand(routermapping.getLogicalRouterUuid());
             DeleteLogicalRouterAnswer answer =
-                    (DeleteLogicalRouterAnswer) _agentMgr.easySend(niciraNvpHost.getId(), cmd);
+                    (DeleteLogicalRouterAnswer)_agentMgr.easySend(niciraNvpHost.getId(), cmd);
             if (answer.getResult() == false) {
                 s_logger.error("Failed to delete LogicalRouter for network "
                         + network.getDisplayText());
@@ -487,7 +488,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
     @Override
     public boolean shutdownProviderInstances(
             PhysicalNetworkServiceProvider provider, ReservationContext context)
-                    throws ConcurrentOperationException, ResourceUnavailableException {
+            throws ConcurrentOperationException, ResourceUnavailableException {
         // Nothing to do here.
         return true;
     }
@@ -629,7 +630,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
             } else {
                 throw new CloudRuntimeException(
                         "Failed to add Nicira Nvp Device due to internal error.");
-            }            
+            }
         } catch (ConfigurationException e) {
             txn.rollback();
             throw new CloudRuntimeException(e.getMessage());
@@ -665,7 +666,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
         if (niciraNvpDevice == null) {
             throw new InvalidParameterValueException(
                     "Could not find a nicira device with id " + niciraDeviceId);
-        }        
+        }
 
         // Find the physical network we work for
         Long physicalNetworkId = niciraNvpDevice.getPhysicalNetworkId();
@@ -736,7 +737,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
         return responseList;
     }
 
-    @Override    
+    @Override
     public List<? extends Network> listNiciraNvpDeviceNetworks(
             ListNiciraNvpDeviceNetworksCmd cmd) {
         Long niciraDeviceId = cmd.getNiciraNvpDeviceId();
@@ -745,7 +746,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
         if (niciraNvpDevice == null) {
             throw new InvalidParameterValueException(
                     "Could not find a nicira device with id " + niciraDeviceId);
-        }        
+        }
 
         // Find the physical network we work for
         Long physicalNetworkId = niciraNvpDevice.getPhysicalNetworkId();
@@ -761,7 +762,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
                 .listByPhysicalNetwork(physicalNetworkId);
 
         // Networks with broadcast type lswitch are ours
-        List<NetworkVO> responseList  = new ArrayList<NetworkVO>();
+        List<NetworkVO> responseList = new ArrayList<NetworkVO>();
         for (NetworkVO network : networkList) {
             if (network.getBroadcastDomainType() == Networks.BroadcastDomainType.Lswitch) {
                 responseList.add(network);
@@ -818,7 +819,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
     @Override
     public boolean applyIps(Network network,
             List<? extends PublicIpAddress> ipAddress, Set<Service> services)
-                    throws ResourceUnavailableException {
+            throws ResourceUnavailableException {
         if (services.contains(Service.SourceNat)) {
             // Only if we need to provide SourceNat we need to configure the logical router
             // SourceNat is required for StaticNat and PortForwarding
@@ -852,7 +853,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
             }
             ConfigurePublicIpsOnLogicalRouterCommand cmd = new ConfigurePublicIpsOnLogicalRouterCommand(routermapping.getLogicalRouterUuid(),
                     niciraNvpHost.getDetail("l3gatewayserviceuuid"), cidrs);
-            ConfigurePublicIpsOnLogicalRouterAnswer answer = (ConfigurePublicIpsOnLogicalRouterAnswer) _agentMgr.easySend(niciraNvpHost.getId(), cmd);
+            ConfigurePublicIpsOnLogicalRouterAnswer answer = (ConfigurePublicIpsOnLogicalRouterAnswer)_agentMgr.easySend(niciraNvpHost.getId(), cmd);
             //FIXME answer can be null if the host is down
             return answer.getResult();
         }
@@ -869,7 +870,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
     @Override
     public boolean applyStaticNats(Network network,
             List<? extends StaticNat> rules)
-                    throws ResourceUnavailableException {
+            throws ResourceUnavailableException {
         if (!canHandle(network, Service.StaticNat)) {
             return false;
         }
@@ -907,7 +908,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
 
         ConfigureStaticNatRulesOnLogicalRouterCommand cmd =
                 new ConfigureStaticNatRulesOnLogicalRouterCommand(routermapping.getLogicalRouterUuid(), staticNatRules);
-        ConfigureStaticNatRulesOnLogicalRouterAnswer answer = (ConfigureStaticNatRulesOnLogicalRouterAnswer) _agentMgr.easySend(niciraNvpHost.getId(), cmd);
+        ConfigureStaticNatRulesOnLogicalRouterAnswer answer = (ConfigureStaticNatRulesOnLogicalRouterAnswer)_agentMgr.easySend(niciraNvpHost.getId(), cmd);
 
         return answer.getResult();
     }
@@ -950,7 +951,7 @@ NiciraNvpElementService, ResourceStateAdapter, IpDeployer {
 
         ConfigurePortForwardingRulesOnLogicalRouterCommand cmd =
                 new ConfigurePortForwardingRulesOnLogicalRouterCommand(routermapping.getLogicalRouterUuid(), portForwardingRules);
-        ConfigurePortForwardingRulesOnLogicalRouterAnswer answer = (ConfigurePortForwardingRulesOnLogicalRouterAnswer) _agentMgr.easySend(niciraNvpHost.getId(), cmd);
+        ConfigurePortForwardingRulesOnLogicalRouterAnswer answer = (ConfigurePortForwardingRulesOnLogicalRouterAnswer)_agentMgr.easySend(niciraNvpHost.getId(), cmd);
 
         return answer.getResult();
     }

@@ -61,8 +61,8 @@ public interface Network extends ControlledEntity, StateObject<Network.State>, I
         public static final Service Connectivity = new Service("Connectivity");
 
 
-        private String name;
-        private Capability[] caps;
+        private final String name;
+        private final Capability[] caps;
 
         public Service(String name, Capability... caps) {
             this.name = name;
@@ -124,13 +124,13 @@ public interface Network extends ControlledEntity, StateObject<Network.State>, I
         public static final Provider SecurityGroupProvider = new Provider("SecurityGroupProvider", false);
         public static final Provider VPCVirtualRouter = new Provider("VpcVirtualRouter", false);
         public static final Provider None = new Provider("None", false);
-        // NiciraNvp is not an "External" provider, otherwise we get in trouble with NetworkServiceImpl.providersConfiguredForExternalNetworking 
+        // NiciraNvp is not an "External" provider, otherwise we get in trouble with NetworkServiceImpl.providersConfiguredForExternalNetworking
         public static final Provider NiciraNvp = new Provider("NiciraNvp", false);
         public static final Provider InternalLbVm = new Provider("InternalLbVm", false);
         public static final Provider CiscoVnmc = new Provider("CiscoVnmc", true);
 
-        private String name;
-        private boolean isExternal;
+        private final String name;
+        private final boolean isExternal;
 
         public Provider(String name, boolean isExternal) {
             this.name = name;
@@ -181,8 +181,9 @@ public interface Network extends ControlledEntity, StateObject<Network.State>, I
         public static final Capability SupportedEgressProtocols = new Capability("SupportedEgressProtocols");
         public static final Capability HealthCheckPolicy = new Capability("HealthCheckPolicy");
         public static final Capability LbSchemes = new Capability("LbSchemes");
+        public static final Capability DhcpAccrossMultipleSubnets = new Capability("DhcpAccrossMultipleSubnets");
 
-        private String name;
+        private final String name;
 
         public Capability(String name) {
             this.name = name;
@@ -247,8 +248,8 @@ public interface Network extends ControlledEntity, StateObject<Network.State>, I
     	private String ip6Address;
     	
     	public IpAddresses(String ip4Address, String ip6Address) {
-    		this.setIp4Address(ip4Address);
-    		this.setIp6Address(ip6Address);
+    		setIp4Address(ip4Address);
+    		setIp6Address(ip6Address);
     	}
 
 		public String getIp4Address() {
@@ -297,6 +298,7 @@ public interface Network extends ControlledEntity, StateObject<Network.State>, I
 
     long getNetworkOfferingId();
 
+    @Override
     State getState();
 
     long getRelated();
@@ -324,6 +326,8 @@ public interface Network extends ControlledEntity, StateObject<Network.State>, I
     boolean getSpecifyIpRanges();
 
     boolean getDisplayNetwork();
+
+    String getGuruName();
 
     /**
      * @return

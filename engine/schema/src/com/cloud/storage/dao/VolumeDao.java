@@ -19,6 +19,7 @@ package com.cloud.storage.dao;
 import java.util.List;
 
 import com.cloud.hypervisor.Hypervisor.HypervisorType;
+import com.cloud.storage.ScopeType;
 import com.cloud.storage.Storage.ImageFormat;
 import com.cloud.storage.Volume;
 import com.cloud.storage.VolumeVO;
@@ -58,11 +59,13 @@ public interface VolumeDao extends GenericDao<VolumeVO, Long>, StateDao<Volume.S
 
     List<VolumeVO> findByPoolId(long poolId);
 
+    List<VolumeVO> findByPoolId(long poolId, Volume.Type volumeType);
+
     List<VolumeVO> findByInstanceAndDeviceId(long instanceId, long deviceId);
 
     List<VolumeVO> findUsableVolumesForInstance(long instanceId);
 
-    Long countAllocatedVolumesForAccount(long accountId); 
+    Long countAllocatedVolumesForAccount(long accountId);
 
     HypervisorType getHypervisorType(long volumeId);
 
@@ -73,20 +76,29 @@ public interface VolumeDao extends GenericDao<VolumeVO, Long>, StateDao<Volume.S
     List<VolumeVO> findReadyRootVolumesByInstance(long instanceId);
 
     List<Long> listPoolIdsByVolumeCount(long dcId, Long podId, Long clusterId, long accountId);
-
+    List<Long> listZoneWidePoolIdsByVolumeCount(long dcId, long accountId);
     /**
      * Gets the Total Primary Storage space allocated for an account
-     *
+     * 
      * @param account
+     * @param list of ids of virtual router VMs under this account
      * @return total Primary Storage space (in bytes) used
      */
-    long primaryStorageUsedForAccount(long accountId);
+    long primaryStorageUsedForAccount(long accountId, List<Long> virtualRouters);
 
     /**
-     * Gets the Total Secondary Storage space used by volumes allocated for an account
-     *
+     * Gets the Total Secondary Storage space used by volumes allocated for an
+     * account
+     * 
      * @param account
      * @return total Secondary Storage space (in bytes) used
      */
     long secondaryStorageUsedForAccount(long accountId);
+
+    /***
+     *
+     * @param volumeId
+     * @return the scope of the storage pool where the volume is present (ZONE/CLUSTER)
+     */
+    ScopeType getVolumeStoragePoolScope(long volumeId);
 }

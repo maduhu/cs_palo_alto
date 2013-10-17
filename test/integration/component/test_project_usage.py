@@ -970,16 +970,17 @@ class TestISOUsage(cloudstackTestCase):
         qresult = str(qresultset)
         self.debug("Query result: %s" % qresult)
 
+        imageStores = ImageStore.list(self.api_client,zoneid=self.zone.id)
         # Check for ISO.CREATE, ISO.DELETE events in cloud.usage_event table
         self.assertEqual(
                             qresult.count('ISO.CREATE'),
-                            1,
+                            len(imageStores),
                             "Check ISO.CREATE event in events table"
                         )
 
         self.assertEqual(
                             qresult.count('ISO.DELETE'),
-                            1,
+                            len(imageStores),
                             "Check ISO.DELETE in events table"
                         )
         return
@@ -1659,7 +1660,10 @@ class TestVpnUsage(cloudstackTestCase):
 
         # Remove VPN user
         self.debug("Deleting VPN user: %s" % vpnuser.id)
-        vpnuser.delete(self.apiclient)
+        vpnuser.delete(
+                       self.apiclient,
+                       projectid=self.project.id
+                       )
 
         # Delete VPN access
         self.debug("Deleting VPN: %s" % vpn.publicipid)

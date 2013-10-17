@@ -19,6 +19,7 @@
 #Import Local Modules
 import marvin
 from marvin.cloudstackTestCase import *
+from marvin.cloudstackException import *
 from marvin.cloudstackAPI import *
 from marvin.remoteSSHClient import remoteSSHClient
 from marvin.integration.lib.utils import *
@@ -80,7 +81,6 @@ class Services:
                         "privateport": 22,
                         "publicport": 22,
                         "protocol": 'TCP',
-                        "diskdevice": "/dev/xvdb",
                         "ostype": 'CentOS 5.5 (64-bit)',
                         "sleep": 10,
                         "timeout": 600,
@@ -346,7 +346,7 @@ class TestVolumes(cloudstackTestCase):
                         cls.disk_offering,
                         cls.volume,
                         cls.account
-        ]
+                        ]
 
     @classmethod
     def tearDownClass(cls):
@@ -521,13 +521,15 @@ class TestVolumes(cloudstackTestCase):
         #Attempt to download the volume and save contents locally
         try:
             formatted_url = urllib.unquote_plus(extract_vol.url)
+            self.debug("Attempting to download volume at url %s" % formatted_url)
             response = urllib.urlopen(formatted_url)
+            self.debug("response from volume url %s" % response.getcode())
             fd, path = tempfile.mkstemp()
+            self.debug("Saving volume %s to path %s" %(self.volume.id, path))
             os.close(fd)
-            fd = open(path, 'wb')
-            fd.write(response.read())
-            fd.close()
-
+            with open(path, 'wb') as fd:
+                fd.write(response.read())
+            self.debug("Saved volume successfully")
         except Exception:
             self.fail(
                 "Extract Volume Failed with invalid URL %s (vol id: %s)" \

@@ -81,9 +81,8 @@ public class ListPortableIpRangesCmd extends BaseListCmd {
     public void execute(){
         ListResponse<PortableIpRangeResponse> response = new ListResponse<PortableIpRangeResponse>();
         List<PortableIpRangeResponse> responses = new ArrayList<PortableIpRangeResponse>();
-        List<? extends PortableIpRange> portableIpRanges = new ArrayList<PortableIpRange>();
 
-        portableIpRanges = _configService.listPortableIpRanges(this);
+        List<? extends PortableIpRange> portableIpRanges = _configService.listPortableIpRanges(this);
         if (portableIpRanges != null && !portableIpRanges.isEmpty()) {
             for (PortableIpRange range : portableIpRanges) {
                 PortableIpRangeResponse rangeResponse = _responseGenerator.createPortableIPRangeResponse(range);
@@ -97,8 +96,6 @@ public class ListPortableIpRangesCmd extends BaseListCmd {
                     }
                     rangeResponse.setPortableIpResponses(portableIpResponses);
                 }
-
-                rangeResponse.setObjectName("portableiprange");
                 responses.add(rangeResponse);
             }
         }

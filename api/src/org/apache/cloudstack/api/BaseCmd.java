@@ -21,23 +21,24 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 
 import javax.inject.Inject;
 
 import org.apache.cloudstack.affinity.AffinityGroupService;
+
 import com.cloud.server.ResourceMetaDataService;
+
 import org.apache.cloudstack.network.element.InternalLoadBalancerElementService;
 import org.apache.cloudstack.network.lb.ApplicationLoadBalancerService;
 import org.apache.cloudstack.network.lb.InternalLoadBalancerVMService;
 import org.apache.cloudstack.query.QueryService;
 import org.apache.cloudstack.usage.UsageService;
+
 import org.apache.log4j.Logger;
 
 import com.cloud.configuration.ConfigurationService;
-import com.cloud.dao.EntityManager;
 import com.cloud.domain.Domain;
 import com.cloud.exception.ConcurrentOperationException;
 import com.cloud.exception.InsufficientCapacityException;
@@ -69,13 +70,13 @@ import com.cloud.server.TaggedResourceService;
 import com.cloud.storage.DataStoreProviderApiService;
 import com.cloud.storage.StorageService;
 import com.cloud.storage.VolumeApiService;
-import com.cloud.storage.snapshot.SnapshotService;
-import com.cloud.template.TemplateService;
+import com.cloud.storage.snapshot.SnapshotApiService;
+import com.cloud.template.TemplateApiService;
 import com.cloud.user.Account;
 import com.cloud.user.AccountService;
 import com.cloud.user.DomainService;
 import com.cloud.user.ResourceLimitService;
-import com.cloud.utils.Pair;
+import com.cloud.utils.db.EntityManager;
 import com.cloud.vm.UserVmService;
 import com.cloud.vm.snapshot.VMSnapshotService;
 
@@ -116,9 +117,9 @@ public abstract class BaseCmd {
     @Inject public VolumeApiService _volumeService;
     @Inject public ResourceService _resourceService;
     @Inject public NetworkService _networkService;
-    @Inject public TemplateService _templateService;
+    @Inject public TemplateApiService _templateService;
     @Inject public SecurityGroupService _securityGroupService;
-    @Inject public SnapshotService _snapshotService;
+    @Inject public SnapshotApiService _snapshotService;
     @Inject public VpcVirtualNetworkApplianceService _routerService;
     @Inject public ResponseGenerator _responseGenerator;
     @Inject public EntityManager _entityMgr;
@@ -297,172 +298,6 @@ public abstract class BaseCmd {
             }
         }
         return lowercaseParams;
-    }
-
-    public String buildResponse(ServerApiException apiException, String responseType) {
-        StringBuffer sb = new StringBuffer();
-        if (RESPONSE_TYPE_JSON.equalsIgnoreCase(responseType)) {
-            // JSON response
-            sb.append("{ \"" + getCommandName() + "\" : { " + "\"@attributes\":{\"cloud-stack-version\":\"" + _mgr.getVersion() + "\"},");
-            sb.append("\"errorcode\" : \"" + apiException.getErrorCode() + "\", \"description\" : \"" + apiException.getDescription() + "\" } }");
-        } else {
-            sb.append("<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>");
-            sb.append("<" + getCommandName() + ">");
-            sb.append("<errorcode>" + apiException.getErrorCode() + "</errorcode>");
-            sb.append("<description>" + escapeXml(apiException.getDescription()) + "</description>");
-            sb.append("</" + getCommandName() + " cloud-stack-version=\"" + _mgr.getVersion() + "\">");
-        }
-        return sb.toString();
-    }
-
-    public String buildResponse(List<Pair<String, Object>> tagList, String responseType) {
-        StringBuffer prefixSb = new StringBuffer();
-        StringBuffer suffixSb = new StringBuffer();
-
-        // set up the return value with the name of the response
-        if (RESPONSE_TYPE_JSON.equalsIgnoreCase(responseType)) {
-            prefixSb.append("{ \"" + getCommandName() + "\" : { \"@attributes\":{\"cloud-stack-version\":\"" + _mgr.getVersion() + "\"},");
-        } else {
-            prefixSb.append("<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>");
-            prefixSb.append("<" + getCommandName() + " cloud-stack-version=\"" + _mgr.getVersion() + "\">");
-        }
-
-        int i = 0;
-        for (Pair<String, Object> tagData : tagList) {
-            String tagName = tagData.first();
-            Object tagValue = tagData.second();
-            if (tagValue instanceof Object[]) {
-                Object[] subObjects = (Object[]) tagValue;
-                if (subObjects.length < 1) {
-                    continue;
-                }
-                writeObjectArray(responseType, suffixSb, i++, tagName, subObjects);
-            } else {
-                writeNameValuePair(suffixSb, tagName, tagValue, responseType, i++);
-            }
-        }
-
-        if (suffixSb.length() > 0) {
-            if (RESPONSE_TYPE_JSON.equalsIgnoreCase(responseType)) { // append comma only if we have some suffix else
-                // not as per strict Json syntax.
-                prefixSb.append(",");
-            }
-            prefixSb.append(suffixSb);
-        }
-        // close the response
-        if (RESPONSE_TYPE_JSON.equalsIgnoreCase(responseType)) {
-            prefixSb.append("} }");
-        } else {
-            prefixSb.append("</" + getCommandName() + ">");
-        }
-        return prefixSb.toString();
-    }
-
-    private void writeNameValuePair(StringBuffer sb, String tagName, Object tagValue, String responseType, int propertyCount) {
-        if (tagValue == null) {
-            return;
-        }
-
-        if (tagValue instanceof Object[]) {
-            Object[] subObjects = (Object[]) tagValue;
-            if (subObjects.length < 1) {
-                return;
-            }
-            writeObjectArray(responseType, sb, propertyCount, tagName, subObjects);
-        } else {
-            if (RESPONSE_TYPE_JSON.equalsIgnoreCase(responseType)) {
-                String seperator = ((propertyCount > 0) ? ", " : "");
-                sb.append(seperator + "\"" + tagName + "\" : \"" + escapeJSON(tagValue.toString()) + "\"");
-            } else {
-                sb.append("<" + tagName + ">" + escapeXml(tagValue.toString()) + "</" + tagName + ">");
-            }
-        }
-    }
-
-    @SuppressWarnings("rawtypes")
-    private void writeObjectArray(String responseType, StringBuffer sb, int propertyCount, String tagName, Object[] subObjects) {
-        if (RESPONSE_TYPE_JSON.equalsIgnoreCase(responseType)) {
-            String separator = ((propertyCount > 0) ? ", " : "");
-            sb.append(separator);
-        }
-        int j = 0;
-        for (Object subObject : subObjects) {
-            if (subObject instanceof List) {
-                List subObjList = (List) subObject;
-                writeSubObject(sb, tagName, subObjList, responseType, j++);
-            }
-        }
-
-        if (RESPONSE_TYPE_JSON.equalsIgnoreCase(responseType)) {
-            sb.append("]");
-        }
-    }
-
-    @SuppressWarnings("rawtypes")
-    private void writeSubObject(StringBuffer sb, String tagName, List tagList, String responseType, int objectCount) {
-        if (RESPONSE_TYPE_JSON.equalsIgnoreCase(responseType)) {
-            sb.append(((objectCount == 0) ? "\"" + tagName + "\" : [  { " : ", { "));
-        } else {
-            sb.append("<" + tagName + ">");
-        }
-
-        int i = 0;
-        for (Object tag : tagList) {
-            if (tag instanceof Pair) {
-                Pair nameValuePair = (Pair) tag;
-                writeNameValuePair(sb, (String) nameValuePair.first(), nameValuePair.second(), responseType, i++);
-            }
-        }
-
-        if (RESPONSE_TYPE_JSON.equalsIgnoreCase(responseType)) {
-            sb.append("}");
-        } else {
-            sb.append("</" + tagName + ">");
-        }
-    }
-
-    /**
-     * Escape xml response set to false by default. API commands to override this method to allow escaping
-     */
-    public boolean requireXmlEscape() {
-        return true;
-    }
-
-    private String escapeXml(String xml) {
-        if (!requireXmlEscape()) {
-            return xml;
-        }
-        int iLen = xml.length();
-        if (iLen == 0) {
-            return xml;
-        }
-        StringBuffer sOUT = new StringBuffer(iLen + 256);
-        int i = 0;
-        for (; i < iLen; i++) {
-            char c = xml.charAt(i);
-            if (c == '<') {
-                sOUT.append("&lt;");
-            } else if (c == '>') {
-                sOUT.append("&gt;");
-            } else if (c == '&') {
-                sOUT.append("&amp;");
-            } else if (c == '"') {
-                sOUT.append("&quot;");
-            } else if (c == '\'') {
-                sOUT.append("&apos;");
-            } else {
-                sOUT.append(c);
-            }
-        }
-        return sOUT.toString();
-    }
-
-    private static String escapeJSON(String str) {
-        if (str == null) {
-            return str;
-        }
-
-        return str.replace("\"", "\\\"");
     }
 
     protected long getInstanceIdFromJobSuccessResult(String result) {

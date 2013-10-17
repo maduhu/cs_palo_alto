@@ -17,11 +17,11 @@
 package com.cloud.storage;
 
 import java.io.File;
-import java.io.FileFilter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import javax.ejb.Local;
 import javax.naming.ConfigurationException;
@@ -40,7 +40,7 @@ public class JavaStorageLayer implements StorageLayer {
     
     public JavaStorageLayer(boolean makeWorldWriteable) {
         this();
-        this._makeWorldWriteable = makeWorldWriteable;
+        _makeWorldWriteable = makeWorldWriteable;
     }
 
     @Override
@@ -164,6 +164,21 @@ public class JavaStorageLayer implements StorageLayer {
     }
 
     @Override
+    public File createUniqDir() {
+        String dirName = System.getProperty("java.io.tmpdir");
+        if (dirName != null) {
+            File dir = new File(dirName);
+            if (dir.exists()) {
+                String uniqDirName = dir.getAbsolutePath() + File.separator + UUID.randomUUID().toString();
+                if (mkdir(uniqDirName)) {
+                    return new File(uniqDirName);
+                }
+            }
+        }
+        return null;
+    }
+
+    @Override
     public boolean mkdirs(String path) {
         synchronized(path.intern()) {
             File dir = new File(path);
@@ -203,6 +218,7 @@ public class JavaStorageLayer implements StorageLayer {
     	return dirPaths;
     }
     
+    @Override
     public boolean setWorldReadableAndWriteable(File file) {
     	return (file.setReadable(true, false) && file.setWritable(true, false));
     }

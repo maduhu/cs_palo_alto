@@ -16,11 +16,11 @@
 // under the License.
 package org.apache.cloudstack.affinity;
 
+import com.cloud.deploy.DeployDestination;
 import com.cloud.deploy.DeploymentPlan;
 import com.cloud.deploy.DeploymentPlanner.ExcludeList;
 import com.cloud.exception.AffinityConflictException;
 import com.cloud.utils.component.Adapter;
-import com.cloud.vm.VirtualMachine;
 import com.cloud.vm.VirtualMachineProfile;
 
 public interface AffinityGroupProcessor extends Adapter {
@@ -36,7 +36,7 @@ public interface AffinityGroupProcessor extends Adapter {
      * @param avoid
      *            avoid these data centers, pods, clusters, or hosts.
      */
-    void process(VirtualMachineProfile<? extends VirtualMachine> vm, DeploymentPlan plan, ExcludeList avoid)
+    void process(VirtualMachineProfile vm, DeploymentPlan plan, ExcludeList avoid)
             throws AffinityConflictException;
 
     /**
@@ -46,4 +46,46 @@ public interface AffinityGroupProcessor extends Adapter {
      * @return String Affinity/Anti-affinity type
      */
     String getType();
+
+    /**
+     * check() is called to see if the planned destination fits the group
+     * requirements
+     *
+     * @param vm
+     *            virtual machine.
+     * @param plannedDestination
+     *            deployment destination where VM is planned to be deployed
+     */
+    boolean check(VirtualMachineProfile vm, DeployDestination plannedDestination)
+            throws AffinityConflictException;
+
+    /**
+     * isAdminControlledGroup() should return true if the affinity/anti-affinity
+     * group can only be operated on[create/delete/modify] by the Admin
+     *
+     * @return boolean true/false
+     */
+    boolean isAdminControlledGroup();
+
+
+    /**
+     * canBeSharedDomainWide() should return true if the affinity/anti-affinity
+     * group can be created for a domain and shared by all accounts under the
+     * domain.
+     *
+     * @return boolean true/false
+     */
+    boolean canBeSharedDomainWide();
+
+    /**
+     * subDomainAccess() should return true if the affinity/anti-affinity group
+     * can be created for a domain and used by the sub-domains. If true, all
+     * accounts under the sub-domains can see this group and use it.
+     * 
+     * @return boolean true/false
+     */
+    boolean subDomainAccess();
+
+    void handleDeleteGroup(AffinityGroup group);
+
 }

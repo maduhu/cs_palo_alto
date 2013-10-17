@@ -25,9 +25,8 @@ import javax.naming.ConfigurationException;
 import org.apache.log4j.Logger;
 
 import com.cloud.exception.InternalErrorException;
-import com.cloud.storage.StorageLayer;
 import com.cloud.storage.Storage.ImageFormat;
-import com.cloud.storage.template.Processor.FormatInfo;
+import com.cloud.storage.StorageLayer;
 import com.cloud.utils.component.AdapterBase;
 
 @Local(value=Processor.class)
@@ -67,5 +66,10 @@ public class RawImageProcessor extends AdapterBase implements Processor {
         s_logger.debug("Process raw image " + info.filename + " successfully");
         return info;
 	}
+
+    @Override
+    public Long getVirtualSize(File file) {
+        return file.length();
+    }
 
 }

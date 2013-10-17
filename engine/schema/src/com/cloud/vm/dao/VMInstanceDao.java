@@ -76,6 +76,8 @@ public interface VMInstanceDao extends GenericDao<VMInstanceVO, Long>, StateDao<
 
     VMInstanceVO findVMByInstanceName(String name);
 
+    VMInstanceVO findVMByHostName(String hostName);
+
     void updateProxyId(long id, Long proxyId, Date time);
 
     List<VMInstanceVO> listByHostIdTypes(long hostid, VirtualMachine.Type... types);
@@ -88,7 +90,7 @@ public interface VMInstanceDao extends GenericDao<VMInstanceVO, Long>, StateDao<
     List<VMInstanceVO> listByTypeAndState(VirtualMachine.Type type, State state);
 
     List<VMInstanceVO> listByAccountId(long accountId);
-    public Long countAllocatedVirtualRoutersForAccount(long accountId);
+    public List<Long> findIdsOfAllocatedVirtualRoutersForAccount(long accountId);
 
     List<VMInstanceVO> listByClusterId(long clusterId);  // this does not pull up VMs which are starting
     List<VMInstanceVO> listLHByClusterId(long clusterId);  // get all the VMs even starting one on this cluster

@@ -36,7 +36,7 @@ public interface DataCenterDao extends GenericDao<DataCenterVO, Long> {
     Pair<String, Long> allocatePrivateIpAddress(long id, long podId, long instanceId, String reservationId);
     DataCenterIpAddressVO allocatePrivateIpAddress(long id, String reservationId);
     String allocateLinkLocalIpAddress(long id, long podId, long instanceId, String reservationId);
-    String allocateVnet(long dcId, long physicalNetworkId, long accountId, String reservationId);
+    String allocateVnet(long dcId, long physicalNetworkId, long accountId, String reservationId, boolean canUseSystemGuestVlans);
     
     void releaseVnet(String vnet, long dcId, long physicalNetworkId, long accountId, String reservationId);
     void releasePrivateIpAddress(String ipAddress, long dcId, Long instanceId);
@@ -70,7 +70,7 @@ public interface DataCenterDao extends GenericDao<DataCenterVO, Long> {
 
 	int countZoneVlans(long dcId, boolean onlyCountAllocated);
     
-    void addVnet(long dcId, long physicalNetworkId, int start, int end);
+    void addVnet(long dcId, long physicalNetworkId, List<String> vnets);
     void deleteVnet(long physicalNetworkId);
     List<DataCenterVnetVO> listAllocatedVnets(long physicalNetworkId);
 

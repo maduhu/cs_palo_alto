@@ -25,14 +25,12 @@ import java.util.Map;
 import javax.inject.Inject;
 import javax.naming.ConfigurationException;
 
-import com.cloud.exception.InvalidParameterValueException;
 import org.springframework.stereotype.Component;
 
 import com.cloud.dc.DataCenterVnetVO;
 import com.cloud.network.dao.AccountGuestVlanMapDao;
 import com.cloud.network.dao.AccountGuestVlanMapVO;
 import com.cloud.utils.db.DB;
-import com.cloud.utils.db.GenericDao;
 import com.cloud.utils.db.GenericDaoBase;
 import com.cloud.utils.db.GenericSearchBuilder;
 import com.cloud.utils.db.JoinBuilder;
@@ -48,7 +46,7 @@ import com.cloud.utils.exception.CloudRuntimeException;
  * data center/physical_network and the vnet that appears within the physical network.
  */
 @Component
-@DB(txn=false)
+@DB
 public class DataCenterVnetDaoImpl extends GenericDaoBase<DataCenterVnetVO, Long> implements DataCenterVnetDao {
 
     private final SearchBuilder<DataCenterVnetVO> FreeVnetSearch;
@@ -64,6 +62,7 @@ public class DataCenterVnetDaoImpl extends GenericDaoBase<DataCenterVnetVO, Long
     private final GenericSearchBuilder<DataCenterVnetVO, Integer> countVnetsAllocatedToAccount;
     protected GenericSearchBuilder<DataCenterVnetVO, Integer> countVnetsDedicatedToAccount;
     protected SearchBuilder<AccountGuestVlanMapVO> AccountGuestVlanMapSearch;
+    protected GenericSearchBuilder<DataCenterVnetVO, String> ListAllVnetSearch;
 
     @Inject protected AccountGuestVlanMapDao _accountGuestVlanMapDao;
     
@@ -73,6 +72,12 @@ public class DataCenterVnetDaoImpl extends GenericDaoBase<DataCenterVnetVO, Long
         return listBy(sc);
     }
 
+    @Override
+    public  int  countAllocatedVnets(long physicalNetworkId){
+        SearchCriteria<DataCenterVnetVO> sc = DcSearchAllocated.create();
+        sc.setParameters("physicalNetworkId", physicalNetworkId);
+        return listBy(sc).size();
+    }
     public List<DataCenterVnetVO> listAllocatedVnetsInRange(long dcId, long physicalNetworkId, Integer start, Integer end) {
         SearchCriteria<DataCenterVnetVO> sc = DcSearchAllocatedInRange.create();
         sc.setParameters("dc",dcId);
@@ -109,18 +114,19 @@ public class DataCenterVnetDaoImpl extends GenericDaoBase<DataCenterVnetVO, Long
         sc.setParameters("vnet", vnet);
 
         return listBy(sc);
-    }    
-    
-    @DB
-    public void add(long dcId, long physicalNetworkId, int start, int end) {
+    }
+
+
+    @DB   //In the List<string> argument each string is a vlan. not a vlanRange.
+    public void add(long dcId, long physicalNetworkId, List<String> vnets) {
         String insertVnet = "INSERT INTO `cloud`.`op_dc_vnet_alloc` (vnet, data_center_id, physical_network_id) VALUES ( ?, ?, ?)";
         
         Transaction txn = Transaction.currentTxn();
         try {
             txn.start();
             PreparedStatement stmt = txn.prepareAutoCloseStatement(insertVnet);
-            for (int i = start; i <= end; i++) {
-                stmt.setString(1, String.valueOf(i));
+            for (int i =0; i <= vnets.size()-1; i++) {
+                stmt.setString(1, vnets.get(i));
                 stmt.setLong(2, dcId);
                 stmt.setLong(3, physicalNetworkId);
                 stmt.addBatch();
@@ -128,23 +134,22 @@ public class DataCenterVnetDaoImpl extends GenericDaoBase<DataCenterVnetVO, Long
             stmt.executeBatch();
             txn.commit();
         } catch (SQLException e) {
-           if (!e.getMessage().contains("Duplicate")){
-               txn.rollback();
-               txn.close();
-               throw new CloudRuntimeException("Exception caught adding vnet ", e);
-           }
+            throw new CloudRuntimeException(e.getMessage());
         }
     }
 
-    public void deleteRange(Transaction txn, long dcId, long physicalNetworkId, int start, int end) {
-        String deleteVnet = "DELETE FROM `cloud`.`op_dc_vnet_alloc` WHERE data_center_id=? AND physical_network_id=? AND taken IS NULL AND vnet BETWEEN ? AND ?";
+    //In the List<string> argument each string is a vlan. not a vlanRange.
+    public void deleteVnets(Transaction txn, long dcId, long physicalNetworkId, List<String> vnets) {
+        String deleteVnet = "DELETE FROM `cloud`.`op_dc_vnet_alloc` WHERE data_center_id=? AND physical_network_id=? AND taken IS NULL AND vnet=?";
         try {
             PreparedStatement stmt = txn.prepareAutoCloseStatement(deleteVnet);
-            stmt.setLong(1,dcId);
-            stmt.setLong(2,physicalNetworkId);
-            stmt.setString(3,((Integer)start).toString());
-            stmt.setString(4,((Integer)end).toString());
-            stmt.execute();
+            for (int i =0; i <= vnets.size()-1; i++) {
+                stmt.setLong(1,dcId);
+                stmt.setLong(2,physicalNetworkId);
+                stmt.setString(3, vnets.get(i));
+                stmt.addBatch();
+            }
+            stmt.executeBatch();
         } catch (SQLException e) {
             throw new CloudRuntimeException("Exception caught adding vnet ", e);
         }
@@ -225,6 +230,14 @@ public class DataCenterVnetDaoImpl extends GenericDaoBase<DataCenterVnetVO, Long
         sc.setParameters("dc", dcId);
         sc.setParameters("accountId", accountId);
         return customSearch(sc, null).get(0);
+    }
+
+    @Override
+    public List<String> listVnetsByPhysicalNetworkAndDataCenter(long dcId, long physicalNetworkId){
+        SearchCriteria<String> sc = ListAllVnetSearch.create();
+        sc.setParameters("dc", dcId );
+        sc.setParameters("physicalNetworkId", physicalNetworkId);
+        return customSearch(sc, null);
     }
 
     @Override
@@ -314,5 +327,12 @@ public class DataCenterVnetDaoImpl extends GenericDaoBase<DataCenterVnetVO, Long
         countVnetsAllocatedToAccount.and("accountId", countVnetsAllocatedToAccount.entity().getAccountId(), SearchCriteria.Op.EQ);
         countVnetsAllocatedToAccount.select(null, Func.COUNT, countVnetsAllocatedToAccount.entity().getId());
         countVnetsAllocatedToAccount.done();
+
+        ListAllVnetSearch  = createSearchBuilder(String.class);
+        ListAllVnetSearch.select(null, Func.NATIVE, ListAllVnetSearch.entity().getVnet());
+        ListAllVnetSearch.and("dc", ListAllVnetSearch.entity().getDataCenterId(), Op.EQ);
+        ListAllVnetSearch.and("physicalNetworkId", ListAllVnetSearch.entity().getPhysicalNetworkId(), Op.EQ);
+        ListAllVnetSearch.done();
+
     }
 }

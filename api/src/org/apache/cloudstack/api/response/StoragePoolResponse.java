@@ -37,14 +37,12 @@ public class StoragePoolResponse extends BaseResponse {
     @SerializedName(ApiConstants.ZONE_NAME) @Param(description="the Zone name of the storage pool")
     private String zoneName;
 
-    @SerializedName(ApiConstants.ZONE_TYPE) @Param(description = "network type of the availability zone")
-    private String zoneType;
 
     @SerializedName("podid") @Param(description="the Pod ID of the storage pool")
     private String podId;
 
     @SerializedName("podname") @Param(description="the Pod name of the storage pool")
-    private String podName;    
+    private String podName;
 
     @SerializedName("name") @Param(description="the name of the storage pool")
     private String name;
@@ -75,6 +73,9 @@ public class StoragePoolResponse extends BaseResponse {
 
     @SerializedName("disksizeused") @Param(description="the host's currently used disk size")
     private Long diskSizeUsed;
+
+    @SerializedName("capacityiops") @Param(description="IOPS CloudStack can provision from this storage pool")
+    private Long capacityIops;
 
     @SerializedName("tags") @Param(description="the tags for the storage pool")
     private String tags;
@@ -141,14 +142,6 @@ public class StoragePoolResponse extends BaseResponse {
 
     public void setZoneName(String zoneName) {
         this.zoneName = zoneName;
-    }
-
-    public String getZoneType() {
-        return zoneType;
-    }
-
-    public void setZoneType(String zoneType) {
-        this.zoneType = zoneType;
     }
 
     public String getPodId() {
@@ -245,6 +238,14 @@ public class StoragePoolResponse extends BaseResponse {
 
     public void setDiskSizeUsed(Long diskSizeUsed) {
         this.diskSizeUsed = diskSizeUsed;
+    }
+
+    public Long getCapacityIops() {
+        return capacityIops;
+    }
+
+    public void setCapacityIops(Long capacityIops) {
+        this.capacityIops = capacityIops;
     }
 
     public String getTags() {

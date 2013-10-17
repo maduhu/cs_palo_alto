@@ -19,10 +19,13 @@ package org.apache.cloudstack.networkoffering;
 
 import java.io.IOException;
 
+import javax.inject.Inject;
+
 import org.apache.cloudstack.acl.SecurityChecker;
+import org.apache.cloudstack.affinity.AffinityGroupService;
+import org.apache.cloudstack.affinity.dao.AffinityGroupDao;
 import org.apache.cloudstack.region.PortableIpDaoImpl;
 import org.apache.cloudstack.region.dao.RegionDaoImpl;
-import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreDao;
 import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreDaoImpl;
 import org.apache.cloudstack.test.utils.SpringUtils;
 import org.mockito.Mockito;
@@ -35,12 +38,22 @@ import org.springframework.core.type.classreading.MetadataReader;
 import org.springframework.core.type.classreading.MetadataReaderFactory;
 import org.springframework.core.type.filter.TypeFilter;
 
+import org.apache.cloudstack.acl.SecurityChecker;
+import org.apache.cloudstack.context.CallContext;
+import org.apache.cloudstack.engine.orchestration.service.NetworkOrchestrationService;
+import org.apache.cloudstack.engine.subsystem.api.storage.DataStoreManager;
+import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
+import org.apache.cloudstack.region.PortableIpDaoImpl;
+import org.apache.cloudstack.region.PortableIpRangeDaoImpl;
+import org.apache.cloudstack.region.dao.RegionDaoImpl;
+import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreDaoImpl;
+import org.apache.cloudstack.test.utils.SpringUtils;
+
 import com.cloud.agent.AgentManager;
 import com.cloud.alert.AlertManager;
 import com.cloud.api.query.dao.UserAccountJoinDaoImpl;
 import com.cloud.capacity.dao.CapacityDaoImpl;
 import com.cloud.cluster.agentlb.dao.HostTransferMapDaoImpl;
-import com.cloud.configuration.dao.ConfigurationDao;
 import com.cloud.dc.ClusterDetailsDao;
 import com.cloud.dc.dao.AccountVlanMapDaoImpl;
 import com.cloud.dc.dao.ClusterDaoImpl;
@@ -59,8 +72,8 @@ import com.cloud.event.dao.UsageEventDaoImpl;
 import com.cloud.host.dao.HostDaoImpl;
 import com.cloud.host.dao.HostDetailsDaoImpl;
 import com.cloud.host.dao.HostTagsDaoImpl;
+import com.cloud.network.IpAddressManager;
 import com.cloud.network.Ipv6AddressManager;
-import com.cloud.network.NetworkManager;
 import com.cloud.network.NetworkModel;
 import com.cloud.network.NetworkService;
 import com.cloud.network.StorageNetworkManager;
@@ -96,28 +109,22 @@ import com.cloud.server.ManagementService;
 import com.cloud.service.dao.ServiceOfferingDaoImpl;
 import com.cloud.service.dao.ServiceOfferingDetailsDaoImpl;
 import com.cloud.storage.dao.DiskOfferingDaoImpl;
-import com.cloud.storage.dao.S3DaoImpl;
 import com.cloud.storage.dao.SnapshotDaoImpl;
 import com.cloud.storage.dao.StoragePoolDetailsDaoImpl;
-import com.cloud.storage.dao.SwiftDaoImpl;
 import com.cloud.storage.dao.VolumeDaoImpl;
-import com.cloud.storage.s3.S3Manager;
 import com.cloud.storage.secondary.SecondaryStorageVmManager;
-import com.cloud.storage.swift.SwiftManager;
 import com.cloud.tags.dao.ResourceTagsDaoImpl;
 import com.cloud.user.AccountDetailsDao;
 import com.cloud.user.AccountManager;
 import com.cloud.user.ResourceLimitService;
-import com.cloud.user.UserContext;
-import com.cloud.user.UserContextInitializer;
 import com.cloud.user.dao.AccountDaoImpl;
 import com.cloud.user.dao.UserDaoImpl;
+import com.cloud.utils.db.EntityManager;
 import com.cloud.vm.dao.InstanceGroupDaoImpl;
 import com.cloud.vm.dao.NicDaoImpl;
 import com.cloud.vm.dao.NicSecondaryIpDaoImpl;
 import com.cloud.vm.dao.UserVmDao;
 import com.cloud.vm.dao.VMInstanceDaoImpl;
-import org.apache.cloudstack.region.PortableIpRangeDaoImpl;
 
 @Configuration
 @ComponentScan(basePackageClasses={
@@ -125,7 +132,6 @@ import org.apache.cloudstack.region.PortableIpRangeDaoImpl;
         VolumeDaoImpl.class,
         HostPodDaoImpl.class,
         DomainDaoImpl.class,
-        SwiftDaoImpl.class,
         ServiceOfferingDaoImpl.class,
         ServiceOfferingDetailsDaoImpl.class,
         VlanDaoImpl.class,
@@ -151,7 +157,6 @@ import org.apache.cloudstack.region.PortableIpRangeDaoImpl;
         DcDetailsDaoImpl.class,
         NicSecondaryIpDaoImpl.class,
         UserIpv6AddressDaoImpl.class,
-        S3DaoImpl.class,
         UserDaoImpl.class,
         NicDaoImpl.class,
         NetworkDomainDaoImpl.class,
@@ -202,6 +207,11 @@ public class ChildTestConfiguration {
     public AlertManager alertMgr() {
         return Mockito.mock(AlertManager.class);
     }
+    
+    @Bean
+    public EntityManager entityMgr() {
+        return Mockito.mock(EntityManager.class);
+    }
 
     @Bean
     public SecurityChecker securityChkr() {
@@ -221,16 +231,6 @@ public class ChildTestConfiguration {
     @Bean
     public SecondaryStorageVmManager ssvmMgr() {
         return Mockito.mock(SecondaryStorageVmManager.class);
-    }
-
-    @Bean
-    public SwiftManager swiftMgr() {
-        return Mockito.mock(SwiftManager.class);
-    }
-
-    @Bean
-    public S3Manager s3Mgr() {
-        return Mockito.mock(S3Manager.class);
     }
 
     @Bean
@@ -309,18 +309,18 @@ public class ChildTestConfiguration {
     }
 
     @Bean
-    public UserContext userContext() {
-        return Mockito.mock(UserContext.class);
+    public CallContext userContext() {
+        return Mockito.mock(CallContext.class);
     }
 
     @Bean
-    public UserContextInitializer userContextInitializer() {
-        return Mockito.mock(UserContextInitializer.class);
+    public NetworkOrchestrationService networkManager() {
+        return Mockito.mock(NetworkOrchestrationService.class);
     }
 
     @Bean
-    public NetworkManager networkManager() {
-        return Mockito.mock(NetworkManager.class);
+    public IpAddressManager ipAddressManager() {
+        return Mockito.mock(IpAddressManager.class);
     }
 
     @Bean
@@ -345,7 +345,7 @@ public class ChildTestConfiguration {
 
     @Bean
     public DataCenterLinkLocalIpAddressDao datacenterLinkLocalIpAddressDao() {
-        return Mockito.mock(DataCenterLinkLocalIpAddressDao.class);
+    	return Mockito.mock(DataCenterLinkLocalIpAddressDao.class);
     }
 
     @Bean
@@ -361,6 +361,21 @@ public class ChildTestConfiguration {
     @Bean
     public AccountDetailsDao accountDetailsDao() {
         return Mockito.mock(AccountDetailsDao.class);
+    }
+
+    @Bean
+    public DataStoreManager dataStoreManager() {
+        return Mockito.mock(DataStoreManager.class);
+    }
+
+    @Bean
+    public AffinityGroupDao affinityGroupDao() {
+        return Mockito.mock(AffinityGroupDao.class);
+    }
+
+    @Bean
+    public AffinityGroupService affinityGroupService() {
+        return Mockito.mock(AffinityGroupService.class);
     }
 
     public static class Library implements TypeFilter {

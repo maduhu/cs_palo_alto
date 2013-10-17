@@ -31,6 +31,8 @@ public class ApiConstants {
     public static final String BOOTABLE = "bootable";
     public static final String BIND_DN = "binddn";
     public static final String BIND_PASSWORD = "bindpass";
+    public static final String BYTES_READ_RATE = "bytesreadrate";
+    public static final String BYTES_WRITE_RATE = "byteswriterate";
     public static final String CATEGORY = "category";
     public static final String CERTIFICATE = "certificate";
     public static final String PRIVATE_KEY = "privatekey";
@@ -46,9 +48,11 @@ public class ApiConstants {
     public static final String COMPONENT = "component";
     public static final String CPU_NUMBER = "cpunumber";
     public static final String CPU_SPEED = "cpuspeed";
-    public static final String CPU_OVERCOMMIT_RATIO="cpuovercommitratio";
     public static final String CREATED = "created";
     public static final String CUSTOMIZED = "customized";
+    public static final String CUSTOMIZED_IOPS = "customizediops";
+    public static final String MIN_IOPS = "miniops";
+    public static final String MAX_IOPS = "maxiops";
     public static final String DESCRIPTION = "description";
     public static final String DESTINATION_ZONE_ID = "destzoneid";
     public static final String DETAILS = "details";
@@ -89,6 +93,7 @@ public class ApiConstants {
     public static final String GSLB_SERVICE_DOMAIN_NAME = "gslbdomainname";
     public static final String GSLB_SERVICE_TYPE = "gslbservicetype";
     public static final String GSLB_STICKY_SESSION_METHOD = "gslbstickysessionmethodname";
+    public static final String GSLB_LBRULE_WEIGHT_MAP = "gslblbruleweightsmap";
     public static final String GUEST_CIDR_ADDRESS = "guestcidraddress";
     public static final String GUEST_VLAN_RANGE = "guestvlanrange";
     public static final String HA_ENABLE = "haenable";
@@ -104,6 +109,8 @@ public class ApiConstants {
     public static final String INTERNAL_DNS1 = "internaldns1";
     public static final String INTERNAL_DNS2 = "internaldns2";
     public static final String INTERVAL_TYPE = "intervaltype";
+    public static final String IOPS_READ_RATE = "iopsreadrate";
+    public static final String IOPS_WRITE_RATE = "iopswriterate";
     public static final String IP_ADDRESS = "ipaddress";
     public static final String IP6_ADDRESS = "ip6address";
     public static final String IP_ADDRESS_ID = "ipaddressid";
@@ -117,6 +124,7 @@ public class ApiConstants {
     public static final String IS_PORTABLE = "isportable";
     public static final String IS_PUBLIC = "ispublic";
     public static final String IS_PERSISTENT = "ispersistent";
+    public static final String EGRESS_DEFAULT_POLICY = "egressdefaultpolicy";
     public static final String IS_READY = "isready";
     public static final String IS_RECURSIVE = "isrecursive";
     public static final String ISO_FILTER = "isofilter";
@@ -133,7 +141,6 @@ public class ApiConstants {
     public static final String MAX = "max";
     public static final String MAX_SNAPS = "maxsnaps";
     public static final String MEMORY = "memory";
-    public static final String MEMORY_OVERCOMMIT_RATIO="memoryovercommitratio";
     public static final String MODE = "mode";
     public static final String NAME = "name";
     public static final String METHOD_NAME = "methodname";
@@ -241,8 +248,7 @@ public class ApiConstants {
     public static final String IS_VOLATILE = "isvolatile";
     public static final String VOLUME_ID = "volumeid";
     public static final String ZONE_ID = "zoneid";
-    public static final String ZONE_NAME = "zonename";
-    public static final String ZONE_TYPE = "zonetype";
+    public static final String ZONE_NAME = "zonename";    
     public static final String NETWORK_TYPE = "networktype";
     public static final String PAGE = "page";
     public static final String PAGE_SIZE = "pagesize";
@@ -322,6 +328,9 @@ public class ApiConstants {
     public static final String SERVICE_CAPABILITY_LIST = "servicecapabilitylist";
     public static final String CAN_CHOOSE_SERVICE_CAPABILITY = "canchooseservicecapability";
     public static final String PROVIDER = "provider";
+    public static final String MANAGED = "managed";
+    public static final String CAPACITY_BYTES = "capacitybytes";
+    public static final String CAPACITY_IOPS = "capacityiops";
     public static final String NETWORK_SPEED = "networkspeed";
     public static final String BROADCAST_DOMAIN_RANGE = "broadcastdomainrange";
     public static final String ISOLATION_METHODS = "isolationmethods";
@@ -487,7 +496,6 @@ public class ApiConstants {
     public static final String UCS_BLADE_DN = "bladedn";
     public static final String UCS_BLADE_ID = "bladeid";
     public static final String VM_GUEST_IP = "vmguestip";
-    public static final String OLDER_THAN = "olderthan";
     public static final String HEALTHCHECK_RESPONSE_TIMEOUT = "responsetimeout";
     public static final String HEALTHCHECK_INTERVAL_TIME = "intervaltime";
     public static final String HEALTHCHECK_HEALTHY_THRESHOLD = "healthythreshold";
@@ -506,7 +514,11 @@ public class ApiConstants {
     public static final String DEPLOYMENT_PLANNER = "deploymentplanner";
     public static final String ACL_ID = "aclid";
     public static final String NUMBER = "number";
-
+    public static final String IS_DYNAMICALLY_SCALABLE = "isdynamicallyscalable";
+    public static final String ROUTING = "isrouting";
+    public static final String MAX_CONNECTIONS = "maxconnections";
+    public static final String SERVICE_STATE = "servicestate";
+    public static final String RESOURCE_TAG = "resourcetag";
     public enum HostDetails {
         all, capacity, events, stats, min;
     }
@@ -514,15 +526,4 @@ public class ApiConstants {
     public enum VMDetails {
         all, group, nics, stats, secgrp, tmpl, servoff, iso, volume, min, affgrp;
     }
-
-    public enum LDAPParams {
-        hostname, port, usessl, queryfilter, searchbase, dn, passwd, truststore, truststorepass;
-
-        @Override
-        public String toString() {
-            return "ldap." + name();
-        }
-    }
-
-
 }

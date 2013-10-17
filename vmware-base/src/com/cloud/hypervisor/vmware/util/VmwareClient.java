@@ -24,17 +24,17 @@ import java.util.Map;
 import java.util.StringTokenizer;
 
 import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.SSLSession;
 import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLSession;
 import javax.xml.ws.BindingProvider;
 import javax.xml.ws.handler.MessageContext;
-
 
 import com.vmware.vim25.DynamicProperty;
 import com.vmware.vim25.InvalidCollectorVersionFaultMsg;
 import com.vmware.vim25.InvalidPropertyFaultMsg;
 import com.vmware.vim25.LocalizedMethodFault;
 import com.vmware.vim25.ManagedObjectReference;
+import com.vmware.vim25.ObjectContent;
 import com.vmware.vim25.ObjectSpec;
 import com.vmware.vim25.ObjectUpdate;
 import com.vmware.vim25.ObjectUpdateKind;
@@ -51,7 +51,6 @@ import com.vmware.vim25.TraversalSpec;
 import com.vmware.vim25.UpdateSet;
 import com.vmware.vim25.VimPortType;
 import com.vmware.vim25.VimService;
-import com.vmware.vim25.ObjectContent;
 
 /**
  * A wrapper class to handle Vmware vsphere connection and disconnection.
@@ -78,6 +77,22 @@ public class VmwareClient {
             return;
         }
     }
+    
+    static {
+    	try {
+			trustAllHttpsCertificates();
+	        HostnameVerifier hv = new HostnameVerifier() {
+	            @Override
+	            public boolean verify(String urlHostName, SSLSession session) {
+	                return true;
+	            }
+	        };
+	        HttpsURLConnection.setDefaultHostnameVerifier(hv);
+	        
+        	vimService = new VimService();
+		} catch (Exception e) {
+		}   	
+    }
 
     private static void trustAllHttpsCertificates() throws Exception {
         // Create a trust manager that does not validate certificate chains:
@@ -92,18 +107,14 @@ public class VmwareClient {
     }
 
     private ManagedObjectReference SVC_INST_REF = new ManagedObjectReference();
-    private ManagedObjectReference propCollectorRef;
-    private ManagedObjectReference rootRef;
-    private VimService vimService;
+    private static VimService vimService;
     private VimPortType vimPort;
-    private ServiceContent serviceContent;
     private String serviceCookie;
     private final String SVC_INST_NAME = "ServiceInstance";
 
     private boolean isConnected = false;
 
     public VmwareClient(String name) {
-
     }
 
     /**
@@ -113,20 +124,9 @@ public class VmwareClient {
      *             the exception
      */
     public void connect(String url, String userName, String password) throws Exception {
-
-        HostnameVerifier hv = new HostnameVerifier() {
-            @Override
-            public boolean verify(String urlHostName, SSLSession session) {
-                return true;
-            }
-        };
-        trustAllHttpsCertificates();
-        HttpsURLConnection.setDefaultHostnameVerifier(hv);
-
         SVC_INST_REF.setType(SVC_INST_NAME);
         SVC_INST_REF.setValue(SVC_INST_NAME);
 
-        vimService = new VimService();
         vimPort = vimService.getVimPort();
         Map<String, Object> ctxt = ((BindingProvider) vimPort).getRequestContext();
 
@@ -136,7 +136,7 @@ public class VmwareClient {
         ctxt.put("com.sun.xml.internal.ws.request.timeout", 600000);
         ctxt.put("com.sun.xml.internal.ws.connect.timeout", 600000);
 
-        serviceContent = vimPort.retrieveServiceContent(SVC_INST_REF);
+        ServiceContent serviceContent = vimPort.retrieveServiceContent(SVC_INST_REF);
 
         // Extract a cookie. See vmware sample program com.vmware.httpfileaccess.GetVMFiles
         Map<String, List<String>> headers = (Map<String, List<String>>) ((BindingProvider) vimPort)
@@ -150,9 +150,6 @@ public class VmwareClient {
 
         vimPort.login(serviceContent.getSessionManager(), userName, password, null);
         isConnected = true;
-
-        propCollectorRef = serviceContent.getPropertyCollector();
-        rootRef = serviceContent.getRootFolder();
     }
 
     /**
@@ -162,7 +159,7 @@ public class VmwareClient {
      */
     public void disconnect() throws Exception {
         if (isConnected) {
-            vimPort.logout(serviceContent.getSessionManager());
+            vimPort.logout(getServiceContent().getSessionManager());
         }
         isConnected = false;
     }
@@ -178,7 +175,12 @@ public class VmwareClient {
      * @return Service instance content
      */
     public ServiceContent getServiceContent() {
-        return serviceContent;
+    	
+        try {
+			return vimPort.retrieveServiceContent(SVC_INST_REF);
+		} catch (RuntimeFaultFaultMsg e) {
+		}
+        return null;
     }
 
     /**
@@ -192,16 +194,53 @@ public class VmwareClient {
      * @return Service property collector
      */
     public ManagedObjectReference getPropCol() {
-        return propCollectorRef;
+        return getServiceContent().getPropertyCollector();
     }
 
     /**
      * @return Root folder
      */
     public ManagedObjectReference getRootFolder() {
-        return rootRef;
+        return getServiceContent().getRootFolder();
     }
 
+	public boolean validate() {
+		//
+		// There is no official API to validate an open vCenter API session. This is hacking way to tell if
+		// an open vCenter API session is still valid for making calls.
+		//
+		// It will give false result if there really does not exist data-center in the inventory, however, I consider
+		// this really is not possible in production deployment
+		//
+		
+        // Create PropertySpecs
+        PropertySpec pSpec = new PropertySpec();
+        pSpec.setType("Datacenter");
+        pSpec.setAll(false);
+        pSpec.getPathSet().add("name");
+
+        ObjectSpec oSpec = new ObjectSpec();
+        oSpec.setObj(getRootFolder());
+        oSpec.setSkip(false);
+        oSpec.getSelectSet().addAll(constructCompleteTraversalSpec());
+
+        PropertyFilterSpec spec = new PropertyFilterSpec();
+        spec.getPropSet().add(pSpec);
+        spec.getObjectSet().add(oSpec);
+        List<PropertyFilterSpec> specArr = new ArrayList<PropertyFilterSpec>();
+        specArr.add(spec);
+
+        try {
+        	List<ObjectContent> ocary = vimPort.retrieveProperties(getPropCol(), specArr);
+        	if(ocary != null && ocary.size() > 0)
+        		return true;
+        } catch(Exception e) {
+        	return false;
+        }
+        
+        return false;
+	}
+    
     /**
      * Get the property value of a managed object.
      *
@@ -261,7 +300,7 @@ public class VmwareClient {
         List<PropertyFilterSpec> specArr = new ArrayList<PropertyFilterSpec>();
         specArr.add(spec);
 
-        return vimPort.retrieveProperties(propCollectorRef, specArr);
+        return vimPort.retrieveProperties(getPropCol(), specArr);    
     }
 
     /**
@@ -329,7 +368,8 @@ public class VmwareClient {
         pSpec.setType(objmor.getType());
         spec.getPropSet().add(pSpec);
 
-        ManagedObjectReference filterSpecRef = vimPort.createFilter(propCollectorRef, spec, true);
+        ManagedObjectReference propertyCollector = this.getPropCol();
+        ManagedObjectReference filterSpecRef = vimPort.createFilter(propertyCollector, spec, true);
 
         boolean reached = false;
 
@@ -338,7 +378,7 @@ public class VmwareClient {
         List<ObjectUpdate> objupary = null;
         List<PropertyChange> propchgary = null;
         while (!reached) {
-            updateset = vimPort.waitForUpdates(propCollectorRef, version);
+            updateset = vimPort.waitForUpdates(propertyCollector, version);
             if (updateset == null || updateset.getFilterSet() == null) {
                 continue;
             }
@@ -541,7 +581,7 @@ public class VmwareClient {
         List<PropertyFilterSpec> specArr = new ArrayList<PropertyFilterSpec>();
         specArr.add(spec);
 
-        List<ObjectContent> ocary = vimPort.retrieveProperties(propCollectorRef, specArr);
+        List<ObjectContent> ocary = vimPort.retrieveProperties(getPropCol(), specArr);
 
         if (ocary == null || ocary.size() == 0) {
             return null;
@@ -554,7 +594,7 @@ public class VmwareClient {
             if (type == null || type.equals(mor.getType())) {
                 if (propary.size() > 0) {
                     String propval = (String) propary.get(0).getVal();
-                    if (propval != null && name.equals(propval))
+                    if (propval != null && name.equalsIgnoreCase(propval))
                         return mor;
                 }
             }

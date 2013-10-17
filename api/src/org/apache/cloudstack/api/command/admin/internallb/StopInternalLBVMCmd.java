@@ -17,22 +17,23 @@
 package org.apache.cloudstack.api.command.admin.internallb;
 
 import org.apache.cloudstack.api.APICommand;
+import org.apache.cloudstack.api.ApiCommandJobType;
 import org.apache.cloudstack.api.ApiConstants;
 import org.apache.cloudstack.api.ApiErrorCode;
 import org.apache.cloudstack.api.BaseAsyncCmd;
 import org.apache.cloudstack.api.Parameter;
 import org.apache.cloudstack.api.ServerApiException;
 import org.apache.cloudstack.api.response.DomainRouterResponse;
+import org.apache.cloudstack.context.CallContext;
+
 import org.apache.log4j.Logger;
 
-import com.cloud.async.AsyncJob;
 import com.cloud.event.EventTypes;
 import com.cloud.exception.ConcurrentOperationException;
 import com.cloud.exception.InvalidParameterValueException;
 import com.cloud.exception.ResourceUnavailableException;
 import com.cloud.network.router.VirtualRouter;
 import com.cloud.network.router.VirtualRouter.Role;
-import com.cloud.user.UserContext;
 
 @APICommand(name = "stopInternalLoadBalancerVM", description = "Stops an Internal LB vm.", responseObject = DomainRouterResponse.class)
 public class StopInternalLBVMCmd extends BaseAsyncCmd {
@@ -88,8 +89,8 @@ public class StopInternalLBVMCmd extends BaseAsyncCmd {
     }
 
     @Override
-    public AsyncJob.Type getInstanceType() {
-        return AsyncJob.Type.InternalLbVm;
+    public ApiCommandJobType getInstanceType() {
+        return ApiCommandJobType.InternalLbVm;
     }
 
     @Override
@@ -103,13 +104,13 @@ public class StopInternalLBVMCmd extends BaseAsyncCmd {
 
     @Override
     public void execute() throws ConcurrentOperationException, ResourceUnavailableException {
-        UserContext.current().setEventDetails("Internal lb vm Id: "+getId());
+        CallContext.current().setEventDetails("Internal lb vm Id: "+getId());
         VirtualRouter result = null;
         VirtualRouter vm = _routerService.findRouter(getId());
         if (vm == null || vm.getRole() != Role.INTERNAL_LB_VM) {
             throw new InvalidParameterValueException("Can't find internal lb vm by id");
         } else {
-            result = _internalLbSvc.stopInternalLbVm(getId(), isForced(), UserContext.current().getCaller(), UserContext.current().getCallerUserId());
+            result = _internalLbSvc.stopInternalLbVm(getId(), isForced(), CallContext.current().getCallingAccount(), CallContext.current().getCallingUserId());
         } 
         
         if (result != null) {

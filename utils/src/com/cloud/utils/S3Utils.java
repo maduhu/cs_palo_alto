@@ -38,7 +38,9 @@ import java.io.FileNotFoundException;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
@@ -46,15 +48,23 @@ import org.apache.commons.lang.ArrayUtils;
 import org.apache.log4j.Logger;
 
 import com.amazonaws.AmazonClientException;
+import com.amazonaws.AmazonServiceException;
 import com.amazonaws.ClientConfiguration;
+import com.amazonaws.HttpMethod;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.Bucket;
+import com.amazonaws.services.s3.model.CannedAccessControlList;
 import com.amazonaws.services.s3.model.GetObjectRequest;
 import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectRequest;
+import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
+import com.amazonaws.services.s3.transfer.TransferManager;
+import com.amazonaws.services.s3.transfer.Upload;
+
 import com.cloud.utils.exception.CloudRuntimeException;
 
 public final class S3Utils {
@@ -70,7 +80,7 @@ public final class S3Utils {
         super();
     }
 
-    private static AmazonS3 acquireClient(final ClientOptions clientOptions) {
+    public static AmazonS3 acquireClient(final ClientOptions clientOptions) {
 
         final AWSCredentials credentials = new BasicAWSCredentials(
                 clientOptions.getAccessKey(), clientOptions.getSecretKey());
@@ -138,6 +148,123 @@ public final class S3Utils {
 
     }
 
+    public static void putObject(final ClientOptions clientOptions,
+            final InputStream sourceStream, final String bucketName, final String key) {
+
+        assert clientOptions != null;
+        assert sourceStream != null;
+        assert !isBlank(bucketName);
+        assert !isBlank(key);
+
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(format("Sending stream as S3 object %1$s in "
+                    + "bucket %2$s", key, bucketName));
+        }
+
+        acquireClient(clientOptions).putObject(bucketName, key, sourceStream, null);
+
+    }
+
+    public static void putObject(final ClientOptions clientOptions,
+            final PutObjectRequest req) {
+
+        assert clientOptions != null;
+        assert req != null;
+
+        acquireClient(clientOptions).putObject(req);
+
+    }
+
+    // multi-part upload file
+    public static void mputFile(final ClientOptions clientOptions,
+            final File sourceFile, final String bucketName, final String key) throws InterruptedException {
+
+        assert clientOptions != null;
+        assert sourceFile != null;
+        assert !isBlank(bucketName);
+        assert !isBlank(key);
+
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(format("Multipart sending file %1$s as S3 object %2$s in "
+                    + "bucket %3$s", sourceFile.getName(), key, bucketName));
+        }
+        TransferManager tm = new TransferManager(S3Utils.acquireClient(clientOptions));
+        Upload upload = tm.upload(bucketName, key, sourceFile);
+        upload.waitForCompletion();
+    }
+
+    // multi-part upload object
+    public static void mputObject(final ClientOptions clientOptions,
+            final InputStream sourceStream, final String bucketName, final String key) throws InterruptedException {
+
+        assert clientOptions != null;
+        assert sourceStream != null;
+        assert !isBlank(bucketName);
+        assert !isBlank(key);
+
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(format("Multipart sending stream as S3 object %1$s in "
+                    + "bucket %2$s", key, bucketName));
+        }
+        TransferManager tm = new TransferManager(S3Utils.acquireClient(clientOptions));
+        Upload upload = tm.upload(bucketName, key, sourceStream, null);
+        upload.waitForCompletion();
+    }
+
+    // multi-part upload object
+    public static void mputObject(final ClientOptions clientOptions,
+            final PutObjectRequest req) throws InterruptedException {
+
+        assert clientOptions != null;
+        assert req != null;
+
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("Multipart sending object to S3 using PutObjectRequest");
+        }       
+        TransferManager tm = new TransferManager(S3Utils.acquireClient(clientOptions));
+        Upload upload = tm.upload(req);
+        upload.waitForCompletion();
+
+    }
+    
+    public static void setObjectAcl(final ClientOptions clientOptions, final String bucketName, final String key,
+            final CannedAccessControlList acl) {
+
+        assert clientOptions != null;
+        assert acl != null;
+
+        acquireClient(clientOptions).setObjectAcl(bucketName, key, acl);
+
+    }
+
+    public static URL generatePresignedUrl(final ClientOptions clientOptions, final String bucketName, final String key,
+            final Date expiration) {
+
+        assert clientOptions != null;
+        assert !isBlank(bucketName);
+        assert !isBlank(key);
+
+        return acquireClient(clientOptions).generatePresignedUrl(bucketName, key, expiration, HttpMethod.GET);
+
+    }
+
+    // Note that whenever S3Object is returned, client code needs to close the internal stream to avoid resource leak.
+    public static S3Object getObject(final ClientOptions clientOptions,
+            final String bucketName, final String key) {
+
+        assert clientOptions != null;
+        assert !isBlank(bucketName);
+        assert !isBlank(key);
+
+        if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug(format("Get S3 object %1$s in "
+                    + "bucket %2$s", key, bucketName));
+        }
+
+        return acquireClient(clientOptions).getObject(bucketName, key);
+
+    }
+
     @SuppressWarnings("unchecked")
     public static File getFile(final ClientOptions clientOptions,
             final String bucketName, final String key,
@@ -155,8 +282,8 @@ public final class S3Utils {
         try {
 
             tempFile = createTempFile(
-                    join(asList(targetDirectory.getName(), currentTimeMillis(),
-                            "part"), "-"), "tmp", targetDirectory);
+                    join("-", targetDirectory.getName(), currentTimeMillis(),
+                            "part"), "tmp", targetDirectory);
             tempFile.deleteOnExit();
 
             if (LOGGER.isDebugEnabled()) {
@@ -165,8 +292,15 @@ public final class S3Utils {
                         key, bucketName, tempFile.getName()));
             }
 
-            connection.getObject(new GetObjectRequest(bucketName, key),
-                    tempFile);
+            try {
+                connection.getObject(new GetObjectRequest(bucketName, key), tempFile);
+            } catch (AmazonClientException ex) {
+                // hack to handle different ETAG format generated from RiakCS for multi-part uploaded object
+                String msg = ex.getMessage();
+                if (!msg.contains("verify integrity")){
+                    throw ex;
+                }
+            }
 
             final File targetFile = new File(targetDirectory,
                     namingStrategy.determineFileName(key));
@@ -188,7 +322,8 @@ public final class S3Utils {
                             targetDirectory.getAbsolutePath(), bucketName, key),
                     e);
 
-        } finally {
+        }
+        finally {
 
             if (tempFile != null) {
                 tempFile.delete();
@@ -225,6 +360,18 @@ public final class S3Utils {
 
     }
 
+    public static List<S3ObjectSummary> getDirectory(final ClientOptions clientOptions,
+            final String bucketName, final String sourcePath){
+        assert clientOptions != null;
+        assert isNotBlank(bucketName);
+        assert isNotBlank(sourcePath);
+
+        final AmazonS3 connection = acquireClient(clientOptions);
+
+        // List the objects in the source directory on S3
+        return listDirectory(bucketName, sourcePath, connection);
+    }
+
     private static List<S3ObjectSummary> listDirectory(final String bucketName,
             final String directory, final AmazonS3 client) {
 
@@ -238,6 +385,7 @@ public final class S3Utils {
         return unmodifiableList(objects);
 
     }
+
 
     public static void putDirectory(final ClientOptions clientOptions,
             final String bucketName, final File directory,
@@ -283,6 +431,8 @@ public final class S3Utils {
         }
 
     }
+
+
 
     public static void deleteObject(final ClientOptions clientOptions,
             final String bucketName, final String key) {

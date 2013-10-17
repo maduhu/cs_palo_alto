@@ -17,15 +17,16 @@
 
 package org.apache.cloudstack.api.command.admin.network;
 
-import com.cloud.async.AsyncJob;
 import com.cloud.event.EventTypes;
 import com.cloud.exception.ResourceInUseException;
 import com.cloud.user.Account;
-import com.cloud.user.UserContext;
+
 import org.apache.cloudstack.api.*;
 import org.apache.cloudstack.api.response.CounterResponse;
 import org.apache.cloudstack.api.response.GuestVlanRangeResponse;
 import org.apache.cloudstack.api.response.SuccessResponse;
+import org.apache.cloudstack.context.CallContext;
+
 import org.apache.log4j.Logger;
 
 @APICommand(name = "releaseDedicatedGuestVlanRange", description = "Releases a dedicated guest vlan range to the system", responseObject = SuccessResponse.class)
@@ -55,8 +56,8 @@ public class ReleaseDedicatedGuestVlanRangeCmd extends BaseAsyncCmd {
     }
 
     @Override
-    public AsyncJob.Type getInstanceType() {
-        return AsyncJob.Type.DedicatedGuestVlanRange;
+    public ApiCommandJobType getInstanceType() {
+        return ApiCommandJobType.DedicatedGuestVlanRange;
     }
 
     @Override
@@ -81,7 +82,7 @@ public class ReleaseDedicatedGuestVlanRangeCmd extends BaseAsyncCmd {
 
     @Override
     public void execute(){
-        UserContext.current().setEventDetails("Dedicated guest vlan range Id: " + id);
+        CallContext.current().setEventDetails("Dedicated guest vlan range Id: " + id);
         boolean result = _networkService.releaseDedicatedGuestVlanRange(getId());
         if (result) {
             SuccessResponse response = new SuccessResponse(getCommandName());

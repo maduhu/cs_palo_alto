@@ -26,14 +26,15 @@ import javax.inject.Inject;
 
 import junit.framework.TestCase;
 
-import org.apache.cloudstack.lb.ApplicationLoadBalancerRuleVO;
-import org.apache.cloudstack.network.lb.InternalLoadBalancerVMManager;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+
+import org.apache.cloudstack.lb.ApplicationLoadBalancerRuleVO;
+import org.apache.cloudstack.network.lb.InternalLoadBalancerVMManager;
 
 import com.cloud.agent.AgentManager;
 import com.cloud.agent.api.Answer;
@@ -53,12 +54,12 @@ import com.cloud.network.router.VirtualRouter;
 import com.cloud.network.router.VirtualRouter.Role;
 import com.cloud.network.rules.FirewallRule;
 import com.cloud.network.rules.LoadBalancerContainer.Scheme;
+import com.cloud.offerings.NetworkOfferingVO;
+import com.cloud.offerings.dao.NetworkOfferingDao;
 import com.cloud.service.ServiceOfferingVO;
 import com.cloud.service.dao.ServiceOfferingDao;
-import com.cloud.user.Account;
 import com.cloud.user.AccountManager;
 import com.cloud.user.AccountVO;
-import com.cloud.user.User;
 import com.cloud.utils.component.ComponentContext;
 import com.cloud.utils.exception.CloudRuntimeException;
 import com.cloud.utils.net.Ip;
@@ -91,7 +92,7 @@ public class InternalLBVMManagerTest extends TestCase {
     @Inject NetworkModel _ntwkModel;
     @Inject VirtualMachineManager _itMgr;
     @Inject DataCenterDao _dcDao;
-    
+    @Inject NetworkOfferingDao _offeringDao;
     long validNtwkId = 1L;
     long invalidNtwkId = 2L;
     String requestedIp = "10.1.1.1";
@@ -100,6 +101,7 @@ public class InternalLBVMManagerTest extends TestCase {
     long validVmId = 1L;
     long invalidVmId = 2L;
     
+    @Override
     @Before
     public void setUp() {
         //mock system offering creation as it's used by configure() method called by initComponentsLifeCycle
@@ -153,14 +155,10 @@ public class InternalLBVMManagerTest extends TestCase {
         DataCenterVO dc = new DataCenterVO
                 (1L, null, null, null, null, null, null, null, null, null, NetworkType.Advanced, null, null);
         Mockito.when(_dcDao.findById(Mockito.anyLong())).thenReturn(dc);
+        NetworkOfferingVO networkOfferingVO = new NetworkOfferingVO();
+        networkOfferingVO.setConcurrentConnections(500);
+        Mockito.when(_offeringDao.findById(Mockito.anyLong())).thenReturn(networkOfferingVO);
         
-        
-        try {
-            Mockito.when(_itMgr.expunge(Mockito.any(DomainRouterVO.class), Mockito.any(User.class), Mockito.any(Account.class))).thenReturn(true);
-        } catch (ResourceUnavailableException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        } 
         
         Mockito.when(_domainRouterDao.findById(validVmId)).thenReturn(vm);
         Mockito.when(_domainRouterDao.findById(invalidVmId)).thenReturn(null);

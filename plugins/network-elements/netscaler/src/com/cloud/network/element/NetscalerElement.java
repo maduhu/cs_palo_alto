@@ -28,8 +28,10 @@ import javax.ejb.Local;
 import javax.inject.Inject;
 
 import org.apache.cloudstack.api.ApiConstants;
+import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
 import org.apache.cloudstack.network.ExternalNetworkDeviceManager.NetworkDevice;
 import org.apache.cloudstack.region.gslb.GslbServiceProvider;
+
 import org.apache.log4j.Logger;
 
 import com.cloud.agent.AgentManager;
@@ -51,7 +53,6 @@ import com.cloud.api.commands.ListNetscalerLoadBalancersCmd;
 import com.cloud.api.response.NetscalerLoadBalancerResponse;
 import com.cloud.configuration.Config;
 import com.cloud.configuration.ConfigurationManager;
-import com.cloud.configuration.dao.ConfigurationDao;
 import com.cloud.dc.DataCenter;
 import com.cloud.dc.DataCenter.NetworkType;
 import com.cloud.dc.DataCenterIpAddressVO;
@@ -115,6 +116,7 @@ import com.cloud.vm.NicProfile;
 import com.cloud.vm.ReservationContext;
 import com.cloud.vm.VirtualMachine;
 import com.cloud.vm.VirtualMachineProfile;
+
 import com.google.gson.Gson;
 
 @Local(value = {NetworkElement.class, StaticNatServiceProvider.class, LoadBalancingServiceProvider.class, GslbServiceProvider.class})
@@ -200,13 +202,13 @@ public class NetscalerElement extends ExternalLoadBalancerDeviceManagerImpl impl
     }
 
     @Override
-    public boolean prepare(Network config, NicProfile nic, VirtualMachineProfile<? extends VirtualMachine> vm, DeployDestination dest, ReservationContext context) throws ConcurrentOperationException,
+    public boolean prepare(Network config, NicProfile nic, VirtualMachineProfile vm, DeployDestination dest, ReservationContext context) throws ConcurrentOperationException,
     InsufficientNetworkCapacityException, ResourceUnavailableException {
         return true;
     }
 
     @Override
-    public boolean release(Network config, NicProfile nic, VirtualMachineProfile<? extends VirtualMachine> vm, ReservationContext context) {
+    public boolean release(Network config, NicProfile nic, VirtualMachineProfile vm, ReservationContext context) {
         return true;
     }
 
@@ -367,6 +369,11 @@ public class NetscalerElement extends ExternalLoadBalancerDeviceManagerImpl impl
                 s_logger.debug(msg);
                 throw new InvalidParameterValueException(msg);
             }
+
+            if (dedicatedUse) {
+                throw new InvalidParameterValueException("NetScaler provisioned to be GSLB service provider can only be configured for shared usage.");
+            }
+
         }
 
         ExternalLoadBalancerDeviceVO lbDeviceVO = addExternalLoadBalancer(cmd.getPhysicalNetworkId(), cmd.getUrl(),

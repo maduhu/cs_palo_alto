@@ -26,12 +26,13 @@ import javax.inject.Inject;
 import javax.naming.ConfigurationException;
 
 import org.apache.cloudstack.engine.subsystem.api.storage.StoragePoolAllocator;
+import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
 import org.apache.cloudstack.storage.datastore.db.StoragePoolVO;
+
 import org.apache.log4j.Logger;
 import org.springframework.stereotype.Component;
 
 import com.cloud.capacity.dao.CapacityDao;
-import com.cloud.configuration.dao.ConfigurationDao;
 import com.cloud.deploy.DeploymentPlan;
 import com.cloud.deploy.DeploymentPlanner.ExcludeList;
 import com.cloud.service.dao.ServiceOfferingDao;
@@ -65,7 +66,8 @@ public class LocalStoragePoolAllocator extends AbstractStoragePoolAllocator {
     ConfigurationDao _configDao;
 
     @Override
-    protected List<StoragePool> select(DiskProfile dskCh, VirtualMachineProfile<? extends VirtualMachine> vmProfile, DeploymentPlan plan, ExcludeList avoid, int returnUpTo) {
+    protected List<StoragePool> select(DiskProfile dskCh, VirtualMachineProfile vmProfile,
+            DeploymentPlan plan, ExcludeList avoid, int returnUpTo) {
 
         List<StoragePool> suitablePools = new ArrayList<StoragePool>();
 
@@ -78,13 +80,13 @@ public class LocalStoragePoolAllocator extends AbstractStoragePoolAllocator {
         // data disk and host identified from deploying vm (attach volume case)
         if (dskCh.getType() == Volume.Type.DATADISK && plan.getHostId() != null) {
             List<StoragePoolHostVO> hostPools = _poolHostDao.listByHostId(plan.getHostId());
-            for (StoragePoolHostVO hostPool: hostPools) {
+            for (StoragePoolHostVO hostPool : hostPools) {
                 StoragePoolVO pool = _storagePoolDao.findById(hostPool.getPoolId());
                 if (pool != null && pool.isLocal()) {
-                	StoragePool pol = (StoragePool)this.dataStoreMgr.getPrimaryDataStore(pool.getId());
-                	if (filter(avoid, pol, dskCh, plan)) {
-                		s_logger.debug("Found suitable local storage pool " + pool.getId() + ", adding to list");
-                		suitablePools.add(pol);
+                    StoragePool pol = (StoragePool) this.dataStoreMgr.getPrimaryDataStore(pool.getId());
+                    if (filter(avoid, pol, dskCh, plan)) {
+                        s_logger.debug("Found suitable local storage pool " + pool.getId() + ", adding to list");
+                        suitablePools.add(pol);
                     } else {
                         avoid.addPool(pool.getId());
                     }
@@ -95,18 +97,23 @@ public class LocalStoragePoolAllocator extends AbstractStoragePoolAllocator {
                 }
             }
         } else {
-        	List<StoragePoolVO> availablePools = _storagePoolDao.findLocalStoragePoolsByTags(plan.getDataCenterId(), plan.getPodId(), plan.getClusterId(), dskCh.getTags());
-        	for (StoragePoolVO pool : availablePools) {
-        		if (suitablePools.size() == returnUpTo) {
-            		break;
-            	}
-        		StoragePool pol = (StoragePool)this.dataStoreMgr.getPrimaryDataStore(pool.getId());
-        		if (filter(avoid, pol, dskCh, plan)) {
-        			suitablePools.add(pol);
+            if (plan.getPodId() == null) {
+                // zone wide primary storage deployment
+                return null;
+            }
+            List<StoragePoolVO> availablePools = _storagePoolDao.findLocalStoragePoolsByTags(plan.getDataCenterId(),
+                    plan.getPodId(), plan.getClusterId(), dskCh.getTags());
+            for (StoragePoolVO pool : availablePools) {
+                if (suitablePools.size() == returnUpTo) {
+                    break;
+                }
+                StoragePool pol = (StoragePool) this.dataStoreMgr.getPrimaryDataStore(pool.getId());
+                if (filter(avoid, pol, dskCh, plan)) {
+                    suitablePools.add(pol);
                 } else {
                     avoid.addPool(pool.getId());
                 }
-        	}
+            }
 
             // add remaining pools in cluster, that did not match tags, to avoid
             // set

@@ -87,9 +87,6 @@ class Services:
                     "name": "Cent OS Template",
                     "passwordenabled": True,
                 },
-                "diskdevice": '/dev/xvdd',
-                # Disk device where ISO is attached to instance
-                "mount_dir": "/mnt/tmp",
                 "sleep": 60,
                 "timeout": 10,
                 "ostype": 'CentOS 5.3 (64-bit)'
@@ -180,6 +177,10 @@ class TestExplicitDedication(cloudstackTestCase):
             if not vms_on_host:
                 empty_host = host
                 break
+
+        #If no empty host is found, return
+        if empty_host:
+           self.skipTest("Did not find any empty hosts, Skipping")
 
         # Create an affinity group for explicit dedication.
         agCmd = createAffinityGroup.createAffinityGroupCmd()

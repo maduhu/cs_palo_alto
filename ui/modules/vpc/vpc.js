@@ -30,6 +30,7 @@
         addAction.action({
           context: context,
           data: args.data,
+          $form: args.$form,
           response: {
             success: function(args) {
               cloudStack.ui.notifications.add(
@@ -89,6 +90,7 @@
           complete: function($panel) {
             var $detailView = $('<div>').detailView(
               $.extend(true, {}, cloudStack.vpc.tiers.detailView, {
+                section: 'networks',
                 $browser: $browser,
                 context: context,
                 onActionComplete: function() {
@@ -181,7 +183,7 @@
       var $router = elems.tier({
         context: args.context,
         tier: {
-          name: 'Router',
+          name: 'Router'
         },
         dashboardItems: args.dashboardItems
       }).addClass('router');

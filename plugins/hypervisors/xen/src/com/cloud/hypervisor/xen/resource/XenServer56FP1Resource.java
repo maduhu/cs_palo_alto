@@ -11,16 +11,31 @@
 // Unless required by applicable law or agreed to in writing,
 // software distributed under the License is distributed on an
 // "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
-// KIND, either express or implied.  See the License for the 
+// KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
 package com.cloud.hypervisor.xen.resource;
 
 
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import javax.ejb.Local;
+
+import org.apache.cloudstack.storage.to.TemplateObjectTO;
+import org.apache.log4j.Logger;
+import org.apache.xmlrpc.XmlRpcException;
+
 import com.cloud.agent.api.FenceAnswer;
 import com.cloud.agent.api.FenceCommand;
+import com.cloud.agent.api.to.DiskTO;
 import com.cloud.agent.api.to.VirtualMachineTO;
-import com.cloud.agent.api.to.VolumeTO;
 import com.cloud.resource.ServerResource;
 import com.cloud.storage.Volume;
 import com.cloud.template.VirtualMachineTemplate.BootloaderType;
@@ -33,36 +48,25 @@ import com.xensource.xenapi.Types.XenAPIException;
 import com.xensource.xenapi.VBD;
 import com.xensource.xenapi.VDI;
 import com.xensource.xenapi.VM;
-import org.apache.log4j.Logger;
-import org.apache.xmlrpc.XmlRpcException;
-
-import javax.ejb.Local;
-import java.io.File;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 @Local(value=ServerResource.class)
 public class XenServer56FP1Resource extends XenServer56Resource {
     private static final long mem_128m = 134217728L;
     private static final Logger s_logger = Logger.getLogger(XenServer56FP1Resource.class);
-    
+
     public XenServer56FP1Resource() {
         super();
     }
-    
+
     @Override
     protected String getGuestOsType(String stdType, boolean bootFromCD) {
     	return CitrixHelper.getXenServer56FP1GuestOsType(stdType, bootFromCD);
     }
-   
+
     @Override
-    protected List<File> getPatchFiles() {      
+    protected List<File> getPatchFiles() {
         List<File> files = new ArrayList<File>();
-        String patch = "scripts/vm/hypervisor/xenserver/xenserver56fp1/patch";    
+        String patch = "scripts/vm/hypervisor/xenserver/xenserver56fp1/patch";
         String patchfilePath = Script.findScript("" , patch);
         if ( patchfilePath == null ) {
             throw new CloudRuntimeException("Unable to find patch file " + patch);
@@ -120,6 +124,34 @@ public class XenServer56FP1Resource extends XenServer56Resource {
         }
     }
 
+    public long getStaticMax(String os, boolean b, long dynamicMinRam, long dynamicMaxRam){
+        long recommendedValue = CitrixHelper.getXenServer56FP1StaticMax(os, b);
+        if(recommendedValue == 0){
+            s_logger.warn("No recommended value found for dynamic max, setting static max and dynamic max equal");
+            return dynamicMaxRam;
+        }
+
+        long staticMax = Math.min(recommendedValue, 4l * dynamicMinRam);  // XS constraint for stability
+        if (dynamicMaxRam > staticMax){ // XS contraint that dynamic max <= static max
+            s_logger.warn("dynamixMax " + dynamicMaxRam + " cant be greater than static max " + staticMax + ", can lead to stability issues. Setting static max as much as dynamic max ");
+            return dynamicMaxRam;
+        }
+        return staticMax;
+    }
+
+    public long getStaticMin(String os, boolean b, long dynamicMinRam, long dynamicMaxRam){
+        long recommendedValue = CitrixHelper.getXenServer56FP1StaticMin(os, b);
+        if(recommendedValue == 0){
+            s_logger.warn("No recommended value found for dynamic min");
+            return dynamicMinRam;
+        }
+
+        if(dynamicMinRam < recommendedValue){   // XS contraint that dynamic min > static min
+            s_logger.warn("Vm is set to dynamixMin " + dynamicMinRam + " less than the recommended static min " + recommendedValue + ", could lead to stability issues.");
+        }
+        return dynamicMinRam;
+    }
+
     @Override
     protected VM createVmFromTemplate(Connection conn, VirtualMachineTO vmSpec, Host host) throws XenAPIException, XmlRpcException {
         String guestOsTypeName = getGuestOsType(vmSpec.getOs(), vmSpec.getBootloader() == BootloaderType.CD);
@@ -137,17 +169,17 @@ public class XenServer56FP1Resource extends XenServer56Resource {
         vmr.actionsAfterCrash = Types.OnCrashBehaviour.DESTROY;
         vmr.actionsAfterShutdown = Types.OnNormalExit.DESTROY;
 
+        Map<String, String> details = vmSpec.getDetails();
         if (isDmcEnabled(conn, host) && vmSpec.isEnableDynamicallyScaleVm()) {
             //scaling is allowed
-            vmr.memoryStaticMin = mem_128m; //128MB
-            //TODO: Remove hardcoded 8GB and assign proportionate to ServiceOffering and mem overcommit ratio
-            vmr.memoryStaticMax = 8589934592L; //8GB
+            vmr.memoryStaticMin = getStaticMin(vmSpec.getOs(), vmSpec.getBootloader() == BootloaderType.CD, vmSpec.getMinRam(), vmSpec.getMaxRam());
+            vmr.memoryStaticMax = getStaticMax(vmSpec.getOs(), vmSpec.getBootloader() == BootloaderType.CD, vmSpec.getMinRam(), vmSpec.getMaxRam());
             vmr.memoryDynamicMin = vmSpec.getMinRam();
             vmr.memoryDynamicMax = vmSpec.getMaxRam();
         } else {
             //scaling disallowed, set static memory target
-            if (s_logger.isDebugEnabled()) {
-                s_logger.warn("Host "+ host.getHostname(conn) +" does not support dynamic scaling");
+            if (vmSpec.isEnableDynamicallyScaleVm() && !isDmcEnabled(conn, host)) {
+                s_logger.warn("Host "+ host.getHostname(conn) +" does not support dynamic scaling, so the vm " + vmSpec.getName() + " is not dynamically scalable");
             }
             vmr.memoryStaticMin = vmSpec.getMinRam();
             vmr.memoryStaticMax = vmSpec.getMaxRam();
@@ -159,6 +191,20 @@ public class XenServer56FP1Resource extends XenServer56Resource {
             vmr.VCPUsMax = (long) vmSpec.getCpus();
         } else {
             vmr.VCPUsMax = 32L;
+        }
+
+        String timeoffset = details.get("timeoffset");
+        if (timeoffset != null) {
+            Map<String, String> platform = vmr.platform;
+            platform.put("timeoffset", timeoffset);
+            vmr.platform = platform;
+        }
+
+        String coresPerSocket = details.get("cpu.corespersocket");
+        if (coresPerSocket != null) {
+            Map<String, String> platform = vmr.platform;
+            platform.put("cores-per-socket", coresPerSocket);
+            vmr.platform = platform;
         }
 
         vmr.VCPUsAtStartup = (long) vmSpec.getCpus();
@@ -177,14 +223,15 @@ public class XenServer56FP1Resource extends XenServer56Resource {
             int cpuWeight = _maxWeight; // cpu_weight
             int utilization = 0; // max CPU cap, default is unlimited
 
-            // weight based allocation
+            // weight based allocation, CPU weight is calculated per VCPU
             cpuWeight = (int) ((speed * 0.99) / _host.speed * _maxWeight);
             if (cpuWeight > _maxWeight) {
                 cpuWeight = _maxWeight;
             }
 
             if (vmSpec.getLimitCpuUse()) {
-                utilization = (int) ((speed * 0.99) / _host.speed * 100);
+                // CPU cap is per VM, so need to assign cap based on the number of vcpus
+                utilization = (int) ((speed * 0.99 * vmSpec.getCpus()) / _host.speed * 100);
             }
 
             vcpuParams.put("weight", Integer.toString(cpuWeight));
@@ -208,13 +255,17 @@ public class XenServer56FP1Resource extends XenServer56Resource {
 
         if (!(guestOsTypeName.startsWith("Windows") || guestOsTypeName.startsWith("Citrix") || guestOsTypeName.startsWith("Other"))) {
             if (vmSpec.getBootloader() == BootloaderType.CD) {
-                VolumeTO[] disks = vmSpec.getDisks();
-                for (VolumeTO disk : disks) {
-                    if (disk.getType() == Volume.Type.ISO && disk.getOsType() != null) {
-                        String isoGuestOsName = getGuestOsType(disk.getOsType(), vmSpec.getBootloader() == BootloaderType.CD);
-                        if (!isoGuestOsName.equals(guestOsTypeName)) {
-                            vmSpec.setBootloader(BootloaderType.PyGrub);
-                        }
+                DiskTO[] disks = vmSpec.getDisks();
+                for (DiskTO disk : disks) {
+                    if (disk.getType() == Volume.Type.ISO ) {
+                    	TemplateObjectTO iso = (TemplateObjectTO)disk.getData();
+                    	String osType = iso.getGuestOsType();
+                    	if (osType != null) {
+                    		String isoGuestOsName = getGuestOsType(osType, vmSpec.getBootloader() == BootloaderType.CD);
+                    		if (!isoGuestOsName.equals(guestOsTypeName)) {
+                    			vmSpec.setBootloader(BootloaderType.PyGrub);
+                    		}
+                    	}
                     }
                 }
             }

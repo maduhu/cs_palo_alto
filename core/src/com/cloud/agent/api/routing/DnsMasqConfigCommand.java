@@ -16,50 +16,20 @@
 // under the License.
 package com.cloud.agent.api.routing;
 
-import com.cloud.agent.api.to.DnsmasqTO;
+import com.cloud.agent.api.to.DhcpTO;
 
 import java.util.List;
 
 public class DnsMasqConfigCommand extends NetworkElementCommand {
-    String domain;
-    String dns1;
-    String dns2;
-    String internal_dns1;
-    String internal_dns2;
-    List<DnsmasqTO> dnsmasqTOs;
+    List<DhcpTO> dhcpTOs;
 
-    public DnsMasqConfigCommand(String domain, List<DnsmasqTO> dnsmasqTOs, String dns1, String dns2, String internal_dns1, String internal_dns2) {
-        this.domain = domain;
-        this.dnsmasqTOs = dnsmasqTOs;
-        this.dns1= dns1;
-        this.dns2= dns2;
-        this.internal_dns1 = internal_dns1;
-        this.internal_dns2 = internal_dns2;
+    public DnsMasqConfigCommand(List<DhcpTO> dhcpTOs) {
+        this.dhcpTOs = dhcpTOs;
 
     }
 
-    public List<DnsmasqTO> getIps() {
-        return  dnsmasqTOs;
-    }
-
-    public  String getDomain() {
-        return domain;
-    }
-
-    public String getDns1() {
-        return dns1;
-    }
-
-    public String getDns2() {
-        return dns2;
-    }
-
-    public String getInternal_dns1() {
-        return internal_dns1;
-    }
-
-    public String getInternal_dns2() {
-        return internal_dns2;
+    public List<DhcpTO> getIps() {
+        return dhcpTOs;
     }
 
 }

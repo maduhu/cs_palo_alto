@@ -31,7 +31,7 @@ import java.util.List;
 
 @Component
 @Local(value = VpcGatewayDao.class)
-@DB(txn = false)
+@DB()
 public class VpcGatewayDaoImpl extends GenericDaoBase<VpcGatewayVO, Long> implements VpcGatewayDao{
     protected final SearchBuilder<VpcGatewayVO> AllFieldsSearch;
     
@@ -41,6 +41,7 @@ public class VpcGatewayDaoImpl extends GenericDaoBase<VpcGatewayVO, Long> implem
         AllFieldsSearch.and("type", AllFieldsSearch.entity().getType(), SearchCriteria.Op.EQ);
         AllFieldsSearch.and("networkid", AllFieldsSearch.entity().getNetworkId(), SearchCriteria.Op.EQ);
         AllFieldsSearch.and("ipaddress", AllFieldsSearch.entity().getIp4Address(), SearchCriteria.Op.EQ);
+        AllFieldsSearch.and("aclId", AllFieldsSearch.entity().getNetworkACLId(), SearchCriteria.Op.EQ);
         AllFieldsSearch.done();
     }
 
@@ -54,14 +55,6 @@ public class VpcGatewayDaoImpl extends GenericDaoBase<VpcGatewayVO, Long> implem
         return findOneBy(sc);
     }
 
-    @Override
-    public VpcGatewayVO getVpnGatewayForVpc(long vpcId) {
-        SearchCriteria<VpcGatewayVO> sc = AllFieldsSearch.create();
-        sc.setParameters("vpcId", vpcId);
-        sc.setParameters("type", VpcGateway.Type.Vpn);
-
-        return findOneBy(sc);
-    }
 
     @Override
     public Long getNetworkAclIdForPrivateIp (long vpcId, long networkId, String ipaddr) {
@@ -86,4 +79,11 @@ public class VpcGatewayDaoImpl extends GenericDaoBase<VpcGatewayVO, Long> implem
         return listBy(sc);
     }
 
+    @Override
+    public List<VpcGatewayVO> listByAclIdAndType(long aclId, VpcGateway.Type type) {
+        SearchCriteria<VpcGatewayVO> sc = AllFieldsSearch.create();
+        sc.setParameters("aclId", aclId);
+        sc.setParameters("type", type);
+        return listBy(sc);
+    }
 }

@@ -268,15 +268,6 @@ public class MockNetworkModelImpl extends ManagerBase implements NetworkModel {
     }
 
     /* (non-Javadoc)
-     * @see com.cloud.network.NetworkModel#getGlobalGuestDomainSuffix()
-     */
-    @Override
-    public String getGlobalGuestDomainSuffix() {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    /* (non-Javadoc)
      * @see com.cloud.network.NetworkModel#getStartIpAddress(long)
      */
     @Override
@@ -580,15 +571,6 @@ public class MockNetworkModelImpl extends ManagerBase implements NetworkModel {
     }
 
     /* (non-Javadoc)
-     * @see com.cloud.network.NetworkModel#getDefaultNetworkDomain()
-     */
-    @Override
-    public String getDefaultNetworkDomain(long zoneId) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    /* (non-Javadoc)
      * @see com.cloud.network.NetworkModel#getNtwkOffDistinctProviders(long)
      */
     @Override
@@ -882,6 +864,7 @@ public class MockNetworkModelImpl extends ManagerBase implements NetworkModel {
         return null;
     }
     
+    @Override
     public IsolationType[] listNetworkIsolationMethods() {
         // TODO Auto-generated method stub
         return null;
@@ -892,4 +875,14 @@ public class MockNetworkModelImpl extends ManagerBase implements NetworkModel {
         return null;
     }
 
+    @Override
+    public boolean getExecuteInSeqNtwkElmtCmd() {
+        // TODO Auto-generated method stub
+        return false;
+    }
+
+    @Override
+    public boolean isNetworkReadyForGc(long networkId) {
+        return true;
+    }
 }

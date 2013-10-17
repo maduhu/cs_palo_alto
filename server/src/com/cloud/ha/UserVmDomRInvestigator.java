@@ -18,18 +18,16 @@ package com.cloud.ha;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import javax.ejb.Local;
 import javax.inject.Inject;
-import javax.naming.ConfigurationException;
 
 import org.apache.log4j.Logger;
 
 import com.cloud.agent.AgentManager;
 import com.cloud.agent.api.Answer;
 import com.cloud.agent.api.PingTestCommand;
-import com.cloud.host.HostVO;
+import com.cloud.host.Host;
 import com.cloud.host.Status;
 import com.cloud.hypervisor.Hypervisor.HypervisorType;
 import com.cloud.network.NetworkModel;
@@ -38,7 +36,6 @@ import com.cloud.network.router.VirtualRouter;
 import com.cloud.network.router.VpcVirtualNetworkApplianceManager;
 import com.cloud.vm.Nic;
 import com.cloud.vm.UserVmVO;
-import com.cloud.vm.VMInstanceVO;
 import com.cloud.vm.VirtualMachine;
 import com.cloud.vm.dao.UserVmDao;
 
@@ -46,14 +43,13 @@ import com.cloud.vm.dao.UserVmDao;
 public class UserVmDomRInvestigator extends AbstractInvestigatorImpl {
     private static final Logger s_logger = Logger.getLogger(UserVmDomRInvestigator.class);
 
-    private String _name = null;
     @Inject private final UserVmDao _userVmDao = null;
     @Inject private final AgentManager _agentMgr = null;
     @Inject private final NetworkModel _networkMgr = null;
     @Inject private final VpcVirtualNetworkApplianceManager _vnaMgr = null;
 
     @Override
-    public Boolean isVmAlive(VMInstanceVO vm, HostVO host) {
+    public Boolean isVmAlive(VirtualMachine vm, Host host) {
         if (vm.getType() != VirtualMachine.Type.User) {
             if (s_logger.isDebugEnabled()) {
                 s_logger.debug("Not a User Vm, unable to determine state of " + vm + " returning null");
@@ -104,7 +100,7 @@ public class UserVmDomRInvestigator extends AbstractInvestigatorImpl {
     }
 
     @Override
-    public Status isAgentAlive(HostVO agent) {
+    public Status isAgentAlive(Host agent) {
         if (s_logger.isDebugEnabled()) {
             s_logger.debug("checking if agent (" + agent.getId() + ") is alive");
         }
@@ -145,18 +141,6 @@ public class UserVmDomRInvestigator extends AbstractInvestigatorImpl {
     }
 
     @Override
-    public boolean configure(String name, Map<String, Object> params) throws ConfigurationException {
-        _name = name;
-
-        return true;
-    }
-
-    @Override
-    public String getName() {
-        return _name;
-    }
-
-    @Override
     public boolean start() {
         return true;
     }
@@ -166,7 +150,7 @@ public class UserVmDomRInvestigator extends AbstractInvestigatorImpl {
         return true;
     }
 
-    private Boolean testUserVM(VMInstanceVO vm, Nic nic, VirtualRouter router) {
+    private Boolean testUserVM(VirtualMachine vm, Nic nic, VirtualRouter router) {
         String privateIp = nic.getIp4Address();
         String routerPrivateIp = router.getPrivateIpAddress();
 
@@ -182,7 +166,8 @@ public class UserVmDomRInvestigator extends AbstractInvestigatorImpl {
                 Answer pingTestAnswer = _agentMgr.easySend(hostId, new PingTestCommand(routerPrivateIp, privateIp));
                 if (pingTestAnswer!=null && pingTestAnswer.getResult()) {
                     if (s_logger.isDebugEnabled()) {
-                        s_logger.debug("user vm " + vm.getHostName() + " has been successfully pinged, returning that it is alive");
+                        s_logger.debug("user vm's " + vm.getHostName() + " ip address "+ privateIp + "  has been successfully pinged from the Virtual Router "
+                                + router.getHostName() + ", returning that vm is alive");
                     }
                     return Boolean.TRUE;
                 }

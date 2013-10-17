@@ -16,25 +16,21 @@
 // under the License.
 package org.apache.cloudstack.api.command.user.volume;
 
-import com.cloud.server.ResourceTag;
-import org.apache.cloudstack.api.APICommand;
-import org.apache.cloudstack.api.ApiConstants;
-import org.apache.cloudstack.api.ApiErrorCode;
-import org.apache.cloudstack.api.BaseAsyncCmd;
-import org.apache.cloudstack.api.Parameter;
-import org.apache.cloudstack.api.ServerApiException;
-import org.apache.cloudstack.api.response.SuccessResponse;
-import org.apache.cloudstack.api.response.UserVmResponse;
-import org.apache.cloudstack.api.response.VolumeResponse;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
 import org.apache.log4j.Logger;
 
-import com.cloud.async.AsyncJob;
-import com.cloud.event.EventTypes;
-import com.cloud.storage.Volume;
-import com.cloud.user.Account;
-import com.cloud.user.UserContext;
+import org.apache.cloudstack.api.APICommand;
+import org.apache.cloudstack.api.ApiConstants;
+import org.apache.cloudstack.api.BaseAsyncCmd;
+import org.apache.cloudstack.api.Parameter;
+import org.apache.cloudstack.api.response.SuccessResponse;
 
-import java.util.*;
+import com.cloud.event.EventTypes;
+import com.cloud.server.ResourceTag;
 
 @APICommand(name = "addResourceDetail", description="Adds detail for the Resource.", responseObject=SuccessResponse.class)
 public class AddResourceDetailCmd extends BaseAsyncCmd {
@@ -111,6 +107,6 @@ public class AddResourceDetailCmd extends BaseAsyncCmd {
     @Override
     public void execute(){
         _resourceMetaDataService.addResourceMetaData(getResourceId(), getResourceType(), getDetails());
-        this.setResponseObject(new SuccessResponse(getCommandName()));
+        setResponseObject(new SuccessResponse(getCommandName()));
     }
 }

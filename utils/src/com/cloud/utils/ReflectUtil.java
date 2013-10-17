@@ -16,19 +16,33 @@
 // under the License.
 package com.cloud.utils;
 
+import static java.beans.Introspector.getBeanInfo;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.unmodifiableList;
+
+import java.beans.BeanInfo;
+import java.beans.IntrospectionException;
+import java.beans.PropertyDescriptor;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import com.cloud.utils.exception.CloudRuntimeException;
+import org.apache.log4j.Logger;
 import org.reflections.Reflections;
 
+import com.google.common.collect.ImmutableSet;
+
+import com.cloud.utils.exception.CloudRuntimeException;
+
 public class ReflectUtil {
+    
+    private static final Logger s_logger = Logger.getLogger(ReflectUtil.class);
+
     public static Pair<Class<?>, Field> getAnyField(Class<?> clazz, String fieldName) {
         try {
             return new Pair<Class<?>, Field>(clazz, clazz.getDeclaredField(fieldName));
@@ -42,19 +56,6 @@ public class ReflectUtil {
             }
             return null;
         }
-    }
-    
-    public static Method findMethod(Class<?> clazz, String methodName) {
-        do {
-            Method[] methods = clazz.getDeclaredMethods();
-            for (Method method : methods) {
-                if (methodName.equals(method.getName())) {
-                    return method;
-                }
-            }
-            clazz = clazz.getSuperclass();
-        } while (clazz != null);
-        return null;
     }
 
     // Gets all classes with some annotation from a package
@@ -96,7 +97,7 @@ public class ReflectUtil {
         List<Field> fields = new ArrayList<Field>();
         Collections.addAll(fields, cmdClass.getDeclaredFields());
         Class<?> superClass = cmdClass.getSuperclass();
-        while (baseClass.isAssignableFrom(superClass)) {
+        while (baseClass.isAssignableFrom(superClass) && baseClass != superClass) {
             Field[] superClassFields = superClass.getDeclaredFields();
             if (superClassFields != null)
                 Collections.addAll(fields, superClassFields);
@@ -105,7 +106,12 @@ public class ReflectUtil {
         return fields;
     }
 
-    // Returns all unique fields except excludeClasses for a cmd class
+    /**
+     * Returns all unique fields except excludeClasses for a cmd class
+     * @param cmdClass    the class in which fields should be collected
+     * @param excludeClasses the classes whose fields must be ignored
+     * @return list of fields
+     */
     public static Set<Field> getAllFieldsForClass(Class<?> cmdClass,
                                                   Class<?>[] excludeClasses) {
         Set<Field> fields = new HashSet<Field>();
@@ -115,18 +121,92 @@ public class ReflectUtil {
         while (superClass != null && superClass != Object.class) {
             String superName = superClass.getName();
             boolean isNameEqualToSuperName = false;
-            for (Class<?> baseClass: excludeClasses)
-                if (superName.equals(baseClass.getName()))
+            for (Class<?> baseClass: excludeClasses) {
+                if (superName.equals(baseClass.getName())) {
                     isNameEqualToSuperName = true;
+                }
+            }
 
             if (!isNameEqualToSuperName) {
                 Field[] superClassFields = superClass.getDeclaredFields();
-                if (superClassFields != null)
+                if (superClassFields != null) {
                     Collections.addAll(fields, superClassFields);
+                }
             }
             superClass = superClass.getSuperclass();
         }
         return fields;
     }
+
+    public static List<String> flattenProperties(final Object target,
+                                                 final Class<?> clazz) {
+        return flattenPropeties(target, clazz, "class");
+    }
+
+    public static List<String> flattenPropeties(final Object target,
+                                                final Class<?> clazz,
+                                                final String...
+                                                        excludedProperties) {
+        return flattenProperties(target, clazz,
+                ImmutableSet.copyOf(excludedProperties));
+    }
+
+    private static List<String> flattenProperties(final Object target,
+                                                  final Class<?> clazz,
+                                                  final ImmutableSet<String>
+                                                          excludedProperties) {
+
+        assert clazz != null;
+
+        if (target == null) {
+            return emptyList();
+        }
+
+        assert clazz.isAssignableFrom(target.getClass());
+
+        try {
+
+            final BeanInfo beanInfo = getBeanInfo(clazz);
+            final PropertyDescriptor[] descriptors = beanInfo
+                    .getPropertyDescriptors();
+
+            final List<String> serializedProperties = new ArrayList<String>();
+            for (final PropertyDescriptor descriptor : descriptors) {
+
+                if (excludedProperties.contains(descriptor.getName())) {
+                    continue;
+                }
+
+                serializedProperties.add(descriptor.getName());
+                final Object value = descriptor.getReadMethod().invoke(target);
+                serializedProperties.add(value != null ? value.toString()
+                        : "null");
+
+            }
+
+            return unmodifiableList(serializedProperties);
+
+        } catch (IntrospectionException e) {
+            s_logger.warn(
+                    "Ignored IntrospectionException when serializing class "
+                            + target.getClass().getCanonicalName(), e);
+        } catch (IllegalArgumentException e) {
+            s_logger.warn(
+                    "Ignored IllegalArgumentException when serializing class "
+                            + target.getClass().getCanonicalName(), e);
+        } catch (IllegalAccessException e) {
+            s_logger.warn(
+                    "Ignored IllegalAccessException when serializing class "
+                            + target.getClass().getCanonicalName(), e);
+        } catch (InvocationTargetException e) {
+            s_logger.warn(
+                    "Ignored InvocationTargetException when serializing class "
+                            + target.getClass().getCanonicalName(), e);
+        }
+
+        return emptyList();
+
+    }
+
 
 }

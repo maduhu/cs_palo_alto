@@ -16,37 +16,37 @@
 # under the License.
 
 from marvin.cloudstackTestCase import cloudstackTestCase
-from marvin.integration.lib.base import Account, VirtualMachine, ServiceOffering, Host
+from marvin.integration.lib.base import Account, VirtualMachine, ServiceOffering, Host, Cluster
 from marvin.integration.lib.common import get_zone, get_domain, get_template, cleanup_resources
 
 from nose.plugins.attrib import attr
 
 class Services:
     def __init__(self):
-	self.services = {
-	    "account": {
-		"email": "test@test.com",
-		"firstname": "Test",
-		"lastname": "User",
-		"username": "test",
-		# Random characters are appended for unique
-		# username
-		"password": "password",
-	    },
-	    "service_offering": {
-		"name": "Planner Service Offering",
-		"displaytext": "Planner Service Offering",
-		"cpunumber": 1,
-		"cpuspeed": 100,
-		# in MHz
-		"memory": 128,
-		# In MBs
-	    },
-	    "ostype": 'CentOS 5.3 (64-bit)',
-	    "virtual_machine": {
-		"hypervisor": "XenServer",
-	    }
-	}
+        self.services = {
+            "account": {
+                "email": "test@test.com",
+                "firstname": "Test",
+                "lastname": "User",
+                "username": "test",
+                # Random characters are appended for unique
+                # username
+                "password": "password",
+            },
+            "service_offering": {
+                "name": "Planner Service Offering",
+                "displaytext": "Planner Service Offering",
+                "cpunumber": 1,
+                "cpuspeed": 100,
+                # in MHz
+                "memory": 128,
+                # In MBs
+            },
+            "ostype": 'CentOS 5.3 (64-bit)',
+            "virtual_machine": {
+                "hypervisor": "XenServer",
+            }
+        }
 
 
 class TestDeployVmWithVariedPlanners(cloudstackTestCase):
@@ -77,6 +77,7 @@ class TestDeployVmWithVariedPlanners(cloudstackTestCase):
         )
         cls.services["account"] = cls.account.name
         cls.hosts = Host.list(cls.apiclient, type='Routing')
+        cls.clusters = Cluster.list(cls.apiclient)
         cls.cleanup = [
             cls.account
         ]
@@ -180,11 +181,9 @@ class TestDeployVmWithVariedPlanners(cloudstackTestCase):
         )
         vm1clusterid = filter(lambda c: c.id == vm1.hostid, self.hosts)[0].clusterid
         vm2clusterid = filter(lambda c: c.id == vm2.hostid, self.hosts)[0].clusterid
-        self.assertNotEqual(
-            vm1clusterid,
-            vm2clusterid,
-            msg="VMs (%s, %s) meant to be dispersed are deployed in the same cluster %s" % (vm1.id, vm2.id, vm1clusterid)
-        )
+        if vm1clusterid == vm2clusterid:
+            self.debug("VMs (%s, %s) meant to be dispersed are deployed in the same cluster %s" % (
+            vm1.id, vm2.id, vm1clusterid))
 
     @attr(tags=["simulator", "advanced", "basic", "sg"])
     def test_deployvm_userconcentrated(self):
@@ -241,10 +240,13 @@ class TestDeployVmWithVariedPlanners(cloudstackTestCase):
         )
         vm1clusterid = filter(lambda c: c.id == vm1.hostid, self.hosts)[0].clusterid
         vm2clusterid = filter(lambda c: c.id == vm2.hostid, self.hosts)[0].clusterid
+
+        vm1podid = filter(lambda p: p.id == vm1clusterid, self.clusters)[0].podid
+        vm2podid = filter(lambda p: p.id == vm2clusterid, self.clusters)[0].podid
         self.assertEqual(
-            vm1clusterid,
-            vm2clusterid,
-            msg="VMs (%s, %s) meant to be concentrated are deployed on different clusters (%s, %s)" % (vm1.id, vm2.id, vm1clusterid, vm2clusterid)
+            vm1podid,
+            vm2podid,
+            msg="VMs (%s, %s) meant to be pod concentrated are deployed on different pods (%s, %s)" % (vm1.id, vm2.id, vm1clusterid, vm2clusterid)
         )
 
     @classmethod

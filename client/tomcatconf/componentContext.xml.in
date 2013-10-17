@@ -18,9 +18,9 @@
   under the License.
 -->
 <beans xmlns="http://www.springframework.org/schema/beans"
-  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:context="http://www.springframework.org/schema/context"
-  xmlns:tx="http://www.springframework.org/schema/tx" 
+  xmlns:tx="http://www.springframework.org/schema/tx"
   xmlns:aop="http://www.springframework.org/schema/aop"
   xsi:schemaLocation="http://www.springframework.org/schema/beans
                       http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
@@ -30,6 +30,8 @@
                       http://www.springframework.org/schema/aop/spring-aop-3.0.xsd
                       http://www.springframework.org/schema/context
                       http://www.springframework.org/schema/context/spring-context-3.0.xsd">
+
+  <context:annotation-config />
 
 
 <!--
@@ -44,7 +46,7 @@
 -->
   
   <bean id="databaseUpgradeChecker" class="com.cloud.upgrade.DatabaseUpgradeChecker" />
-  <bean id="configurationDaoImpl" class="com.cloud.configuration.dao.ConfigurationDaoImpl" />
+  <bean id="configurationDaoImpl" class="org.apache.cloudstack.framework.config.dao.ConfigurationDaoImpl" />
   <bean id="GlobalLoadBalancingRulesServiceImpl" class ="org.apache.cloudstack.region.gslb.GlobalLoadBalancingRulesServiceImpl" />
 
   <!--
@@ -70,13 +72,61 @@
     <property name="name" value="MidoNetElement"/>
   </bean>
 
+  <!--
+    Stratosphere SSP support components
+  -->
+  <bean id="sspCredentialDaoImpl" class="org.apache.cloudstack.network.dao.SspCredentialDaoImpl"/>
+  <bean id="sspTenantDaoImpl" class="org.apache.cloudstack.network.dao.SspTenantDaoImpl"/>
+  <bean id="sspUuidDaoImpl" class="org.apache.cloudstack.network.dao.SspUuidDaoImpl"/>
+  <bean id="SspGuestNetworkGuru" class="org.apache.cloudstack.network.guru.SspGuestNetworkGuru">
+    <property name="name" value="SspGuestNetworkGuru"/>
+  </bean>
+  <bean id="StratosphereSsp" class="org.apache.cloudstack.network.element.SspElement">
+    <property name="name" value="StratosphereSsp"/>
+  </bean>
+
+  <!--
+    UCS support components
+  -->
+  <bean id="ucsBladeDaoImpl" class="com.cloud.ucs.database.UcsBladeDaoImpl" />
+  <bean id="ucsManagerDaoImpl" class="com.cloud.ucs.database.UcsManagerDaoImpl" />
+
+  <!--
+      VXLAN support components
+  -->
+  <bean id="VxlanGuestNetworkGuru" class="com.cloud.network.guru.VxlanGuestNetworkGuru">
+    <property name="name" value="VxlanGuestNetworkGuru"/>
+  </bean>
+
 <!--
 
   Deployment configurations of various adapters
 
   It determines whether or not a adapter is activated or how it is loaded in order in its managing provider,
 
---> 
+-->
+  <bean id="cloudStackImageStoreProviderImpl"
+        class="org.apache.cloudstack.storage.datastore.provider.CloudStackImageStoreProviderImpl"/>
+  <bean id="s3ImageStoreProviderImpl"
+        class="org.apache.cloudstack.storage.datastore.provider.S3ImageStoreProviderImpl"/>
+  <bean id="swiftImageStoreProviderImpl"
+        class="org.apache.cloudstack.storage.datastore.provider.SwiftImageStoreProviderImpl"/>
+  <bean id="solidFireDataStoreProvider"
+        class="org.apache.cloudstack.storage.datastore.provider.SolidfirePrimaryDataStoreProvider"/>
+
+  <!--Storage Providers-->
+  <bean id="dataStoreProviderManager"
+        class="org.apache.cloudstack.storage.datastore.provider.DataStoreProviderManagerImpl">
+    <property name="providers">
+      <list merge="true">
+        <ref bean="cloudStackPrimaryDataStoreProviderImpl"/>
+        <ref local="cloudStackImageStoreProviderImpl"/>
+        <ref local="s3ImageStoreProviderImpl"/>
+        <ref local="swiftImageStoreProviderImpl"/>
+        <ref local="solidFireDataStoreProvider"/>
+      </list>
+    </property>
+  </bean>
 
   <!-- Security adapters -->
   <bean id="userAuthenticators" class="com.cloud.utils.component.AdapterList">
@@ -84,7 +134,7 @@
       <list>
           <ref bean="SHA256SaltedUserAuthenticator"/>
           <ref bean="MD5UserAuthenticator"/>
-          <ref bean="LDAPUserAuthenticator"/>
+          <ref bean="LdapAuthenticator"/>
           <ref bean="PlainTextUserAuthenticator"/>
       </list>
     </property>
@@ -94,7 +144,7 @@
       <list>
           <ref bean="SHA256SaltedUserAuthenticator"/>
           <ref bean="MD5UserAuthenticator"/>
-          <ref bean="LDAPUserAuthenticator"/>
+          <ref bean="LdapAuthenticator"/>
           <ref bean="PlainTextUserAuthenticator"/>
       </list>
     </property>
@@ -103,6 +153,7 @@
   <bean id="securityCheckers" class="com.cloud.utils.component.AdapterList">
     <property name="Adapters">
       <list>
+		  <ref bean="affinityGroupAccessChecker"/>
           <ref bean="domainChecker"/>
       </list>
     </property>
@@ -116,11 +167,7 @@
           <ref bean="SecondaryStorageDiscoverer"/>
           <ref bean="KvmServerDiscoverer"/>
           <ref bean="LxcServerDiscoverer"/>
-
-  <!--
           <ref bean="BareMetalDiscoverer"/>
-  -->
-
           <ref bean="OvmDiscoverer"/>
       </list>
     </property>
@@ -134,6 +181,7 @@
           <ref bean="XenServerInvestigator"/>
           <ref bean="UserVmDomRInvestigator"/>
           <ref bean="ManagementIPSystemVMInvestigator"/>
+          <ref bean="KVMInvestigator"/>
       </list>
     </property>
   </bean>
@@ -156,9 +204,7 @@
           <ref bean="UserDispersingPlanner" />
           <ref bean="UserConcentratedPodPlanner" />
           <ref bean="ImplicitDedicationPlanner" />
-<!--
           <ref bean="BareMetalPlanner" />
--->
       </list>
     </property>
   </bean>
@@ -185,7 +231,6 @@
           <ref bean="LocalStoragePoolAllocator"/>
           <ref bean="clusterScopeStoragePoolAllocator"/>
           <ref bean="zoneWideStoragePoolAllocator"/>
-          <ref bean="garbageCollectingStoragePoolAllocator"/>
       </list>
     </property>
   </bean>
@@ -208,9 +253,7 @@
       <list>
           <ref bean="VirtualRouter"/>
           <ref bean="VpcVirtualRouter"/>
-<!--
           <ref bean="BareMetalDhcp"/>
--->
       </list>
     </property>
   </bean>
@@ -229,6 +272,8 @@
           <ref bean="PrivateNetworkGuru"/>
           <ref bean="NiciraNvpGuestNetworkGuru"/>
           <ref bean="MidoNetGuestNetworkGuru"/>
+          <ref bean="SspGuestNetworkGuru"/>
+          <ref bean="VxlanGuestNetworkGuru"/>
       </list>
     </property>
   </bean>
@@ -242,12 +287,11 @@
           <ref bean="VpcVirtualRouter"/>
           <ref bean="NiciraNvp" />
           <ref bean="MidoNetElement"/>
+          <ref bean="StratosphereSsp"/>
           <ref bean="InternalLbVm"/>
-<!--
           <ref bean="BareMetalDhcp"/>
           <ref bean="BareMetalPxe"/>
           <ref bean="BareMetalUserdata"/>
--->
       </list>
     </property>
   </bean>

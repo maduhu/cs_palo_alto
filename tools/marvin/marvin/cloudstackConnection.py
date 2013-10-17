@@ -32,13 +32,15 @@ from requests import RequestException
 
 
 class cloudConnection(object):
+
     """ Connections to make API calls to the cloudstack management server
     """
+
     def __init__(self, mgtSvr, port=8096, user=None, passwd=None,
                  apiKey=None, securityKey=None,
                  asyncTimeout=3600, logging=None, scheme='http',
                  path='client/api'):
-        self.loglevel() #Turn off requests logs
+        self.loglevel()  # Turn off requests logs
         self.apiKey = apiKey
         self.securityKey = securityKey
         self.mgtSvr = mgtSvr
@@ -144,9 +146,11 @@ class cloudConnection(object):
 
         try:
             if method == 'POST':
-                response = requests.post(self.baseurl, params=payload)
+                response = requests.post(
+                    self.baseurl, params=payload, verify=False)
             else:
-                response = requests.get(self.baseurl, params=payload)
+                response = requests.get(
+                    self.baseurl, params=payload, verify=False)
         except ConnectionError, c:
             self.logging.debug("Connection refused. Reason: %s : %s" %
                                (self.baseurl, c))
@@ -172,8 +176,7 @@ class cloudConnection(object):
         requests = {}
         required = []
         for attribute in dir(cmd):
-            if attribute != "__doc__" and attribute != "__init__" and\
-               attribute != "__module__":
+            if not attribute.startswith('__'):
                 if attribute == "isAsync":
                     isAsync = getattr(cmd, attribute)
                 elif attribute == "required":
@@ -204,7 +207,7 @@ class cloudConnection(object):
                             i = i + 1
         return cmdname, isAsync, requests
 
-    def marvin_request(self, cmd, response_type=None, method='GET'):
+    def marvin_request(self, cmd, response_type=None, method='GET', data=''):
         """
         Requester for marvin command objects
         @param cmd: marvin's command from cloudstackAPI

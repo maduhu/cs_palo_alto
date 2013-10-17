@@ -32,8 +32,9 @@ import javax.naming.ConfigurationException;
 
 import org.apache.log4j.Logger;
 
+import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
+
 import com.cloud.agent.AgentManager;
-import com.cloud.configuration.dao.ConfigurationDao;
 import com.cloud.host.HostVO;
 import com.cloud.host.Status.Event;
 import com.cloud.host.dao.HostDao;
@@ -44,7 +45,6 @@ import com.cloud.resource.ServerResource;
 import com.cloud.storage.VMTemplateVO;
 import com.cloud.storage.VMTemplateZoneVO;
 import com.cloud.storage.dao.VMTemplateDao;
-import com.cloud.storage.dao.VMTemplateHostDao;
 import com.cloud.storage.dao.VMTemplateZoneDao;
 import com.cloud.storage.resource.DummySecondaryStorageResource;
 import com.cloud.utils.component.ComponentContext;
@@ -59,18 +59,16 @@ import com.cloud.utils.script.Script;
 @Local(value=Discoverer.class)
 public class SecondaryStorageDiscoverer extends DiscovererBase implements Discoverer {
     private static final Logger s_logger = Logger.getLogger(SecondaryStorageDiscoverer.class);
-    
+
     long _timeout = 2 * 60 * 1000; // 2 minutes
     String _mountParent;
     boolean _useServiceVM = false;
-    
+
     Random _random = new Random(System.currentTimeMillis());
     @Inject
     protected HostDao _hostDao = null;
     @Inject
     protected VMTemplateDao _tmpltDao = null;
-    @Inject
-    protected VMTemplateHostDao _vmTemplateHostDao = null;
     @Inject
     protected VMTemplateZoneDao _vmTemplateZoneDao = null;
     @Inject
@@ -79,19 +77,22 @@ public class SecondaryStorageDiscoverer extends DiscovererBase implements Discov
     protected ConfigurationDao _configDao = null;
     @Inject
     protected AgentManager _agentMgr = null;
-    
+
     protected SecondaryStorageDiscoverer() {
     }
-    
+
     @Override
     public Map<? extends ServerResource, Map<String, String>> find(long dcId, Long podId, Long clusterId, URI uri, String username, String password, List<String> hostTags) {
-        if (!uri.getScheme().equalsIgnoreCase("nfs") && !uri.getScheme().equalsIgnoreCase("file")
-                && !uri.getScheme().equalsIgnoreCase("iso") && !uri.getScheme().equalsIgnoreCase("dummy")) {
+        if (!uri.getScheme().equalsIgnoreCase("nfs") && !uri.getScheme().equalsIgnoreCase("cifs")
+        		&& !uri.getScheme().equalsIgnoreCase("file") 
+        		&& !uri.getScheme().equalsIgnoreCase("iso") 
+        		&& !uri.getScheme().equalsIgnoreCase("dummy")) {
             s_logger.debug("It's not NFS or file or ISO, so not a secondary storage server: " + uri.toString());
             return null;
         }
 
-        if (uri.getScheme().equalsIgnoreCase("nfs") || uri.getScheme().equalsIgnoreCase("iso")) {
+        if (uri.getScheme().equalsIgnoreCase("nfs")	|| uri.getScheme().equalsIgnoreCase("cifs")
+        		|| uri.getScheme().equalsIgnoreCase("iso")) {
             return createNfsSecondaryStorageResource(dcId, podId, uri);
         } else if (uri.getScheme().equalsIgnoreCase("file")) {
             return createLocalSecondaryStorageResource(dcId, podId, uri);
@@ -101,14 +102,14 @@ public class SecondaryStorageDiscoverer extends DiscovererBase implements Discov
             return null;
         }
     }
-    
+
     protected Map<? extends ServerResource, Map<String, String>> createNfsSecondaryStorageResource(long dcId, Long podId, URI uri) {
-        
+
     	if (_useServiceVM) {
     	    return createDummySecondaryStorageResource(dcId, podId, uri);
     	}
         String mountStr = NfsUtils.uri2Mount(uri);
-        
+
         Script script = new Script(true, "mount", _timeout, s_logger);
         String mntPoint = null;
         File file = null;
@@ -116,12 +117,12 @@ public class SecondaryStorageDiscoverer extends DiscovererBase implements Discov
             mntPoint = _mountParent + File.separator + Integer.toHexString(_random.nextInt(Integer.MAX_VALUE));
             file = new File(mntPoint);
         } while (file.exists());
-                
+
         if (!file.mkdirs()) {
             s_logger.warn("Unable to make directory: " + mntPoint);
             return null;
         }
-        
+
         script.add(mountStr, mntPoint);
         String result = script.execute();
         if (result != null && !result.contains("already mounted")) {
@@ -129,15 +130,15 @@ public class SecondaryStorageDiscoverer extends DiscovererBase implements Discov
             file.delete();
             return null;
         }
-        
+
         script = new Script(true, "umount", 0, s_logger);
         script.add(mntPoint);
         script.execute();
-        
+
         file.delete();
-        
+
         Map<NfsSecondaryStorageResource, Map<String, String>> srs = new HashMap<NfsSecondaryStorageResource, Map<String, String>>();
-        
+
         NfsSecondaryStorageResource storage;
         if(_configDao.isPremium()) {
             Class<?> impl;
@@ -172,12 +173,12 @@ public class SecondaryStorageDiscoverer extends DiscovererBase implements Discov
         } else {
         	storage = new NfsSecondaryStorageResource();
         }
-        
+
         Map<String, String> details = new HashMap<String, String>();
         details.put("mount.path", mountStr);
         details.put("orig.url", uri.toString());
         details.put("mount.parent", _mountParent);
-        
+
         Map<String, Object> params = new HashMap<String, Object>();
         params.putAll(details);
         params.put("zone", Long.toString(dcId));
@@ -187,7 +188,7 @@ public class SecondaryStorageDiscoverer extends DiscovererBase implements Discov
         params.put("guid", uri.toString());
         params.put("secondary.storage.vm", "false");
         params.put("max.template.iso.size", _configDao.getValue("max.template.iso.size"));
-        
+
         try {
             storage.configure("Storage", params);
         } catch (ConfigurationException e) {
@@ -195,22 +196,22 @@ public class SecondaryStorageDiscoverer extends DiscovererBase implements Discov
             return null;
         }
         srs.put(storage, details);
-        
+
         return srs;
     }
-    
+
     protected Map<? extends ServerResource, Map<String, String>> createLocalSecondaryStorageResource(long dcId, Long podId, URI uri) {
         Map<LocalSecondaryStorageResource, Map<String, String>> srs = new HashMap<LocalSecondaryStorageResource, Map<String, String>>();
-        
+
         LocalSecondaryStorageResource storage = new LocalSecondaryStorageResource();
         storage = ComponentContext.inject(storage);
-        
+
         Map<String, String> details = new HashMap<String, String>();
-        
+
         File file = new File(uri);
         details.put("mount.path", file.getAbsolutePath());
         details.put("orig.url", uri.toString());
-        
+
         Map<String, Object> params = new HashMap<String, Object>();
         params.putAll(details);
         params.put("zone", Long.toString(dcId));
@@ -218,7 +219,7 @@ public class SecondaryStorageDiscoverer extends DiscovererBase implements Discov
             params.put("pod", podId.toString());
         }
         params.put("guid", uri.toString());
-        
+
         try {
             storage.configure("Storage", params);
         } catch (ConfigurationException e) {
@@ -226,21 +227,21 @@ public class SecondaryStorageDiscoverer extends DiscovererBase implements Discov
             return null;
         }
         srs.put(storage, details);
-        
+
         return srs;
     }
-    
+
     protected Map<ServerResource, Map<String, String>> createDummySecondaryStorageResource(long dcId, Long podId, URI uri) {
         Map<ServerResource, Map<String, String>> srs = new HashMap<ServerResource, Map<String, String>>();
-        
+
         DummySecondaryStorageResource storage = new DummySecondaryStorageResource(_useServiceVM);
         storage = ComponentContext.inject(storage);
-        
+
         Map<String, String> details = new HashMap<String, String>();
-        
+
         details.put("mount.path", uri.toString());
         details.put("orig.url", uri.toString());
-        
+
         Map<String, Object> params = new HashMap<String, Object>();
         params.putAll(details);
         params.put("zone", Long.toString(dcId));
@@ -248,7 +249,7 @@ public class SecondaryStorageDiscoverer extends DiscovererBase implements Discov
             params.put("pod", podId.toString());
         }
         params.put("guid", uri.toString());
-        
+
         try {
             storage.configure("Storage", params);
         } catch (ConfigurationException e) {
@@ -256,26 +257,26 @@ public class SecondaryStorageDiscoverer extends DiscovererBase implements Discov
             return null;
         }
         srs.put(storage, details);
-        
+
         return srs;
     }
-    
+
     @Override
     public boolean configure(String name, Map<String, Object> params) throws ConfigurationException {
         super.configure(name, params);
-        
+
         _mountParent = _params.get("mount.parent");
         if (_mountParent == null) {
             _mountParent = "/mnt";
         }
-        
+
         String useServiceVM = _params.get("secondary.storage.vm");
         if ("true".equalsIgnoreCase(useServiceVM)){
         	_useServiceVM = true;
         }
         return true;
     }
-    
+
     @Override
 	public boolean matchHypervisor(String hypervisor) {
         if( hypervisor.equals("SecondaryStorage")) {
@@ -289,7 +290,7 @@ public class SecondaryStorageDiscoverer extends DiscovererBase implements Discov
 	public Hypervisor.HypervisorType getHypervisorType() {
     	return Hypervisor.HypervisorType.None;
     }
-    
+
 	@Override
 	public void postDiscovery(List<HostVO> hosts, long msId) {
 		if (_useServiceVM) {
@@ -300,9 +301,9 @@ public class SecondaryStorageDiscoverer extends DiscovererBase implements Discov
 		for (HostVO h: hosts) {
 			associateTemplatesToZone(h.getId(), h.getDataCenterId());
 		}
-		
+
 	}
-	
+
     private void associateTemplatesToZone(long hostId, long dcId){
     	VMTemplateZoneVO tmpltZone;
 

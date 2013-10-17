@@ -19,7 +19,10 @@ package com.cloud.network.security;
 
 import java.io.IOException;
 
+import org.apache.cloudstack.engine.orchestration.service.NetworkOrchestrationService;
+import org.apache.cloudstack.framework.config.dao.ConfigurationDaoImpl;
 import org.apache.cloudstack.test.utils.SpringUtils;
+
 import org.mockito.Mockito;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
@@ -33,7 +36,6 @@ import org.springframework.core.type.filter.TypeFilter;
 import com.cloud.agent.AgentManager;
 import com.cloud.api.query.dao.SecurityGroupJoinDaoImpl;
 import com.cloud.cluster.agentlb.dao.HostTransferMapDaoImpl;
-import com.cloud.configuration.dao.ConfigurationDaoImpl;
 import com.cloud.dc.dao.ClusterDaoImpl;
 import com.cloud.dc.dao.DataCenterDaoImpl;
 import com.cloud.dc.dao.DataCenterIpAddressDaoImpl;
@@ -47,7 +49,6 @@ import com.cloud.event.dao.UsageEventDaoImpl;
 import com.cloud.host.dao.HostDaoImpl;
 import com.cloud.host.dao.HostDetailsDaoImpl;
 import com.cloud.host.dao.HostTagsDaoImpl;
-import com.cloud.network.NetworkManager;
 import com.cloud.network.NetworkModel;
 import com.cloud.network.security.SecurityGroupManagerTestConfiguration.Library;
 import com.cloud.network.security.dao.SecurityGroupDaoImpl;
@@ -126,8 +127,8 @@ public class SecurityGroupManagerTestConfiguration {
     }
 
     @Bean
-    public NetworkManager networkManager(){
-        return Mockito.mock(NetworkManager.class);
+    public NetworkOrchestrationService networkManager(){
+        return Mockito.mock(NetworkOrchestrationService.class);
     }
 
     @Bean

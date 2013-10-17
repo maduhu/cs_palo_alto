@@ -19,41 +19,35 @@ package com.cloud.agent.api;
 import com.cloud.vm.VirtualMachine;
 
 public class StopCommand extends RebootCommand {
-    String vnet;
     private boolean isProxy=false;
     private String urlPort=null;
     private String publicConsoleProxyIpAddress=null;
+    boolean executeInSequence = false;
 
     protected StopCommand() {
     }
 
-    public StopCommand(VirtualMachine vm, boolean isProxy, String urlPort, String publicConsoleProxyIpAddress) {
+    public StopCommand(VirtualMachine vm, boolean isProxy, String urlPort, String publicConsoleProxyIpAddress, boolean executeInSequence) {
     	super(vm);
     	this.isProxy = isProxy;
     	this.urlPort = urlPort;
     	this.publicConsoleProxyIpAddress = publicConsoleProxyIpAddress;
-    }
-
-    public StopCommand(VirtualMachine vm, String vnet) {
-        super(vm);
-        this.vnet = vnet;
+    	this.executeInSequence = executeInSequence;
     }
     
-    public StopCommand(VirtualMachine vm) {
+    public StopCommand(VirtualMachine vm, boolean executeInSequence) {
         super(vm);
+        this.executeInSequence = executeInSequence;
     }
 
-    public StopCommand(String vmName) {
+    public StopCommand(String vmName, boolean executeInSequence) {
         super(vmName);
-    }
-
-    public String getVnet() {
-        return vnet;
+        this.executeInSequence = executeInSequence;
     }
 
     @Override
     public boolean executeInSequence() {
-        return true;
+        return executeInSequence;
     }
 
 	public boolean isProxy() {

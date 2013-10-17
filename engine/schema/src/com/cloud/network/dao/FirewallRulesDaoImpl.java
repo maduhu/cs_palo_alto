@@ -31,7 +31,6 @@ import com.cloud.network.rules.FirewallRule.TrafficType;
 import com.cloud.network.rules.FirewallRuleVO;
 import com.cloud.server.ResourceTag.TaggedResourceType;
 import com.cloud.tags.dao.ResourceTagDao;
-import com.cloud.tags.dao.ResourceTagsDaoImpl;
 import com.cloud.utils.db.DB;
 import com.cloud.utils.db.GenericDaoBase;
 import com.cloud.utils.db.GenericSearchBuilder;
@@ -44,7 +43,7 @@ import com.cloud.utils.db.Transaction;
 
 @Component
 @Local(value = FirewallRulesDao.class)
-@DB(txn = false)
+@DB
 public class FirewallRulesDaoImpl extends GenericDaoBase<FirewallRuleVO, Long> implements FirewallRulesDao {
 
     protected final SearchBuilder<FirewallRuleVO> AllFieldsSearch;
@@ -100,6 +99,7 @@ public class FirewallRulesDaoImpl extends GenericDaoBase<FirewallRuleVO, Long> i
         RulesByIpCount = createSearchBuilder(Long.class);
         RulesByIpCount.select(null, Func.COUNT, RulesByIpCount.entity().getId());
         RulesByIpCount.and("ipAddressId", RulesByIpCount.entity().getSourceIpAddressId(), Op.EQ);
+        RulesByIpCount.and("state", RulesByIpCount.entity().getState(), Op.EQ);
         RulesByIpCount.done();
     }
 
@@ -326,6 +326,16 @@ public class FirewallRulesDaoImpl extends GenericDaoBase<FirewallRuleVO, Long> i
         boolean result = super.remove(id);
         txn.commit();
         return result;
+    }
+
+    @Override
+    public long countRulesByIpIdAndState(long sourceIpId, FirewallRule.State state) {
+        SearchCriteria<Long> sc = RulesByIpCount.create();
+        sc.setParameters("ipAddressId", sourceIpId);
+        if (state != null) {
+            sc.setParameters("state", state);
+        }
+        return customSearch(sc, null).get(0);
     }
 
     @Override

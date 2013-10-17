@@ -18,10 +18,12 @@ package com.cloud.network;
 import com.cloud.capacity.CapacityManagerImpl;
 import com.cloud.dc.DataCenterVO;
 import com.cloud.dc.dao.DataCenterDao;
+import com.cloud.dc.dao.DataCenterVnetDao;
 import com.cloud.network.NetworkServiceImpl;
 import com.cloud.network.dao.PhysicalNetworkDao;
 import com.cloud.network.dao.PhysicalNetworkVO;
 import com.cloud.utils.Pair;
+import com.cloud.utils.db.Transaction;
 import org.junit.Test;
 import org.junit.*;
 import org.mockito.ArgumentCaptor;
@@ -39,30 +41,34 @@ import static org.mockito.Mockito.when;
 
 public class UpdatePhysicalNetworkTest {
     private PhysicalNetworkDao _physicalNetworkDao = mock(PhysicalNetworkDao.class);
+    private DataCenterVnetDao _DatacenterVnetDao = mock(DataCenterVnetDao.class);
     private DataCenterDao _datacenterDao = mock(DataCenterDao.class);
     private DataCenterVO datacentervo = mock(DataCenterVO.class);
     private PhysicalNetworkVO physicalNetworkVO = mock(PhysicalNetworkVO.class);
-    List<Pair<Integer,Integer>> existingRange = new ArrayList<Pair<Integer, Integer>>();
+    List<String> existingRange = new ArrayList<String>();
     ArgumentCaptor<String> argumentCaptor =  ArgumentCaptor.forClass(String.class);
 
     public NetworkServiceImpl setUp() {
         NetworkServiceImpl networkService = new NetworkServiceImpl();
         ((NetworkServiceImpl)networkService)._dcDao= _datacenterDao;
         networkService._physicalNetworkDao = _physicalNetworkDao;
+        networkService._datacneter_vnet = _DatacenterVnetDao;
         return networkService;
     }
 
     @Test
     public void updatePhysicalNetworkTest(){
+        Transaction txn = Transaction.open("updatePhysicalNetworkTest");
         NetworkServiceImpl networkService = setUp();
-        existingRange.add(new Pair<Integer, Integer>(520, 524));
+        existingRange.add("524");
         when(_physicalNetworkDao.findById(anyLong())).thenReturn(physicalNetworkVO);
         when(_datacenterDao.findById(anyLong())).thenReturn(datacentervo);
         when(_physicalNetworkDao.update(anyLong(), any(physicalNetworkVO.getClass()))).thenReturn(true);
-        when(physicalNetworkVO.getVnet()).thenReturn(existingRange);
-        networkService.updatePhysicalNetwork(1l, null, null, "525-530", null, null);
+        when(_DatacenterVnetDao.listVnetsByPhysicalNetworkAndDataCenter(anyLong(), anyLong())).thenReturn(existingRange);
+        networkService.updatePhysicalNetwork(1l, null, null, "524-524,525-530", null);
+        txn.close("updatePhysicalNetworkTest");
         verify(physicalNetworkVO).setVnet(argumentCaptor.capture());
-        assertEquals("520-530", argumentCaptor.getValue());
+        assertEquals("524-530", argumentCaptor.getValue());
     }
 
 }

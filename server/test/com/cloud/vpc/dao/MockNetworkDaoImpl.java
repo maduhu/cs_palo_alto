@@ -32,7 +32,7 @@ import java.util.List;
 import java.util.Map;
 
 @Local(value = NetworkDao.class)
-@DB(txn = false)
+@DB()
 public class MockNetworkDaoImpl extends GenericDaoBase<NetworkVO, Long> implements NetworkDao{
 
     /* (non-Javadoc)
@@ -328,7 +328,7 @@ public class MockNetworkDaoImpl extends GenericDaoBase<NetworkVO, Long> implemen
      * @see com.cloud.network.dao.NetworkDao#getPrivateNetwork(java.lang.String, java.lang.String, long, long)
      */
     @Override
-    public NetworkVO getPrivateNetwork(String broadcastUri, String cidr, long accountId, long zoneId) {
+    public NetworkVO getPrivateNetwork(String broadcastUri, String cidr, long accountId, long zoneId, Long netofferid) {
         // TODO Auto-generated method stub
         return null;
     }

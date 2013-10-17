@@ -38,7 +38,9 @@ public interface PhysicalNetwork extends Identity, InternalIdentity {
         GRE,
         STT,
         VNS,
-        MIDO;
+        MIDO,
+        SSP,
+        VXLAN;
     }
 
     public enum BroadcastDomainRange {

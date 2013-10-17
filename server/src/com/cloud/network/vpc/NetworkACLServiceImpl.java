@@ -16,6 +16,23 @@
 // under the License.
 package com.cloud.network.vpc;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import javax.ejb.Local;
+import javax.inject.Inject;
+
+import org.apache.commons.lang.StringUtils;
+import org.apache.log4j.Logger;
+import org.springframework.stereotype.Component;
+
+import org.apache.cloudstack.api.ApiErrorCode;
+import org.apache.cloudstack.api.ServerApiException;
+import org.apache.cloudstack.api.command.user.network.CreateNetworkACLCmd;
+import org.apache.cloudstack.api.command.user.network.ListNetworkACLsCmd;
+import org.apache.cloudstack.context.CallContext;
+
 import com.cloud.exception.InvalidParameterValueException;
 import com.cloud.exception.ResourceUnavailableException;
 import com.cloud.network.Network;
@@ -31,29 +48,17 @@ import com.cloud.tags.ResourceTagVO;
 import com.cloud.tags.dao.ResourceTagDao;
 import com.cloud.user.Account;
 import com.cloud.user.AccountManager;
-import com.cloud.user.UserContext;
 import com.cloud.utils.Pair;
 import com.cloud.utils.Ternary;
 import com.cloud.utils.component.ManagerBase;
+import com.cloud.utils.db.EntityManager;
 import com.cloud.utils.db.Filter;
 import com.cloud.utils.db.JoinBuilder;
 import com.cloud.utils.db.SearchBuilder;
 import com.cloud.utils.db.SearchCriteria;
 import com.cloud.utils.db.SearchCriteria.Op;
+import com.cloud.utils.exception.CloudRuntimeException;
 import com.cloud.utils.net.NetUtils;
-import org.apache.cloudstack.api.ApiErrorCode;
-import org.apache.cloudstack.api.ServerApiException;
-import org.apache.cloudstack.api.command.user.network.CreateNetworkACLCmd;
-import org.apache.cloudstack.api.command.user.network.ListNetworkACLsCmd;
-import org.apache.commons.lang.StringUtils;
-import org.apache.log4j.Logger;
-import org.springframework.stereotype.Component;
-
-import javax.ejb.Local;
-import javax.inject.Inject;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 
 @Component
@@ -81,11 +86,13 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
     VpcGatewayDao _vpcGatewayDao;
     @Inject
     VpcManager _vpcMgr;
+    @Inject
+    EntityManager _entityMgr;
 
     @Override
     public NetworkACL createNetworkACL(String name, String description, long vpcId) {
-        Account caller = UserContext.current().getCaller();
-        Vpc vpc = _vpcMgr.getVpc(vpcId);
+        Account caller = CallContext.current().getCallingAccount();
+        Vpc vpc = _entityMgr.findById(Vpc.class, vpcId);
         if(vpc == null){
             throw new InvalidParameterValueException("Unable to find VPC");
         }
@@ -103,7 +110,7 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
         SearchBuilder<NetworkACLVO> sb = _networkACLDao.createSearchBuilder();
         sb.and("id", sb.entity().getId(), Op.EQ);
         sb.and("name", sb.entity().getName(), Op.EQ);
-        sb.and("vpcId", sb.entity().getVpcId(), Op.EQ);
+        sb.and("vpcId", sb.entity().getVpcId(), Op.IN);
 
         if(networkId != null){
             SearchBuilder<NetworkVO> network = _networkDao.createSearchBuilder();
@@ -121,7 +128,8 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
         }
 
         if(vpcId != null){
-            sc.setParameters("vpcId", vpcId);
+            //Include vpcId 0 to list default ACLs
+            sc.setParameters("vpcId", vpcId, 0);
         }
 
         if(networkId != null){
@@ -135,7 +143,7 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
 
     @Override
     public boolean deleteNetworkACL(long id) {
-        Account caller = UserContext.current().getCaller();
+        Account caller = CallContext.current().getCallingAccount();
         NetworkACL acl = _networkACLDao.findById(id);
         if(acl == null) {
             throw new InvalidParameterValueException("Unable to find specified ACL");
@@ -146,7 +154,7 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
             throw new InvalidParameterValueException("Default ACL cannot be removed");
         }
 
-        Vpc vpc = _vpcMgr.getVpc(acl.getVpcId());
+        Vpc vpc = _entityMgr.findById(Vpc.class, acl.getVpcId());
         if(vpc == null){
             throw new InvalidParameterValueException("Unable to find specified VPC associated with the ACL");
         }
@@ -155,7 +163,7 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
     }
     @Override
     public boolean replaceNetworkACLonPrivateGw(long aclId, long privateGatewayId) throws ResourceUnavailableException {
-        Account caller = UserContext.current().getCaller();
+        Account caller = CallContext.current().getCallingAccount();
         VpcGateway gateway = _vpcGatewayDao.findById(privateGatewayId);
         if (gateway == null) {
             throw new InvalidParameterValueException("Unable to find specified private gateway");
@@ -177,7 +185,7 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
         }
 
         if(aclId != NetworkACL.DEFAULT_DENY && aclId != NetworkACL.DEFAULT_ALLOW) {
-            Vpc vpc = _vpcMgr.getVpc(acl.getVpcId());
+            Vpc vpc = _entityMgr.findById(Vpc.class, acl.getVpcId());
             if(vpc == null){
                 throw new InvalidParameterValueException("Unable to find Vpc associated with the NetworkACL");
             }
@@ -187,7 +195,7 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
             }
         }
 
-        PrivateGateway privateGateway = _vpcMgr.getVpcPrivateGateway(privateGatewayId);
+        PrivateGateway privateGateway = _entityMgr.findById(PrivateGateway.class, privateGatewayId);
         _accountMgr.checkAccess(caller, null, true, privateGateway);
 
         return  _networkAclMgr.replaceNetworkACLForPrivateGw(acl, privateGateway);
@@ -196,7 +204,7 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
 
     @Override
     public boolean replaceNetworkACL(long aclId, long networkId) throws ResourceUnavailableException {
-        Account caller = UserContext.current().getCaller();
+        Account caller = CallContext.current().getCallingAccount();
 
         NetworkVO network = _networkDao.findById(networkId);
         if(network == null){
@@ -219,7 +227,7 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
         if(aclId != NetworkACL.DEFAULT_DENY && aclId != NetworkACL.DEFAULT_ALLOW) {
             //ACL is not default DENY/ALLOW
             // ACL should be associated with a VPC
-            Vpc vpc = _vpcMgr.getVpc(acl.getVpcId());
+            Vpc vpc = _entityMgr.findById(Vpc.class, acl.getVpcId());
             if(vpc == null){
                 throw new InvalidParameterValueException("Unable to find Vpc associated with the NetworkACL");
             }
@@ -235,7 +243,7 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
 
     @Override
     public NetworkACLItem createNetworkACLItem(CreateNetworkACLCmd aclItemCmd){
-        Account caller = UserContext.current().getCaller();
+        Account caller = CallContext.current().getCallingAccount();
         Long aclId = aclItemCmd.getACLId();
         if(aclId == null){
             //ACL id is not specified. Get the ACL details from network
@@ -247,6 +255,40 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
                 throw new InvalidParameterValueException("Network: "+network.getUuid()+" does not belong to VPC");
             }
             aclId = network.getNetworkACLId();
+
+            if(aclId == null){
+                //Network is not associated with any ACL. Create a new ACL and add aclItem in it for backward compatibility
+                s_logger.debug("Network "+network.getId()+" is not associated with any ACL. Creating an ACL before adding acl item");
+
+                //verify that ACLProvider is supported by network offering
+                if(!_networkModel.areServicesSupportedByNetworkOffering(network.getNetworkOfferingId(), Network.Service.NetworkACL)){
+                    throw new InvalidParameterValueException("Network Offering does not support NetworkACL service");
+                }
+
+                Vpc vpc = _entityMgr.findById(Vpc.class, network.getVpcId());
+                if(vpc == null){
+                    throw new InvalidParameterValueException("Unable to find Vpc associated with the Network");
+                }
+
+                //Create new ACL
+                String aclName = "VPC_"+vpc.getName()+"_Tier_"+network.getName()+"_ACL_"+network.getUuid();
+                String description = "ACL for "+aclName;
+                NetworkACL acl = _networkAclMgr.createNetworkACL(aclName, description, network.getVpcId());
+                if(acl == null){
+                    throw new CloudRuntimeException("Error while create ACL before adding ACL Item for network "+network.getId());
+                }
+                s_logger.debug("Created ACL: "+aclName+" for network "+network.getId());
+                aclId = acl.getId();
+                //Apply acl to network
+                try {
+                    if(!_networkAclMgr.replaceNetworkACL(acl, (NetworkVO)network)){
+                        throw new CloudRuntimeException("Unable to apply auto created ACL to network "+network.getId());
+                    }
+                    s_logger.debug("Created ACL is applied to network "+network.getId());
+                } catch (ResourceUnavailableException e) {
+                    throw new CloudRuntimeException("Unable to apply auto created ACL to network "+network.getId(), e);
+                }
+            }
         }
 
         NetworkACL acl = _networkAclMgr.getNetworkACL(aclId);
@@ -258,7 +300,7 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
             throw new InvalidParameterValueException("Default ACL cannot be modified");
         }
 
-        Vpc vpc = _vpcMgr.getVpc(acl.getVpcId());
+        Vpc vpc = _entityMgr.findById(Vpc.class, acl.getVpcId());
         if(vpc == null){
             throw new InvalidParameterValueException("Unable to find Vpc associated with the NetworkACL");
         }
@@ -272,7 +314,7 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
         }
 
         validateNetworkACLItem(aclItemCmd.getSourcePortStart(), aclItemCmd.getSourcePortEnd(), aclItemCmd.getSourceCidrList(),
-                aclItemCmd.getProtocol(), aclItemCmd.getIcmpCode(), aclItemCmd.getIcmpType(), aclItemCmd.getAction());
+                aclItemCmd.getProtocol(), aclItemCmd.getIcmpCode(), aclItemCmd.getIcmpType(), aclItemCmd.getAction(), aclItemCmd.getNumber());
 
         return _networkAclMgr.createNetworkACLItem(aclItemCmd.getSourcePortStart(),
                 aclItemCmd.getSourcePortEnd(), aclItemCmd.getProtocol(), aclItemCmd.getSourceCidrList(), aclItemCmd.getIcmpCode(),
@@ -280,7 +322,7 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
     }
 
     private void validateNetworkACLItem(Integer portStart, Integer portEnd, List<String> sourceCidrList, String protocol, Integer icmpCode,
-                                        Integer icmpType, String action) {
+                                        Integer icmpType, String action, Integer number) {
 
         if (portStart != null && !NetUtils.isValidPort(portStart)) {
             throw new InvalidParameterValueException("publicPort is an invalid value: " + portStart);
@@ -352,6 +394,11 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
                 throw new InvalidParameterValueException("Invalid action. Allowed actions are Allow and Deny");
             }
         }
+
+        //Check for valid number
+        if(number != null && number < 1){
+            throw new InvalidParameterValueException("Invalid number. Number cannot be < 1");
+        }
     }
 
     @Override
@@ -374,7 +421,7 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
         String action = cmd.getAction();
         Map<String, String> tags = cmd.getTags();
 
-        Account caller = UserContext.current().getCaller();
+        Account caller = CallContext.current().getCallingAccount();
         List<Long> permittedAccounts = new ArrayList<Long>();
 
         Ternary<Long, Boolean, ListProjectResourcesCriteria> domainIdRecursiveListProject =
@@ -475,9 +522,9 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
 
         NetworkACL acl = _networkAclMgr.getNetworkACL(aclItem.getAclId());
 
-        Vpc vpc = _vpcMgr.getVpc(acl.getVpcId());
+        Vpc vpc = _entityMgr.findById(Vpc.class, acl.getVpcId());
 
-        Account caller = UserContext.current().getCaller();
+        Account caller = CallContext.current().getCallingAccount();
 
         _accountMgr.checkAccess(caller, null, true, vpc);
 
@@ -490,7 +537,7 @@ public class NetworkACLServiceImpl extends ManagerBase implements NetworkACLServ
         }
 
         validateNetworkACLItem((sourcePortStart == null) ? aclItem.getSourcePortStart() : sourcePortStart, (sourcePortEnd == null) ? aclItem.getSourcePortEnd() : sourcePortEnd,
-                sourceCidrList, protocol, icmpCode, (icmpType == null) ? aclItem.getIcmpType() : icmpType, action);
+                sourceCidrList, protocol, icmpCode, (icmpType == null) ? aclItem.getIcmpType() : icmpType, action, number);
 
         return _networkAclMgr.updateNetworkACLItem(id, protocol, sourceCidrList, trafficType, action, number, sourcePortStart,
                 sourcePortEnd, icmpCode, icmpType);

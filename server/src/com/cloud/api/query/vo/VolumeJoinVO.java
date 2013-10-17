@@ -58,6 +58,12 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
     @Column(name = "size")
     long size;
 
+    @Column(name = "min_iops")
+    Long minIops;
+
+    @Column(name = "max_iops")
+    Long maxIops;
+
     @Column(name = "state")
     @Enumerated(value = EnumType.STRING)
     private Volume.State state;
@@ -117,9 +123,6 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
     @Column(name="data_center_name")
     private String dataCenterName;
-    
-    @Column(name="data_center_type")
-    private String dataCenterType;
 
     @Column(name="vm_id")
     private long vmId;
@@ -141,11 +144,11 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
     @Enumerated(value=EnumType.STRING)
     protected VirtualMachine.Type vmType;
 
-    @Column (name="volume_host_size")
-    private long volumeHostSize;
+    @Column(name = "volume_store_size")
+    private long volumeStoreSize;
 
-    @Column(name="volume_host_created")
-    private Date volumeHostCreated;
+    @Column(name = "created_on_store")
+    private Date createdOnStore;
 
     @Column(name="format")
     private Storage.ImageFormat format;
@@ -183,6 +186,18 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
     @Column(name="use_local_storage")
     private boolean useLocalStorage;
+
+    @Column(name="bytes_read_rate")
+    Long bytesReadRate;
+
+    @Column(name="bytes_write_rate")
+    Long bytesWriteRate;
+
+    @Column(name="iops_read_rate")
+    Long iopsReadRate;
+
+    @Column(name="iops_write_rate")
+    Long iopsWriteRate;
 
     @Column(name="pool_id")
     private long poolId;
@@ -245,9 +260,11 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
     @Column(name="tag_customer")
     private String tagCustomer;
 
-
     @Column(name="display_volume", updatable=true, nullable=false)
     protected boolean displayVolume;
+
+    @Column(name="path")
+    protected String path;
 
 
     public VolumeJoinVO() {
@@ -263,21 +280,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
     @Override
-    public void setId(long id) {
-        this.id = id;
-    }
-
-
-
-    @Override
     public String getUuid() {
         return uuid;
-    }
-
-
-
-    public void setUuid(String uuid) {
-        this.uuid = uuid;
     }
 
 
@@ -288,20 +292,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setName(String name) {
-        this.name = name;
-    }
-
-
-
     public Long getDeviceId() {
         return deviceId;
-    }
-
-
-
-    public void setDeviceId(Long deviceId) {
-        this.deviceId = deviceId;
     }
 
 
@@ -312,44 +304,27 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setVolumeType(Volume.Type volumeType) {
-        this.volumeType = volumeType;
-    }
-
-
-
     public long getSize() {
         return size;
     }
 
 
 
-    public void setSize(long size) {
-        this.size = size;
+    public Long getMinIops() {
+        return minIops;
     }
 
-
+    public Long getMaxIops() {
+        return maxIops;
+    }
 
     public Volume.State getState() {
         return state;
     }
 
 
-
-    public void setState(Volume.State state) {
-        this.state = state;
-    }
-
-
-
     public Date getCreated() {
         return created;
-    }
-
-
-
-    public void setCreated(Date created) {
-        this.created = created;
     }
 
 
@@ -360,20 +335,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setAttached(Date attached) {
-        this.attached = attached;
-    }
-
-
-
     public Date getRemoved() {
         return removed;
-    }
-
-
-
-    public void setRemoved(Date removed) {
-        this.removed = removed;
     }
 
 
@@ -385,28 +348,13 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setAccountId(long accountId) {
-        this.accountId = accountId;
-    }
-
-
     public boolean isDisplayVolume() {
         return displayVolume;
-    }
-
-    public void setDisplayVolume(boolean displayVolume) {
-        this.displayVolume = displayVolume;
     }
 
     @Override
     public String getAccountUuid() {
         return accountUuid;
-    }
-
-
-
-    public void setAccountUuid(String accountUuid) {
-        this.accountUuid = accountUuid;
     }
 
 
@@ -418,21 +366,9 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setAccountName(String accountName) {
-        this.accountName = accountName;
-    }
-
-
-
     @Override
     public short getAccountType() {
         return accountType;
-    }
-
-
-
-    public void setAccountType(short accountType) {
-        this.accountType = accountType;
     }
 
 
@@ -444,21 +380,9 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setDomainId(long domainId) {
-        this.domainId = domainId;
-    }
-
-
-
     @Override
     public String getDomainUuid() {
         return domainUuid;
-    }
-
-
-
-    public void setDomainUuid(String domainUuid) {
-        this.domainUuid = domainUuid;
     }
 
 
@@ -470,12 +394,6 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setDomainName(String domainName) {
-        this.domainName = domainName;
-    }
-
-
-
     @Override
     public String getDomainPath() {
         return domainPath;
@@ -483,20 +401,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setDomainPath(String domainPath) {
-        this.domainPath = domainPath;
-    }
-
-
-
     public long getProjectId() {
         return projectId;
-    }
-
-
-
-    public void setProjectId(long projectId) {
-        this.projectId = projectId;
     }
 
 
@@ -508,21 +414,9 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setProjectUuid(String projectUuid) {
-        this.projectUuid = projectUuid;
-    }
-
-
-
     @Override
     public String getProjectName() {
         return projectName;
-    }
-
-
-
-    public void setProjectName(String projectName) {
-        this.projectName = projectName;
     }
 
 
@@ -533,20 +427,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setVmId(long vmId) {
-        this.vmId = vmId;
-    }
-
-
-
     public String getVmUuid() {
         return vmUuid;
-    }
-
-
-
-    public void setVmUuid(String vmUuid) {
-        this.vmUuid = vmUuid;
     }
 
 
@@ -557,20 +439,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setVmName(String vmName) {
-        this.vmName = vmName;
-    }
-
-
-
     public String getVmDisplayName() {
         return vmDisplayName;
-    }
-
-
-
-    public void setVmDisplayName(String vmDisplayName) {
-        this.vmDisplayName = vmDisplayName;
     }
 
 
@@ -581,56 +451,22 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setVmState(VirtualMachine.State vmState) {
-        this.vmState = vmState;
-    }
-
-
-
     public VirtualMachine.Type getVmType() {
         return vmType;
     }
 
 
 
-    public void setVmType(VirtualMachine.Type vmType) {
-        this.vmType = vmType;
+    public long getVolumeStoreSize() {
+        return volumeStoreSize;
     }
 
-
-
-    public long getVolumeHostSize() {
-        return volumeHostSize;
+    public Date getCreatedOnStore() {
+        return createdOnStore;
     }
-
-
-
-    public void setVolumeHostSize(long volumeHostSize) {
-        this.volumeHostSize = volumeHostSize;
-    }
-
-
-
-    public Date getVolumeHostCreated() {
-        return volumeHostCreated;
-    }
-
-
-
-    public void setVolumeHostCreated(Date volumeHostCreated) {
-        this.volumeHostCreated = volumeHostCreated;
-    }
-
-
 
     public Storage.ImageFormat getFormat() {
         return format;
-    }
-
-
-
-    public void setFormat(Storage.ImageFormat format) {
-        this.format = format;
     }
 
 
@@ -641,20 +477,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setDownloadPercent(int downloadPercent) {
-        this.downloadPercent = downloadPercent;
-    }
-
-
-
     public Status getDownloadState() {
         return downloadState;
-    }
-
-
-
-    public void setDownloadState(Status downloadState) {
-        this.downloadState = downloadState;
     }
 
 
@@ -665,20 +489,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setErrorString(String errorString) {
-        this.errorString = errorString;
-    }
-
-
-
     public HypervisorType getHypervisorType() {
         return hypervisorType;
-    }
-
-
-
-    public void setHypervisorType(HypervisorType hypervisorType) {
-        this.hypervisorType = hypervisorType;
     }
 
 
@@ -689,20 +501,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setDiskOfferingId(long diskOfferingId) {
-        this.diskOfferingId = diskOfferingId;
-    }
-
-
-
     public String getDiskOfferingUuid() {
         return diskOfferingUuid;
-    }
-
-
-
-    public void setDiskOfferingUuid(String diskOfferingUuid) {
-        this.diskOfferingUuid = diskOfferingUuid;
     }
 
 
@@ -713,20 +513,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setDiskOfferingName(String diskOfferingName) {
-        this.diskOfferingName = diskOfferingName;
-    }
-
-
-
     public String getDiskOfferingDisplayText() {
         return diskOfferingDisplayText;
-    }
-
-
-
-    public void setDiskOfferingDisplayText(String diskOfferingDisplayText) {
-        this.diskOfferingDisplayText = diskOfferingDisplayText;
     }
 
 
@@ -737,20 +525,24 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setUseLocalStorage(boolean useLocalStorage) {
-        this.useLocalStorage = useLocalStorage;
+    public Long getBytesReadRate() {
+        return bytesReadRate;
     }
 
+    public Long getBytesWriteRate() {
+        return bytesWriteRate;
+    }
 
+    public Long getIopsReadRate() {
+        return iopsReadRate;
+    }
+
+    public Long getIopsWriteRate() {
+        return iopsWriteRate;
+    }
 
     public long getPoolId() {
         return poolId;
-    }
-
-
-
-    public void setPoolId(long poolId) {
-        this.poolId = poolId;
     }
 
 
@@ -761,20 +553,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setPoolUuid(String poolUuid) {
-        this.poolUuid = poolUuid;
-    }
-
-
-
     public String getPoolName() {
         return poolName;
-    }
-
-
-
-    public void setPoolName(String poolName) {
-        this.poolName = poolName;
     }
 
 
@@ -785,20 +565,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setTemplateId(long templateId) {
-        this.templateId = templateId;
-    }
-
-
-
     public String getTemplateUuid() {
         return templateUuid;
-    }
-
-
-
-    public void setTemplateUuid(String templateUuid) {
-        this.templateUuid = templateUuid;
     }
 
 
@@ -809,20 +577,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setExtractable(boolean extractable) {
-        this.extractable = extractable;
-    }
-
-
-
     public Storage.TemplateType getTemplateType() {
         return templateType;
-    }
-
-
-
-    public void setTemplateType(Storage.TemplateType templateType) {
-        this.templateType = templateType;
     }
 
 
@@ -833,20 +589,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setJobId(Long jobId) {
-        this.jobId = jobId;
-    }
-
-
-
     public String getJobUuid() {
         return jobUuid;
-    }
-
-
-
-    public void setJobUuid(String jobUuid) {
-        this.jobUuid = jobUuid;
     }
 
 
@@ -857,20 +601,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setJobStatus(int jobStatus) {
-        this.jobStatus = jobStatus;
-    }
-
-
-
     public long getTagId() {
         return tagId;
-    }
-
-
-
-    public void setTagId(long tagId) {
-        this.tagId = tagId;
     }
 
 
@@ -881,20 +613,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setTagUuid(String tagUuid) {
-        this.tagUuid = tagUuid;
-    }
-
-
-
     public String getTagKey() {
         return tagKey;
-    }
-
-
-
-    public void setTagKey(String tagKey) {
-        this.tagKey = tagKey;
     }
 
 
@@ -905,20 +625,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setTagValue(String tagValue) {
-        this.tagValue = tagValue;
-    }
-
-
-
     public long getTagDomainId() {
         return tagDomainId;
-    }
-
-
-
-    public void setTagDomainId(long tagDomainId) {
-        this.tagDomainId = tagDomainId;
     }
 
 
@@ -929,20 +637,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setTagAccountId(long tagAccountId) {
-        this.tagAccountId = tagAccountId;
-    }
-
-
-
     public long getTagResourceId() {
         return tagResourceId;
-    }
-
-
-
-    public void setTagResourceId(long tagResourceId) {
-        this.tagResourceId = tagResourceId;
     }
 
 
@@ -953,20 +649,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setTagResourceUuid(String tagResourceUuid) {
-        this.tagResourceUuid = tagResourceUuid;
-    }
-
-
-
     public TaggedResourceType getTagResourceType() {
         return tagResourceType;
-    }
-
-
-
-    public void setTagResourceType(TaggedResourceType tagResourceType) {
-        this.tagResourceType = tagResourceType;
     }
 
 
@@ -977,20 +661,8 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setTagCustomer(String tagCustomer) {
-        this.tagCustomer = tagCustomer;
-    }
-
-
-
     public long getDataCenterId() {
         return dataCenterId;
-    }
-
-
-
-    public void setDataCenterId(long dataCenterId) {
-        this.dataCenterId = dataCenterId;
     }
 
 
@@ -1001,44 +673,14 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setDataCenterUuid(String dataCenterUuid) {
-        this.dataCenterUuid = dataCenterUuid;
-    }
-
-
-
     public String getDataCenterName() {
         return dataCenterName;
     }
 
 
 
-    public void setDataCenterName(String dataCenterName) {
-        this.dataCenterName = dataCenterName;
-    }
-
-       
-        
-    public String getDataCenterType() {
-        return dataCenterType;
-    }
-
-
-
-    public void setDataCenterType(String dataCenterType) {
-        this.dataCenterType = dataCenterType;
-    }
-    
-    
-
     public long getPodId() {
         return podId;
-    }
-
-
-
-    public void setPodId(long podId) {
-        this.podId = podId;
     }
 
 
@@ -1049,11 +691,9 @@ public class VolumeJoinVO extends BaseViewVO implements ControlledViewEntity {
 
 
 
-    public void setSystemUse(boolean systemUse) {
-        this.systemUse = systemUse;
+    public String getPath() {
+        return path;
     }
-
-
 
 
 }

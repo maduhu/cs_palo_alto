@@ -116,7 +116,7 @@ class Services:
                     "name": "Cent OS Template",
                     "passwordenabled": True,
                 },
-            "diskdevice": '/dev/xvdd',
+            "diskdevice": ['/dev/vdc',  '/dev/vdb', '/dev/hdb', '/dev/hdc', '/dev/xvdd', '/dev/cdrom', '/dev/sr0', '/dev/cdrom1' ],
             # Disk device where ISO is attached to instance
             "mount_dir": "/mnt/tmp",
             "sleep": 60,
@@ -698,7 +698,7 @@ class TestVMLifeCycle(cloudstackTestCase):
 
     @attr(tags = ["advanced", "advancedns", "smoke", "basic", "sg"])
     def test_10_attachAndDetach_iso(self):
-        """Test for detach ISO to virtual machine"""
+        """Test for attach and detach ISO to virtual machine"""
 
         # Validate the following
         # 1. Create ISO
@@ -732,42 +732,27 @@ class TestVMLifeCycle(cloudstackTestCase):
         cmd.virtualmachineid = self.virtual_machine.id
         self.apiclient.attachIso(cmd)
 
-        #determine device type from hypervisor
-        hosts = Host.list(self.apiclient, id=self.virtual_machine.hostid)
-        self.assertTrue(isinstance(hosts, list))
-        self.assertTrue(len(hosts) > 0)
-        self.debug("Found %s host" % hosts[0].hypervisor)
-
-        if hosts[0].hypervisor.lower() == "kvm":
-            self.services["diskdevice"] = "/dev/vda"
-
         try:
             ssh_client = self.virtual_machine.get_ssh_client()
         except Exception as e:
             self.fail("SSH failed for virtual machine: %s - %s" %
                                 (self.virtual_machine.ipaddress, e))
 
-        cmds = [
-                    "mkdir -p %s" % self.services["mount_dir"],
-                    "mount -rt iso9660 %s %s" \
-                                % (
-                                   self.services["diskdevice"],
-                                   self.services["mount_dir"]
-                                   ),
-            ]
-        for c in cmds:
-            res = ssh_client.execute(c)
-            self.assertEqual(res, [], "Check mount is successful or not")
-            c = "fdisk -l|grep %s|head -1" % self.services["diskdevice"]
-            res = ssh_client.execute(c)
-            #Disk /dev/xvdd: 4393 MB, 4393723904 bytes
+        cmds = "mkdir -p %s" % self.services["mount_dir"]
+        self.assert_(ssh_client.execute(cmds) == [], "mkdir failed within guest")
 
-        # Res may contain more than one strings depending on environment
-        # Split strings to form new list which is used for assertion on ISO size 
-        result = []
-        for i in res:
-            for k in i.split():
-                result.append(k)
+        for diskdevice in self.services["diskdevice"]:
+            res = ssh_client.execute("mount -rt iso9660 {} {}".format(diskdevice, self.services["mount_dir"]))
+            if res == []:
+                self.services["mount"] = diskdevice
+                break
+        else:
+            self.fail("No mount points matched. Mount was unsuccessful")
+
+        c = "mount |grep %s|head -1" % self.services["mount"]
+        res = ssh_client.execute(c)
+        size = ssh_client.execute("du %s | tail -1" % self.services["mount"])
+        self.debug("Found a mount point at %s with size %s" % (res, size))
 
         # Get ISO size
         iso_response = list_isos(
@@ -779,13 +764,7 @@ class TestVMLifeCycle(cloudstackTestCase):
                             True,
                             "Check list response returns a valid list"
                         )
-        iso_size = iso_response[0].size
 
-        self.assertEqual(
-                         str(iso_size) in result,
-                         True,
-                         "Check size of the attached ISO"
-                         )
         try:
             #Unmount ISO
             command = "umount %s" % self.services["mount_dir"]
@@ -806,7 +785,7 @@ class TestVMLifeCycle(cloudstackTestCase):
                                 (self.virtual_machine.ipaddress, e))
 
         # Check if ISO is properly detached from VM (using fdisk)
-        result = self.services["diskdevice"] in str(res)
+        result = self.services["mount"] in str(res)
 
         self.assertEqual(
                          result,

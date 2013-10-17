@@ -5,7 +5,7 @@
 // to you under the Apache License, Version 2.0 (the
 // "License"); you may not use this file except in compliance
 // with the License.  You may obtain a copy of the License at
-// 
+//
 //   http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing,
@@ -17,13 +17,12 @@
 package org.apache.cloudstack.internallbvmmgr;
 
 import java.lang.reflect.Field;
-import java.util.Map;
 
 import javax.inject.Inject;
 
 import junit.framework.TestCase;
 
-import org.apache.cloudstack.network.lb.InternalLoadBalancerVMService;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -31,11 +30,12 @@ import org.mockito.Mockito;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
-import com.cloud.deploy.DeploymentPlan;
+import org.apache.cloudstack.context.CallContext;
+import org.apache.cloudstack.network.lb.InternalLoadBalancerVMService;
+
 import com.cloud.exception.ConcurrentOperationException;
 import com.cloud.exception.InsufficientCapacityException;
 import com.cloud.exception.InvalidParameterValueException;
-import com.cloud.exception.OperationTimedoutException;
 import com.cloud.exception.ResourceUnavailableException;
 import com.cloud.exception.StorageUnavailableException;
 import com.cloud.hypervisor.Hypervisor.HypervisorType;
@@ -43,18 +43,15 @@ import com.cloud.network.router.VirtualRouter;
 import com.cloud.network.router.VirtualRouter.Role;
 import com.cloud.service.ServiceOfferingVO;
 import com.cloud.service.dao.ServiceOfferingDao;
-import com.cloud.user.Account;
 import com.cloud.user.AccountManager;
 import com.cloud.user.AccountVO;
-import com.cloud.user.User;
 import com.cloud.user.UserVO;
+import com.cloud.user.dao.AccountDao;
 import com.cloud.utils.component.ComponentContext;
 import com.cloud.vm.DomainRouterVO;
 import com.cloud.vm.VirtualMachine;
 import com.cloud.vm.VirtualMachineManager;
 import com.cloud.vm.dao.DomainRouterDao;
-import com.cloud.user.UserContext;
-import com.cloud.user.dao.AccountDao;
 
 
 /**
@@ -64,7 +61,6 @@ import com.cloud.user.dao.AccountDao;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @ContextConfiguration(locations="classpath:/lb_svc.xml")
-@SuppressWarnings("unchecked")
 public class InternalLBVMServiceTest extends TestCase {
     //The interface to test
     @Inject InternalLoadBalancerVMService _lbVmSvc;
@@ -80,6 +76,7 @@ public class InternalLBVMServiceTest extends TestCase {
     long nonExistingVmId = 2L;
     long nonInternalLbVmId = 3L;
     
+    @Override
     @Before
     public void setUp() {
         //mock system offering creation as it's used by configure() method called by initComponentsLifeCycle
@@ -94,7 +91,7 @@ public class InternalLBVMServiceTest extends TestCase {
         Mockito.when(_accountMgr.getSystemUser()).thenReturn(new UserVO(1));
         Mockito.when(_accountMgr.getSystemAccount()).thenReturn(new AccountVO(2));
         Mockito.when(_accountDao.findByIdIncludingRemoved(Mockito.anyLong())).thenReturn(new AccountVO(2));
-        UserContext.registerContext(_accountMgr.getSystemUser().getId(), _accountMgr.getSystemAccount(), null, false);
+        CallContext.register(_accountMgr.getSystemUser(), _accountMgr.getSystemAccount());
         
         
         DomainRouterVO validVm = new DomainRouterVO(validVmId,off.getId(),1,"alena",1,HypervisorType.XenServer,1,1,1,
@@ -109,33 +106,14 @@ public class InternalLBVMServiceTest extends TestCase {
         Mockito.when(_domainRouterDao.findById(validVmId)).thenReturn(validVm);
         Mockito.when(_domainRouterDao.findById(nonExistingVmId)).thenReturn(null);
         Mockito.when(_domainRouterDao.findById(nonInternalLbVmId)).thenReturn(nonInternalLbVm);
-        
-        try {
-            Mockito.when(_itMgr.start(Mockito.any(DomainRouterVO.class),
-                    Mockito.any(Map.class), Mockito.any(User.class), Mockito.any(Account.class), Mockito.any(DeploymentPlan.class))).thenReturn(validVm);
-        } catch (InsufficientCapacityException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        } catch (ResourceUnavailableException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-        
-        try {
-            Mockito.when(_itMgr.advanceStop(Mockito.any(DomainRouterVO.class), Mockito.any(Boolean.class), Mockito.any(User.class), Mockito.any(Account.class))).thenReturn(true);
-        } catch (ResourceUnavailableException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        } catch (OperationTimedoutException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        } catch (ConcurrentOperationException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
-        }
-
     }
     
+    @Override
+    @After
+    public void tearDown() {
+        CallContext.unregister();
+    }
+
     //TESTS FOR START COMMAND
     
     

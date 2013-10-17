@@ -24,9 +24,8 @@ from marvin.cloudstackAPI import *
 from marvin.integration.lib.utils import *
 from marvin.integration.lib.base import *
 from marvin.integration.lib.common import *
-from marvin.remoteSSHClient import remoteSSHClient
-import datetime
 import netaddr
+from nose.plugins.attrib import attr
 
 class Services:
     """ Test networks in advanced zone with security groups"""
@@ -156,7 +155,7 @@ class TestNetworksInAdvancedSG(cloudstackTestCase):
     @classmethod
     def setUpClass(cls):
         cls.api_client = super(
-                               TestSharedNetworks,
+                               TestNetworksInAdvancedSG,
                                cls
                                ).getClsTestClient().getApiClient()
         
@@ -246,6 +245,7 @@ class TestNetworksInAdvancedSG(cloudstackTestCase):
             raise Exception("Warning: Exception during network cleanup : %s" % e)
         return
 
+    @attr(tags = ["advancedsg"])
     def test_createIsolatedNetwork(self):
         """ Test Isolated Network """
         
@@ -423,8 +423,9 @@ class TestNetworksInAdvancedSG(cloudstackTestCase):
         except Exception as e:
             self.debug("Network creation failed because create isolated network is invalid in advanced zone with security groups.")
 
+    @attr(tags = ["advancedsg"])
     def test_createSharedNetwork_withoutSG(self):
-        """ Test Shared Network with used vlan 01 """
+        """ Test Shared Network with without SecurityProvider """
         
         # Steps,
         #  1. create an Admin account
@@ -574,6 +575,7 @@ class TestNetworksInAdvancedSG(cloudstackTestCase):
         except Exception as e:
             self.debug("Network creation failed because there is no SecurityProvider in the network offering.")
     
+    @attr(tags = ["advancedsg"])
     def test_deployVM_SharedwithSG(self):
         """ Test VM deployment in shared networks with SecurityProvider """
         
@@ -684,7 +686,7 @@ class TestNetworksInAdvancedSG(cloudstackTestCase):
             "The network offering state should get updated to Enabled."
             )
         
-        physical_network = list_physical_networks_response[0]        
+        physical_network = PhysicalNetwork.list(self.api_client)[0]
 
 	    #create network using the shared network offering created
         self.services["shared_network_sg"]["acltype"] = "domain"

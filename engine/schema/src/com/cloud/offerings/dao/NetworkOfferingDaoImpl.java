@@ -42,7 +42,7 @@ import com.cloud.utils.db.Transaction;
 
 @Component
 @Local(value = NetworkOfferingDao.class)
-@DB(txn = false)
+@DB()
 public class NetworkOfferingDaoImpl extends GenericDaoBase<NetworkOfferingVO, Long> implements NetworkOfferingDao {
     final SearchBuilder<NetworkOfferingVO> NameSearch;
     final SearchBuilder<NetworkOfferingVO> SystemOfferingSearch;
@@ -76,7 +76,7 @@ public class NetworkOfferingDaoImpl extends GenericDaoBase<NetworkOfferingVO, Lo
         AllFieldsSearch.done();
 
         UpgradeSearch = createSearchBuilder(Long.class);
-        UpgradeSearch.selectField(UpgradeSearch.entity().getId());
+        UpgradeSearch.selectFields(UpgradeSearch.entity().getId());
         UpgradeSearch.and("physicalNetworkId", UpgradeSearch.entity().getId(), Op.NEQ);
         UpgradeSearch.and("physicalNetworkId", UpgradeSearch.entity().isSystemOnly(), Op.EQ);
         UpgradeSearch.and("trafficType", UpgradeSearch.entity().getTrafficType(), Op.EQ);

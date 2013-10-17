@@ -57,7 +57,7 @@ public class PrivateGatewayProfile implements PrivateGateway {
     }
 
     @Override
-    public Long getNetworkId() {
+    public long getNetworkId() {
         return vpcGateway.getNetworkId();
     }
 
@@ -67,8 +67,8 @@ public class PrivateGatewayProfile implements PrivateGateway {
     }
 
     @Override
-    public String getVlanTag() {
-        return vpcGateway.getVlanTag();
+    public String getBroadcastUri() {
+        return vpcGateway.getBroadcastUri();
     }
 
     @Override

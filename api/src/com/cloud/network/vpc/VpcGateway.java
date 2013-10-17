@@ -56,7 +56,7 @@ public interface VpcGateway extends Identity, ControlledEntity, InternalIdentity
     /**
      * @return
      */
-    Long getNetworkId();
+    long getNetworkId();
 
     /**
      * @return
@@ -71,7 +71,7 @@ public interface VpcGateway extends Identity, ControlledEntity, InternalIdentity
     /**
      * @return
      */
-    String getVlanTag();
+    String getBroadcastUri();
 
     /**
      * @return

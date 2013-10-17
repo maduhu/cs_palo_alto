@@ -16,21 +16,44 @@
 // under the License.
 package org.apache.cloudstack.api.command.user.address;
 
-import com.cloud.async.AsyncJob;
+import java.util.List;
+
+import org.apache.log4j.Logger;
+
+import org.apache.cloudstack.api.APICommand;
+import org.apache.cloudstack.api.ApiCommandJobType;
+import org.apache.cloudstack.api.ApiConstants;
+import org.apache.cloudstack.api.ApiErrorCode;
+import org.apache.cloudstack.api.BaseAsyncCmd;
+import org.apache.cloudstack.api.BaseAsyncCreateCmd;
+import org.apache.cloudstack.api.BaseCmd;
+import org.apache.cloudstack.api.Parameter;
+import org.apache.cloudstack.api.ServerApiException;
+import org.apache.cloudstack.api.response.DomainResponse;
+import org.apache.cloudstack.api.response.IPAddressResponse;
+import org.apache.cloudstack.api.response.NetworkResponse;
+import org.apache.cloudstack.api.response.ProjectResponse;
+import org.apache.cloudstack.api.response.RegionResponse;
+import org.apache.cloudstack.api.response.VpcResponse;
+import org.apache.cloudstack.api.response.ZoneResponse;
+import org.apache.cloudstack.context.CallContext;
+
 import com.cloud.dc.DataCenter;
 import com.cloud.dc.DataCenter.NetworkType;
 import com.cloud.event.EventTypes;
-import com.cloud.exception.*;
+import com.cloud.exception.ConcurrentOperationException;
+import com.cloud.exception.InsufficientAddressCapacityException;
+import com.cloud.exception.InsufficientCapacityException;
+import com.cloud.exception.InvalidParameterValueException;
+import com.cloud.exception.PermissionDeniedException;
+import com.cloud.exception.ResourceAllocationException;
+import com.cloud.exception.ResourceUnavailableException;
 import com.cloud.network.IpAddress;
 import com.cloud.network.Network;
 import com.cloud.network.vpc.Vpc;
+import com.cloud.offering.NetworkOffering;
+import com.cloud.projects.Project;
 import com.cloud.user.Account;
-import com.cloud.user.UserContext;
-import org.apache.cloudstack.api.*;
-import org.apache.cloudstack.api.response.*;
-import org.apache.log4j.Logger;
-
-import java.util.List;
 
 @APICommand(name = "associateIpAddress", description="Acquires and associates a public IP to an account.", responseObject=IPAddressResponse.class)
 public class AssociateIPAddrCmd extends BaseAsyncCreateCmd {
@@ -83,14 +106,14 @@ public class AssociateIPAddrCmd extends BaseAsyncCreateCmd {
         if (accountName != null) {
             return accountName;
         }
-        return UserContext.current().getCaller().getAccountName();
+        return CallContext.current().getCallingAccount().getAccountName();
     }
 
     public long getDomainId() {
         if (domainId != null) {
             return domainId;
         }
-        return UserContext.current().getCaller().getDomainId();
+        return CallContext.current().getCallingAccount().getDomainId();
     }
 
     private long getZoneId() {
@@ -141,7 +164,7 @@ public class AssociateIPAddrCmd extends BaseAsyncCreateCmd {
             return null;
         }
 
-        DataCenter zone = _configService.getZone(zoneId);
+        DataCenter zone = _entityMgr.findById(DataCenter.class, zoneId);
         if (zone.getNetworkType() == NetworkType.Advanced) {
             List<? extends Network> networks = _networkService.getIsolatedNetworksOwnedByAccountInZone(getZoneId(),
                     _accountService.getAccount(getEntityOwnerId()));
@@ -171,15 +194,41 @@ public class AssociateIPAddrCmd extends BaseAsyncCreateCmd {
 
     @Override
     public long getEntityOwnerId() {
-        Account caller = UserContext.current().getCaller();
+        Account caller = CallContext.current().getCallingAccount();
         if (accountName != null && domainId != null) {
             Account account = _accountService.finalizeOwner(caller, accountName, domainId, projectId);
             return account.getId();
-        } else if (networkId != null){
+        } else if (projectId != null) {
+            Project project = _projectService.getProject(projectId);
+            if (project != null) {
+                if (project.getState() == Project.State.Active) {
+                    return project.getProjectAccountId();
+                } else {
+                    throw new PermissionDeniedException("Can't add resources to the project with specified projectId in state="
+                           + project.getState() + " as it's no longer active");
+                }
+            } else {
+                throw new InvalidParameterValueException("Unable to find project by id");
+            }
+       } else if (networkId != null){
             Network network = _networkService.getNetwork(networkId);
+            if (network == null) {
+                throw new InvalidParameterValueException("Unable to find network by network id specified");
+            }
+
+            NetworkOffering offering = _entityMgr.findById(NetworkOffering.class, network.getNetworkOfferingId());
+
+            DataCenter zone = _entityMgr.findById(DataCenter.class, network.getDataCenterId());
+            if (zone.getNetworkType() == NetworkType.Basic && offering.getElasticIp() && offering.getElasticLb()) {
+                // Since the basic zone network is owned by 'Root' domain, domain access checkers will fail for the
+                // accounts in non-root domains while acquiring public IP. So add an exception for the 'Basic' zone
+                // shared network with EIP/ELB service.
+                return caller.getAccountId();
+            }
+
             return network.getAccountId();
         } else if (vpcId != null) {
-            Vpc vpc = _vpcService.getVpc(getVpcId());
+            Vpc vpc = _entityMgr.findById(Vpc.class, getVpcId());
             if (vpc == null) {
                 throw new InvalidParameterValueException("Can't find Enabled vpc by id specified");
             }
@@ -229,8 +278,8 @@ public class AssociateIPAddrCmd extends BaseAsyncCreateCmd {
             }
 
             if (ip != null) {
-                this.setEntityId(ip.getId());
-                this.setEntityUuid(ip.getUuid());
+                setEntityId(ip.getId());
+                setEntityUuid(ip.getUuid());
             } else {
                 throw new ServerApiException(ApiErrorCode.INTERNAL_ERROR, "Failed to allocate ip address");
             }
@@ -247,7 +296,7 @@ public class AssociateIPAddrCmd extends BaseAsyncCreateCmd {
     @Override
     public void execute() throws ResourceUnavailableException, ResourceAllocationException,
                                     ConcurrentOperationException, InsufficientCapacityException {
-        UserContext.current().setEventDetails("Ip Id: " + getEntityId());
+        CallContext.current().setEventDetails("Ip Id: " + getEntityId());
 
         IpAddress result = null;
 
@@ -260,7 +309,7 @@ public class AssociateIPAddrCmd extends BaseAsyncCreateCmd {
         if (result != null) {
             IPAddressResponse ipResponse = _responseGenerator.createIPAddressResponse(result);
             ipResponse.setResponseName(getCommandName());
-            this.setResponseObject(ipResponse);
+            setResponseObject(ipResponse);
         } else {
             throw new ServerApiException(ApiErrorCode.INTERNAL_ERROR, "Failed to assign ip address");
         }
@@ -278,8 +327,8 @@ public class AssociateIPAddrCmd extends BaseAsyncCreateCmd {
     }
 
     @Override
-    public AsyncJob.Type getInstanceType() {
-        return AsyncJob.Type.IpAddress;
+    public ApiCommandJobType getInstanceType() {
+        return ApiCommandJobType.IpAddress;
     }
 
 }

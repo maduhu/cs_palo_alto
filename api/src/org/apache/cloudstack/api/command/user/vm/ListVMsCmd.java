@@ -22,6 +22,7 @@ import java.util.List;
 
 import org.apache.cloudstack.affinity.AffinityGroupResponse;
 import org.apache.cloudstack.api.APICommand;
+import org.apache.cloudstack.api.ApiCommandJobType;
 import org.apache.cloudstack.api.ApiConstants;
 import org.apache.cloudstack.api.ApiConstants.VMDetails;
 import org.apache.cloudstack.api.BaseListTaggedResourcesCmd;
@@ -39,7 +40,6 @@ import org.apache.cloudstack.api.response.VpcResponse;
 import org.apache.cloudstack.api.response.ZoneResponse;
 import org.apache.log4j.Logger;
 
-import com.cloud.async.AsyncJob;
 import com.cloud.exception.InvalidParameterValueException;
 
 
@@ -66,7 +66,7 @@ public class ListVMsCmd extends BaseListTaggedResourcesCmd {
     private Long id;
 
     @Parameter(name=ApiConstants.NAME, type=CommandType.STRING, description="name of the virtual machine")
-    private String instanceName;
+    private String name;
 
     @Parameter(name=ApiConstants.POD_ID, type=CommandType.UUID, entityType=PodResponse.class,
             description="the pod ID")
@@ -130,8 +130,8 @@ public class ListVMsCmd extends BaseListTaggedResourcesCmd {
         return id;
     }
 
-    public String getInstanceName() {
-        return instanceName;
+    public String getName() {
+        return name;
     }
 
     public Long getPodId() {
@@ -211,8 +211,8 @@ public class ListVMsCmd extends BaseListTaggedResourcesCmd {
     }
 
     @Override
-    public AsyncJob.Type getInstanceType() {
-        return AsyncJob.Type.VirtualMachine;
+    public ApiCommandJobType getInstanceType() {
+        return ApiCommandJobType.VirtualMachine;
     }
 
     @Override

@@ -16,33 +16,33 @@
 // under the License.
 package com.cloud.metadata;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import javax.ejb.Local;
 import javax.inject.Inject;
 import javax.naming.ConfigurationException;
 
+import com.cloud.dc.DcDetailVO;
+import com.cloud.dc.dao.DataCenterDao;
+import com.cloud.dc.dao.DcDetailsDao;
+import com.cloud.network.dao.NetworkDetailVO;
+import com.cloud.network.dao.NetworkDetailsDao;
 import com.cloud.server.ResourceMetaDataService;
 import com.cloud.storage.VolumeDetailVO;
 import com.cloud.storage.dao.VolumeDetailsDao;
 import com.cloud.vm.NicDetailVO;
+import com.cloud.vm.UserVmDetailVO;
 import com.cloud.vm.dao.NicDao;
 import com.cloud.vm.dao.NicDetailDao;
-import org.apache.cloudstack.api.command.user.tag.ListTagsCmd;
+import com.cloud.vm.dao.UserVmDetailsDao;
 import org.apache.log4j.Logger;
 import org.springframework.stereotype.Component;
 
-
 import com.cloud.api.query.dao.ResourceTagJoinDao;
-import com.cloud.api.query.vo.ResourceTagJoinVO;
-import com.cloud.domain.Domain;
 import com.cloud.event.ActionEvent;
 import com.cloud.event.EventTypes;
 import com.cloud.exception.InvalidParameterValueException;
-import com.cloud.exception.PermissionDeniedException;
 import com.cloud.network.dao.FirewallRulesDao;
 import com.cloud.network.dao.IPAddressDao;
 import com.cloud.network.dao.LoadBalancerDao;
@@ -52,7 +52,6 @@ import com.cloud.network.rules.dao.PortForwardingRulesDao;
 import com.cloud.network.security.dao.SecurityGroupDao;
 import com.cloud.network.vpc.dao.StaticRouteDao;
 import com.cloud.network.vpc.dao.VpcDao;
-import com.cloud.projects.Project.ListProjectResourcesCriteria;
 import com.cloud.projects.dao.ProjectDao;
 import com.cloud.server.ResourceTag;
 import com.cloud.server.ResourceTag.TaggedResourceType;
@@ -61,22 +60,12 @@ import com.cloud.storage.dao.SnapshotDao;
 import com.cloud.storage.dao.VMTemplateDao;
 import com.cloud.storage.dao.VolumeDao;
 import com.cloud.tags.dao.ResourceTagDao;
-import com.cloud.user.Account;
 import com.cloud.user.AccountManager;
 import com.cloud.user.DomainManager;
-import com.cloud.user.UserContext;
-import com.cloud.utils.Pair;
-import com.cloud.utils.Ternary;
-import com.cloud.utils.component.Manager;
 import com.cloud.utils.component.ManagerBase;
 import com.cloud.utils.db.DB;
-import com.cloud.utils.db.DbUtil;
-import com.cloud.utils.db.Filter;
 import com.cloud.utils.db.GenericDao;
-import com.cloud.utils.db.SearchBuilder;
-import com.cloud.utils.db.SearchCriteria;
 import com.cloud.utils.db.Transaction;
-import com.cloud.utils.exception.CloudRuntimeException;
 import com.cloud.uuididentity.dao.IdentityDao;
 import com.cloud.vm.dao.UserVmDao;
 import com.cloud.vm.snapshot.dao.VMSnapshotDao;
@@ -111,6 +100,8 @@ public class ResourceMetaDataManagerImpl extends ManagerBase implements Resource
     @Inject
     NetworkDao _networkDao;
     @Inject
+    DataCenterDao _dataCenterDao;
+    @Inject
     LoadBalancerDao _lbDao;
     @Inject
     PortForwardingRulesDao _pfDao;
@@ -135,9 +126,17 @@ public class ResourceMetaDataManagerImpl extends ManagerBase implements Resource
     @Inject
     NicDetailDao _nicDetailDao;
     @Inject
+    UserVmDetailsDao _userVmDetailDao;
+    @Inject
     NicDao _nicDao;
     @Inject
+    DcDetailsDao _dcDetailsDao;
+    @Inject
+    NetworkDetailsDao _networkDetailsDao;
+    @Inject
     TaggedResourceService _taggedResourceMgr;
+    @Inject
+    UserVmDetailsDao _userVmDetail;
 
     @Override
     public boolean configure(String name, Map<String, Object> params) throws ConfigurationException {
@@ -160,6 +159,7 @@ public class ResourceMetaDataManagerImpl extends ManagerBase implements Resource
         _daoMap.put(TaggedResourceType.StaticRoute, _staticRouteDao);
         _daoMap.put(TaggedResourceType.VMSnapshot, _vmSnapshotDao);
         _daoMap.put(TaggedResourceType.RemoteAccessVpn, _vpnDao);
+        _daoMap.put(TaggedResourceType.Zone, _dataCenterDao);
         return true;
     }
 
@@ -214,9 +214,20 @@ public class ResourceMetaDataManagerImpl extends ManagerBase implements Resource
                 if(resourceType == TaggedResourceType.Volume){
                     VolumeDetailVO v = new VolumeDetailVO(id, key, value);
                     _volumeDetailDao.persist(v);
-                }else {
+                } else if (resourceType == TaggedResourceType.Nic){
                     NicDetailVO n = new NicDetailVO(id, key, value);
                     _nicDetailDao.persist(n);
+                }else if (resourceType == TaggedResourceType.UserVm){
+                    UserVmDetailVO userVmDetail = new UserVmDetailVO(id, key, value);
+                    _userVmDetailDao.persist(userVmDetail);
+                } else if (resourceType == TaggedResourceType.Zone){
+                     DcDetailVO dataCenterDetail = new DcDetailVO(id, key, value);
+                     _dcDetailsDao.persist(dataCenterDetail);
+                } else if (resourceType == TaggedResourceType.Network){
+                    NetworkDetailVO networkDetail = new NetworkDetailVO(id, key, value);
+                    _networkDetailsDao.persist(networkDetail);
+                } else {
+                    throw new InvalidParameterValueException("The resource type " + resourceType + " is not supported by the API yet");
                 }
 
         }
@@ -236,8 +247,16 @@ public class ResourceMetaDataManagerImpl extends ManagerBase implements Resource
         // TODO - Have a better design here.
         if(resourceType == TaggedResourceType.Volume){
            _volumeDetailDao.removeDetails(id, key);
-        } else {
+        } else if(resourceType == TaggedResourceType.Nic){
             _nicDetailDao.removeDetails(id, key);
+        } else if(resourceType == TaggedResourceType.UserVm){
+            _userVmDetailDao.removeDetails(id, key);
+        } else if (resourceType == TaggedResourceType.Zone){
+            _dcDetailsDao.removeDetails(id, key);
+        } else if (resourceType == TaggedResourceType.Network){
+            _networkDetailsDao.removeDetails(id, key);
+        } else{
+            throw new InvalidParameterValueException("The resource type " + resourceType + " is not supported by the API yet");
         }
 
         return true;

@@ -24,8 +24,8 @@ import com.cloud.user.dao.AccountDao;
 import junit.framework.TestCase;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Mockito.*;
-import com.midokura.midonet.client.MidonetApi;
-import com.midokura.midonet.client.resource.*;
+import org.midonet.client.MidonetApi;
+import org.midonet.client.resource.*;
 import com.sun.jersey.core.util.MultivaluedMapImpl;
 import com.cloud.network.*;
 import com.cloud.vm.*;
@@ -97,8 +97,8 @@ public class MidoNetElementTest extends TestCase {
 
         //mockVm
         @SuppressWarnings("unchecked")
-        VirtualMachineProfile<? extends VirtualMachine> mockVm =
-                (VirtualMachineProfile<? extends VirtualMachine>)mock(VirtualMachineProfile.class);
+        VirtualMachineProfile mockVm =
+                (VirtualMachineProfile)mock(VirtualMachineProfile.class);
         when(mockVm.getType()).thenReturn(VirtualMachine.Type.User);
 
         MidoNetElement elem = new MidoNetElement();

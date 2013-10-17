@@ -19,8 +19,6 @@
 
 package com.cloud.network.guru;
 
-import com.cloud.network.element.MidoNetElement;
-import com.cloud.dc.DataCenter;
 import com.cloud.dc.DataCenter.NetworkType;
 import com.cloud.deploy.DeployDestination;
 import com.cloud.deploy.DeploymentPlan;
@@ -33,21 +31,12 @@ import com.cloud.user.Account;
 import com.cloud.user.AccountVO;
 import com.cloud.user.dao.AccountDao;
 import com.cloud.vm.*;
-import com.midokura.midonet.client.resource.Bridge;
-import com.cloud.utils.net.NetUtils;
-
-import com.cloud.network.Networks.AddressFormat;
-import com.midokura.midonet.client.resource.BridgePort;
 import org.apache.log4j.Logger;
 import org.springframework.stereotype.Component;
 import com.cloud.network.dao.NetworkVO;
 import com.cloud.network.dao.PhysicalNetworkVO;
 
-
-import com.cloud.vm.Nic.ReservationStrategy;
-
 import javax.ejb.Local;
-import java.util.UUID;
 import javax.inject.Inject;
 
 @Component
@@ -145,7 +134,7 @@ public class MidoNetGuestNetworkGuru extends GuestNetworkGuru {
 
     @Override
     public void reserve(NicProfile nic, Network network,
-                        VirtualMachineProfile<? extends VirtualMachine> vm,
+                        VirtualMachineProfile vm,
                         DeployDestination dest, ReservationContext context)
             throws InsufficientVirtualNetworkCapcityException,
             InsufficientAddressCapacityException {
@@ -156,7 +145,7 @@ public class MidoNetGuestNetworkGuru extends GuestNetworkGuru {
 
     @Override
     public boolean release(NicProfile nic,
-                           VirtualMachineProfile<? extends VirtualMachine> vm,
+                           VirtualMachineProfile vm,
                            String reservationId) {
         s_logger.debug("release called with nic: " + nic.toString() + " vm: " + vm.toString());
         return super.release(nic, vm, reservationId);
@@ -170,10 +159,9 @@ public class MidoNetGuestNetworkGuru extends GuestNetworkGuru {
     }
 
     @Override
-    public boolean trash(Network network, NetworkOffering offering,
-                         Account owner) {
+    public boolean trash(Network network, NetworkOffering offering) {
         s_logger.debug("trash called with network: " + network.toString());
 
-        return super.trash(network, offering, owner);
+        return super.trash(network, offering);
     }
 }

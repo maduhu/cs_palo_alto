@@ -20,10 +20,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.cloudstack.api.BaseCmd.HTTPMethod;
+import org.apache.cloudstack.framework.config.ConfigKey;
+
 import com.cloud.agent.api.VmDiskStatsEntry;
 import com.cloud.agent.api.VmStatsEntry;
 import com.cloud.api.query.vo.UserVmJoinVO;
-import com.cloud.exception.*;
+import com.cloud.exception.ConcurrentOperationException;
+import com.cloud.exception.InsufficientCapacityException;
+import com.cloud.exception.ManagementServerException;
+import com.cloud.exception.ResourceUnavailableException;
+import com.cloud.exception.VirtualMachineMigrationException;
 import com.cloud.projects.Project.ListProjectResourcesCriteria;
 import com.cloud.server.Criteria;
 import com.cloud.user.Account;
@@ -34,7 +41,11 @@ import com.cloud.utils.Pair;
  *
  * 
  */
-public interface UserVmManager extends VirtualMachineGuru<UserVmVO>, UserVmService{
+public interface UserVmManager extends UserVmService {
+    static final String EnableDynamicallyScaleVmCK = "enable.dynamic.scale.vm";
+    static final ConfigKey<Boolean> EnableDynamicallyScaleVm = new ConfigKey<Boolean>("Advanced", Boolean.class, EnableDynamicallyScaleVmCK, "false",
+        "Enables/Diables dynamically scaling a vm", true, ConfigKey.Scope.Zone);
+    
 
 	static final int MAX_USER_DATA_LENGTH_BYTES = 2048;
     /**
@@ -100,4 +111,7 @@ public interface UserVmManager extends VirtualMachineGuru<UserVmVO>, UserVmServi
     boolean setupVmForPvlan(boolean add, Long hostId, NicProfile nic);
 
     void collectVmDiskStatistics (UserVmVO userVm);
+
+    UserVm updateVirtualMachine(long id, String displayName, String group, Boolean ha, Boolean isDisplayVmEnabled, Long osTypeId, String userData,
+            Boolean isDynamicallyScalable, HTTPMethod httpMethod)throws ResourceUnavailableException, InsufficientCapacityException;
 }

@@ -16,13 +16,12 @@
 // under the License.
 package com.cloud.server;
 
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import com.cloud.exception.*;
+
 import org.apache.cloudstack.api.ServerApiException;
 import org.apache.cloudstack.api.command.admin.cluster.ListClustersCmd;
 import org.apache.cloudstack.api.command.admin.config.ListCfgsByCmd;
@@ -43,21 +42,16 @@ import org.apache.cloudstack.api.command.user.event.ArchiveEventsCmd;
 import org.apache.cloudstack.api.command.user.event.DeleteEventsCmd;
 import org.apache.cloudstack.api.command.user.guest.ListGuestOsCategoriesCmd;
 import org.apache.cloudstack.api.command.user.guest.ListGuestOsCmd;
-import org.apache.cloudstack.api.command.user.iso.ListIsosCmd;
-import org.apache.cloudstack.api.command.user.iso.UpdateIsoCmd;
 import org.apache.cloudstack.api.command.user.ssh.CreateSSHKeyPairCmd;
 import org.apache.cloudstack.api.command.user.ssh.DeleteSSHKeyPairCmd;
 import org.apache.cloudstack.api.command.user.ssh.ListSSHKeyPairsCmd;
 import org.apache.cloudstack.api.command.user.ssh.RegisterSSHKeyPairCmd;
-import org.apache.cloudstack.api.command.user.template.ListTemplatesCmd;
-import org.apache.cloudstack.api.command.user.template.UpdateTemplateCmd;
 import org.apache.cloudstack.api.command.user.vm.GetVMPasswordCmd;
 import org.apache.cloudstack.api.command.user.vmgroup.UpdateVMGroupCmd;
-import org.apache.cloudstack.api.command.user.volume.ExtractVolumeCmd;
+import org.apache.cloudstack.config.Configuration;
 
 import com.cloud.alert.Alert;
 import com.cloud.capacity.Capacity;
-import com.cloud.configuration.Configuration;
 import com.cloud.dc.Pod;
 import com.cloud.dc.Vlan;
 import com.cloud.domain.Domain;
@@ -69,7 +63,6 @@ import com.cloud.org.Cluster;
 import com.cloud.storage.GuestOS;
 import com.cloud.storage.GuestOsCategory;
 import com.cloud.storage.StoragePool;
-import com.cloud.template.VirtualMachineTemplate;
 import com.cloud.user.SSHKeyPair;
 import com.cloud.utils.Pair;
 import com.cloud.utils.Ternary;
@@ -124,15 +117,6 @@ public interface ManagementService {
      */
     Pair<List<? extends Host>, Integer> searchForServers(ListHostsCmd cmd);
 
-    /**
-     * Creates a new template
-     *
-     * @param cmd
-     * @return updated template
-     */
-    VirtualMachineTemplate updateTemplate(UpdateIsoCmd cmd);
-
-    VirtualMachineTemplate updateTemplate(UpdateTemplateCmd cmd);
 
 
 
@@ -223,28 +207,6 @@ public interface ManagementService {
      */
     List<? extends Capacity> listCapacities(ListCapacityCmd cmd);
 
-    /**
-     * List ISOs that match the specified criteria.
-     *
-     * @param cmd
-     *            The command that wraps the (optional) templateId, name, keyword, templateFilter, bootable, account,
-     *            and zoneId
-     *            parameters.
-     * @return list of ISOs
-     */
-    Set<Pair<Long, Long>> listIsos(ListIsosCmd cmd);
-
-    /**
-     * List templates that match the specified criteria.
-     *
-     * @param cmd
-     *            The command that wraps the (optional) templateId, name, keyword, templateFilter, bootable, account,
-     *            and zoneId
-     *            parameters.
-     * @return list of ISOs
-     */
-    Set<Pair<Long, Long>> listTemplates(ListTemplatesCmd cmd);
-
 
     /**
      * List system VMs by the given search criteria
@@ -270,20 +232,6 @@ public interface ManagementService {
 
 
     Map<String, Object> listCapabilities(ListCapabilitiesCmd cmd);
-
-    /**
-     * Extracts the volume to a particular location.
-     *
-     * @param cmd
-     *            the command specifying url (where the volume needs to be extracted to), zoneId (zone where the volume
-     *            exists),
-     *            id (the id of the volume)
-     * @throws URISyntaxException
-     * @throws InternalErrorException
-     * @throws PermissionDeniedException
-     *
-     */
-    Long extractVolume(ExtractVolumeCmd cmd) throws URISyntaxException;
 
     /**
      * return an array of available hypervisors
@@ -412,8 +360,12 @@ public interface ManagementService {
      * @return List of capacities
      */
     List<? extends Capacity> listTopConsumedResources(ListCapacityCmd cmd);
-    
+
     List<String> listDeploymentPlanners();
 
     VirtualMachine upgradeSystemVM(ScaleSystemVMCmd cmd) throws ResourceUnavailableException, ManagementServerException, VirtualMachineMigrationException, ConcurrentOperationException;
+
+    boolean getExecuteInSequence();
+
+    void cleanupVMReservations();
 }

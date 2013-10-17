@@ -22,7 +22,10 @@ import java.util.Map;
 
 import javax.ejb.Local;
 
-import org.springframework.stereotype.Component;
+import com.cloud.vm.UserVmDetailVO;
+import org.apache.cloudstack.framework.config.ConfigKey;
+import org.apache.cloudstack.framework.config.ConfigKey.Scope;
+import org.apache.cloudstack.framework.config.ScopedConfigStorage;
 
 import com.cloud.dc.DcDetailVO;
 import com.cloud.utils.db.GenericDaoBase;
@@ -30,9 +33,8 @@ import com.cloud.utils.db.SearchBuilder;
 import com.cloud.utils.db.SearchCriteria;
 import com.cloud.utils.db.Transaction;
 
-@Component
 @Local(value=DcDetailsDao.class)
-public class DcDetailsDaoImpl extends GenericDaoBase<DcDetailVO, Long> implements DcDetailsDao {
+public class DcDetailsDaoImpl extends GenericDaoBase<DcDetailVO, Long> implements DcDetailsDao, ScopedConfigStorage {
     protected final SearchBuilder<DcDetailVO> DcSearch;
     protected final SearchBuilder<DcDetailVO> DetailSearch;
     
@@ -68,15 +70,37 @@ public class DcDetailsDaoImpl extends GenericDaoBase<DcDetailVO, Long> implement
         }
         return details;
     }
-    
+
+    @Override
+    public List<DcDetailVO> findDetailsList(long dcId) {
+        SearchCriteria<DcDetailVO> sc = DcSearch.create();
+        sc.setParameters("dcId", dcId);
+
+        List<DcDetailVO> results = search(sc, null);
+        return results;
+    }
+
+
     @Override
     public void deleteDetails(long dcId) {
-        SearchCriteria sc = DcSearch.create();
+        SearchCriteria<DcDetailVO> sc = DcSearch.create();
         sc.setParameters("dcId", dcId);
         
         List<DcDetailVO> results = search(sc, null);
         for (DcDetailVO result : results) {
         	remove(result.getId());
+        }
+    }
+
+    @Override
+    public void removeDetails(Long id, String key) {
+        if(key != null){
+            DcDetailVO detail = findDetail(id, key);
+            if(detail != null){
+                remove(detail.getId());
+            }
+        }else {
+            deleteDetails(id);
         }
     }
 
@@ -94,4 +118,16 @@ public class DcDetailsDaoImpl extends GenericDaoBase<DcDetailVO, Long> implement
         }
         txn.commit();
     }
+
+    @Override
+    public Scope getScope() {
+        return ConfigKey.Scope.Zone;
+    }
+
+    @Override
+    public String getConfigValue(long id, ConfigKey<?> key) {
+        DcDetailVO vo = findDetail(id, key.key());
+        return vo == null ? null : vo.getValue();
+    }
+
 }

@@ -34,6 +34,8 @@ import org.apache.log4j.Logger;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 
 import javax.inject.Inject;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -104,7 +106,7 @@ public class UserVmStateListener implements StateListener<State, VirtualMachine.
             return; // no provider is configured to provide events bus, so just return
         }
 
-        String resourceName = getEntityFromClassName(Network.class.getName());
+        String resourceName = getEntityFromClassName(VirtualMachine.class.getName());
         org.apache.cloudstack.framework.events.Event eventMsg =  new org.apache.cloudstack.framework.events.Event(
                 ManagementServer.Name,
                 EventCategory.RESOURCE_STATE_CHANGE_EVENT.getName(),
@@ -116,6 +118,10 @@ public class UserVmStateListener implements StateListener<State, VirtualMachine.
         eventDescription.put("id", vo.getUuid());
         eventDescription.put("old-state", oldState.name());
         eventDescription.put("new-state", newState.name());
+
+        String eventDate = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss Z").format(new Date());
+        eventDescription.put("eventDateTime", eventDate);
+
         eventMsg.setDescription(eventDescription);
         try {
             _eventBus.publish(eventMsg);

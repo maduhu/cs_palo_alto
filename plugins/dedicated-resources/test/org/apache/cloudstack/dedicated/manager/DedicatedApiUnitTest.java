@@ -22,17 +22,19 @@ import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.util.UUID;
 
 import javax.inject.Inject;
-import javax.naming.ConfigurationException;
 
 import junit.framework.Assert;
 
+import org.apache.cloudstack.affinity.AffinityGroupService;
+import org.apache.cloudstack.affinity.dao.AffinityGroupDao;
 import org.apache.cloudstack.dedicated.DedicatedResourceManagerImpl;
 import org.apache.cloudstack.test.utils.SpringUtils;
 import org.apache.log4j.Logger;
+import org.junit.After;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mockito;
@@ -48,7 +50,11 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 import org.springframework.test.context.support.AnnotationConfigContextLoader;
 
-import com.cloud.configuration.dao.ConfigurationDao;
+import org.apache.cloudstack.context.CallContext;
+import org.apache.cloudstack.dedicated.DedicatedResourceManagerImpl;
+import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
+import org.apache.cloudstack.test.utils.SpringUtils;
+
 import com.cloud.dc.DedicatedResourceVO;
 import com.cloud.dc.dao.ClusterDao;
 import com.cloud.dc.dao.DataCenterDao;
@@ -61,7 +67,7 @@ import com.cloud.host.dao.HostDao;
 import com.cloud.user.Account;
 import com.cloud.user.AccountManager;
 import com.cloud.user.AccountVO;
-import com.cloud.user.UserContext;
+import com.cloud.user.UserVO;
 import com.cloud.user.dao.AccountDao;
 import com.cloud.utils.component.ComponentContext;
 import com.cloud.utils.exception.CloudRuntimeException;
@@ -108,22 +114,24 @@ public class DedicatedApiUnitTest {
     private static long accountId = 5L;
     private static String accountName = "admin";
 
-    @BeforeClass
-    public static void setUp() throws ConfigurationException {
-
-    }
-
     @Before
-    public void testSetUp() {
+    public void setUp() {
         ComponentContext.initComponentsLifeCycle();
         AccountVO account = new AccountVO(accountName, domainId, "networkDomain", Account.ACCOUNT_TYPE_NORMAL, "uuid");
         DomainVO domain = new DomainVO("rootDomain", 5L, 5L, "networkDomain");
 
-        UserContext.registerContext(1, account, null, true);
+        UserVO user = new UserVO(1, "testuser", "password", "firstname", "lastName", "email", "timezone", UUID.randomUUID().toString());
+
+        CallContext.register(user, account);
         when(_acctMgr.finalizeOwner((Account) anyObject(), anyString(), anyLong(), anyLong())).thenReturn(account);
         when(_accountDao.findByIdIncludingRemoved(0L)).thenReturn(account);
         when(_accountDao.findById(anyLong())).thenReturn(account);
         when(_domainDao.findById(domainId)).thenReturn(domain);
+    }
+
+    @After
+    public void tearDown() {
+        CallContext.unregister();
     }
 
     @Test(expected = InvalidParameterValueException.class)
@@ -208,28 +216,28 @@ public class DedicatedApiUnitTest {
 
     @Test(expected = CloudRuntimeException.class)
     public void dedicateZoneExistTest() {
-        DedicatedResourceVO dr = new DedicatedResourceVO(10L, null, null, null, domainId, accountId);
+        DedicatedResourceVO dr = new DedicatedResourceVO(10L, null, null, null, domainId, accountId, 12L);
         when(_dedicatedDao.findByZoneId(10L)).thenReturn(dr);
         _dedicatedService.dedicateZone(10L, domainId, accountName);
     }
 
     @Test(expected = CloudRuntimeException.class)
     public void dedicatePodExistTest() {
-        DedicatedResourceVO dr = new DedicatedResourceVO(null, 10L, null, null, domainId, accountId);
+        DedicatedResourceVO dr = new DedicatedResourceVO(null, 10L, null, null, domainId, accountId, 12L);
         when(_dedicatedDao.findByPodId(10L)).thenReturn(dr);
         _dedicatedService.dedicatePod(10L, domainId, accountName);
     }
 
     @Test(expected = CloudRuntimeException.class)
     public void dedicateClusterExistTest() {
-        DedicatedResourceVO dr = new DedicatedResourceVO(null, null, 10L, null, domainId, accountId);
+        DedicatedResourceVO dr = new DedicatedResourceVO(null, null, 10L, null, domainId, accountId, 12L);
         when(_dedicatedDao.findByClusterId(10L)).thenReturn(dr);
         _dedicatedService.dedicateCluster(10L, domainId, accountName);
     }
 
     @Test(expected = CloudRuntimeException.class)
     public void dedicateHostExistTest() {
-        DedicatedResourceVO dr = new DedicatedResourceVO(null, null, null, 10L, domainId, accountId);
+        DedicatedResourceVO dr = new DedicatedResourceVO(null, null, null, 10L, domainId, accountId, 12L);
         when(_dedicatedDao.findByHostId(10L)).thenReturn(dr);
         _dedicatedService.dedicateHost(10L, domainId, accountName);
     }
@@ -304,6 +312,16 @@ public class DedicatedApiUnitTest {
         @Bean
         public ConfigurationDao configDao() {
             return Mockito.mock(ConfigurationDao.class);
+        }
+
+        @Bean
+        public AffinityGroupService affinityGroupService() {
+            return Mockito.mock(AffinityGroupService.class);
+        }
+
+        @Bean
+        public AffinityGroupDao affinityGroupDao() {
+            return Mockito.mock(AffinityGroupDao.class);
         }
 
         public static class Library implements TypeFilter {

@@ -32,6 +32,7 @@ import java.util.Properties;
 
 import javax.naming.ConfigurationException;
 
+import org.apache.cloudstack.managed.context.ManagedContextRunnable;
 import org.apache.log4j.Logger;
 
 import com.cloud.agent.Agent.ExitStatus;
@@ -112,6 +113,7 @@ public class ConsoleProxyResource extends ServerResourceBase implements
     }
 
     private Answer execute(StartConsoleProxyAgentHttpHandlerCommand cmd) {
+    	s_logger.info("Invoke launchConsoleProxy() in responding to StartConsoleProxyAgentHttpHandlerCommand");
         launchConsoleProxy(cmd.getKeystoreBits(), cmd.getKeystorePassword(), cmd.getEncryptorPassword());
         return new Answer(cmd);
     }
@@ -356,34 +358,37 @@ public class ConsoleProxyResource extends ServerResourceBase implements
     private void launchConsoleProxy(final byte[] ksBits, final String ksPassword, final String encryptorPassword) {
         final Object resource = this;
         if (_consoleProxyMain == null) {
-            _consoleProxyMain = new Thread(new Runnable() {
-                public void run() {
+            _consoleProxyMain = new Thread(new ManagedContextRunnable() {
+                @Override
+                protected void runInContext() {
                     try {
                         Class<?> consoleProxyClazz = Class.forName("com.cloud.consoleproxy.ConsoleProxy");
                         try {
+                        	s_logger.info("Invoke setEncryptorPassword(), ecnryptorPassword: " + encryptorPassword);
                             Method methodSetup = consoleProxyClazz.getMethod(
                                     "setEncryptorPassword", String.class);
                             methodSetup.invoke(null, encryptorPassword);
                             
+                        	s_logger.info("Invoke startWithContext()");
                             Method method = consoleProxyClazz.getMethod(
                                     "startWithContext", Properties.class,
                                     Object.class, byte[].class, String.class);
                             method.invoke(null, _properties, resource, ksBits,
                                     ksPassword);
                         } catch (SecurityException e) {
-                            s_logger.error("Unable to launch console proxy due to SecurityException");
+                            s_logger.error("Unable to launch console proxy due to SecurityException", e);
                             System.exit(ExitStatus.Error.value());
                         } catch (NoSuchMethodException e) {
-                            s_logger.error("Unable to launch console proxy due to NoSuchMethodException");
+                            s_logger.error("Unable to launch console proxy due to NoSuchMethodException", e);
                             System.exit(ExitStatus.Error.value());
                         } catch (IllegalArgumentException e) {
-                            s_logger.error("Unable to launch console proxy due to IllegalArgumentException");
+                            s_logger.error("Unable to launch console proxy due to IllegalArgumentException", e);
                             System.exit(ExitStatus.Error.value());
                         } catch (IllegalAccessException e) {
-                            s_logger.error("Unable to launch console proxy due to IllegalAccessException");
+                            s_logger.error("Unable to launch console proxy due to IllegalAccessException", e);
                             System.exit(ExitStatus.Error.value());
                         } catch (InvocationTargetException e) {
-                            s_logger.error("Unable to launch console proxy due to InvocationTargetException");
+                            s_logger.error("Unable to launch console proxy due to InvocationTargetException " + e.getTargetException().toString(), e);
                             System.exit(ExitStatus.Error.value());
                         }
                     } catch (final ClassNotFoundException e) {
@@ -402,22 +407,22 @@ public class ConsoleProxyResource extends ServerResourceBase implements
                 Method methodSetup = consoleProxyClazz.getMethod("setEncryptorPassword", String.class);
                 methodSetup.invoke(null, encryptorPassword);
             } catch (SecurityException e) {
-                s_logger.error("Unable to launch console proxy due to SecurityException");
+                s_logger.error("Unable to launch console proxy due to SecurityException", e);
                 System.exit(ExitStatus.Error.value());
             } catch (NoSuchMethodException e) {
-                s_logger.error("Unable to launch console proxy due to NoSuchMethodException");
+                s_logger.error("Unable to launch console proxy due to NoSuchMethodException", e);
                 System.exit(ExitStatus.Error.value());
             } catch (IllegalArgumentException e) {
-                s_logger.error("Unable to launch console proxy due to IllegalArgumentException");
+                s_logger.error("Unable to launch console proxy due to IllegalArgumentException", e);
                 System.exit(ExitStatus.Error.value());
             } catch (IllegalAccessException e) {
-                s_logger.error("Unable to launch console proxy due to IllegalAccessException");
+                s_logger.error("Unable to launch console proxy due to IllegalAccessException", e);
                 System.exit(ExitStatus.Error.value());
             } catch (InvocationTargetException e) {
-                s_logger.error("Unable to launch console proxy due to InvocationTargetException");
+                s_logger.error("Unable to launch console proxy due to InvocationTargetException " + e.getTargetException().toString(), e);
                 System.exit(ExitStatus.Error.value());
             } catch (final ClassNotFoundException e) {
-                s_logger.error("Unable to launch console proxy due to ClassNotFoundException");
+                s_logger.error("Unable to launch console proxy due to ClassNotFoundException", e);
                 System.exit(ExitStatus.Error.value());
             }
         }

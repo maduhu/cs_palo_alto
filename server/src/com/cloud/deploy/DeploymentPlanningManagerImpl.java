@@ -22,7 +22,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Timer;
-import java.util.TimerTask;
 import java.util.TreeSet;
 
 import javax.ejb.Local;
@@ -30,32 +29,34 @@ import javax.inject.Inject;
 import javax.naming.ConfigurationException;
 
 import org.apache.cloudstack.affinity.AffinityGroupProcessor;
+import org.apache.cloudstack.affinity.AffinityGroupService;
 import org.apache.cloudstack.affinity.AffinityGroupVMMapVO;
-
+import org.apache.cloudstack.affinity.AffinityGroupVO;
 import org.apache.cloudstack.affinity.dao.AffinityGroupDao;
 import org.apache.cloudstack.affinity.dao.AffinityGroupVMMapDao;
+import org.apache.cloudstack.engine.cloud.entity.api.db.VMReservationVO;
+import org.apache.cloudstack.engine.cloud.entity.api.db.dao.VMReservationDao;
+import org.apache.cloudstack.engine.subsystem.api.storage.DataStore;
 import org.apache.cloudstack.engine.subsystem.api.storage.DataStoreManager;
 import org.apache.cloudstack.engine.subsystem.api.storage.StoragePoolAllocator;
+import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
 import org.apache.cloudstack.framework.messagebus.MessageBus;
 import org.apache.cloudstack.framework.messagebus.MessageSubscriber;
-
+import org.apache.cloudstack.managed.context.ManagedContextTimerTask;
 import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreDao;
 import org.apache.cloudstack.storage.datastore.db.StoragePoolVO;
+import org.apache.cloudstack.utils.identity.ManagementServerNode;
 import org.apache.log4j.Logger;
-
 
 import com.cloud.capacity.CapacityManager;
 import com.cloud.capacity.dao.CapacityDao;
-import com.cloud.cluster.ManagementServerNode;
 import com.cloud.configuration.Config;
-import com.cloud.configuration.dao.ConfigurationDao;
 import com.cloud.dc.ClusterDetailsDao;
 import com.cloud.dc.ClusterDetailsVO;
 import com.cloud.dc.ClusterVO;
 import com.cloud.dc.DataCenter;
 import com.cloud.dc.DataCenterVO;
 import com.cloud.dc.DedicatedResourceVO;
-import com.cloud.dc.HostPodVO;
 import com.cloud.dc.Pod;
 import com.cloud.dc.dao.ClusterDao;
 import com.cloud.dc.dao.DataCenterDao;
@@ -67,6 +68,7 @@ import com.cloud.deploy.dao.PlannerHostReservationDao;
 import com.cloud.exception.AffinityConflictException;
 import com.cloud.exception.ConnectionException;
 import com.cloud.exception.InsufficientServerCapacityException;
+import com.cloud.exception.PermissionDeniedException;
 import com.cloud.host.Host;
 import com.cloud.host.HostVO;
 import com.cloud.host.Status;
@@ -77,6 +79,7 @@ import com.cloud.org.Cluster;
 import com.cloud.org.Grouping;
 import com.cloud.resource.ResourceState;
 import com.cloud.storage.DiskOfferingVO;
+import com.cloud.storage.ScopeType;
 import com.cloud.storage.StorageManager;
 import com.cloud.storage.StoragePool;
 import com.cloud.storage.StoragePoolHostVO;
@@ -94,12 +97,15 @@ import com.cloud.utils.Pair;
 import com.cloud.utils.component.Manager;
 import com.cloud.utils.component.ManagerBase;
 import com.cloud.utils.db.DB;
+import com.cloud.utils.db.SearchCriteria;
 import com.cloud.utils.db.Transaction;
 import com.cloud.utils.exception.CloudRuntimeException;
+import com.cloud.utils.fsm.StateListener;
 import com.cloud.vm.DiskProfile;
 import com.cloud.vm.ReservationContext;
 import com.cloud.vm.VMInstanceVO;
 import com.cloud.vm.VirtualMachine;
+import com.cloud.vm.VirtualMachine.Event;
 import com.cloud.vm.VirtualMachineProfile;
 import com.cloud.vm.VirtualMachine.State;
 import com.cloud.vm.dao.UserVmDao;
@@ -116,7 +122,8 @@ import com.cloud.agent.manager.allocator.HostAllocator;
 
 
 @Local(value = { DeploymentPlanningManager.class })
-public class DeploymentPlanningManagerImpl extends ManagerBase implements DeploymentPlanningManager, Manager, Listener {
+public class DeploymentPlanningManagerImpl extends ManagerBase implements DeploymentPlanningManager, Manager, Listener,
+        StateListener<State, VirtualMachine.Event, VirtualMachine> {
 
     private static final Logger s_logger = Logger.getLogger(DeploymentPlanningManagerImpl.class);
     @Inject
@@ -130,6 +137,8 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
     @Inject
     protected AffinityGroupVMMapDao _affinityGroupVMMapDao;
     @Inject
+    AffinityGroupService _affinityGroupService;
+    @Inject
     DataCenterDao _dcDao;
     @Inject
     PlannerHostReservationDao _plannerHostReserveDao;
@@ -138,6 +147,8 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
     MessageBus _messageBus;
     private Timer _timer = null;
     private long _hostReservationReleasePeriod = 60L * 60L * 1000L; // one hour by default
+    @Inject
+    protected VMReservationDao _reservationDao;
 
     private static final long INITIAL_RESERVATION_RELEASE_CHECKER_DELAY = 30L * 1000L; // thirty seconds expressed in milliseconds
     protected long _nodeId = -1;
@@ -195,7 +206,7 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
     }
 
     @Override
-    public DeployDestination planDeployment(VirtualMachineProfile<? extends VirtualMachine> vmProfile,
+    public DeployDestination planDeployment(VirtualMachineProfile vmProfile,
             DeploymentPlan plan, ExcludeList avoids) throws InsufficientServerCapacityException,
             AffinityConflictException {
 
@@ -210,7 +221,9 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
             }
         }
 
-        checkForNonDedicatedResources(vmProfile, dc, avoids);
+        if (vm.getType() == VirtualMachine.Type.User) {
+            checkForNonDedicatedResources(vmProfile, dc, avoids);
+        }
         if (s_logger.isDebugEnabled()) {
             s_logger.debug("Deploy avoids pods: " + avoids.getPodsToAvoid() + ", clusters: "
                     + avoids.getClustersToAvoid() + ", hosts: " + avoids.getHostsToAvoid());
@@ -437,57 +450,65 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
         return dest;
     }
 
-    private void checkForNonDedicatedResources(VirtualMachineProfile<? extends VirtualMachine> vmProfile, DataCenter dc, ExcludeList avoids) {
+    private void checkForNonDedicatedResources(VirtualMachineProfile vmProfile, DataCenter dc, ExcludeList avoids) {
         boolean isExplicit = false;
         VirtualMachine vm = vmProfile.getVirtualMachine();
-        // check affinity group of type Explicit dedication exists
+
+        // check if zone is dedicated. if yes check if vm owner has acess to it.
+        DedicatedResourceVO dedicatedZone = _dedicatedDao.findByZoneId(dc.getId());
+        if (dedicatedZone != null) {
+            long accountDomainId = vmProfile.getOwner().getDomainId();
+            long accountId = vmProfile.getOwner().getAccountId();
+
+            // If a zone is dedicated to an account then all hosts in this zone
+            // will be explicitly dedicated to
+            // that account. So there won't be any shared hosts in the zone, the
+            // only way to deploy vms from that
+            // account will be to use explicit dedication affinity group.
+            if (dedicatedZone.getAccountId() != null) {
+                if (dedicatedZone.getAccountId().equals(accountId)) {
+                    return;
+                } else {
+                    throw new CloudRuntimeException("Failed to deploy VM, Zone " + dc.getName()
+                            + " not available for the user account " + vmProfile.getOwner());
+                }
+            }
+
+            // if zone is dedicated to a domain. Check owner's access to the
+            // domain level dedication group
+            if (!_affinityGroupService.isAffinityGroupAvailableInDomain(dedicatedZone.getAffinityGroupId(),
+                    accountDomainId)) {
+                throw new CloudRuntimeException("Failed to deploy VM, Zone " + dc.getName()
+                        + " not available for the user domain " + vmProfile.getOwner());
+            }
+
+        }
+
+        // check affinity group of type Explicit dedication exists. If No put
+        // dedicated pod/cluster/host in avoid list
         List<AffinityGroupVMMapVO> vmGroupMappings = _affinityGroupVMMapDao.findByVmIdType(vm.getId(), "ExplicitDedication");
 
         if (vmGroupMappings != null && !vmGroupMappings.isEmpty()){
             isExplicit = true;
         }
 
-        if (!isExplicit && vm.getType() == VirtualMachine.Type.User) {
+        if (!isExplicit) {
             //add explicitly dedicated resources in avoidList
-            DedicatedResourceVO dedicatedZone = _dedicatedDao.findByZoneId(dc.getId());
-            if (dedicatedZone != null) {
-                long accountDomainId = vmProfile.getOwner().getDomainId();
-                if (dedicatedZone.getDomainId() != null && !dedicatedZone.getDomainId().equals(accountDomainId)) {
-                    throw new CloudRuntimeException("Failed to deploy VM. Zone " + dc.getName() + " is dedicated.");
-                }
-            }
 
-            List<HostPodVO> podsInDc = _podDao.listByDataCenterId(dc.getId());
-            for (HostPodVO pod : podsInDc) {
-                DedicatedResourceVO dedicatedPod = _dedicatedDao.findByPodId(pod.getId());
-                if (dedicatedPod != null) {
-                    avoids.addPod(dedicatedPod.getPodId());
-                    if (s_logger.isDebugEnabled()) {
-                        s_logger.debug("Cannot use this dedicated pod " + pod.getName() + ".");
-                    }
-                }
-            }
+            List<Long> allPodsInDc = _podDao.listAllPods(dc.getId());
+            List<Long> allDedicatedPods = _dedicatedDao.listAllPods();
+            allPodsInDc.retainAll(allDedicatedPods);
+            avoids.addPodList(allPodsInDc);
 
-            List<ClusterVO> clusterInDc = _clusterDao.listClustersByDcId(dc.getId());
-            for (ClusterVO cluster : clusterInDc) {
-                DedicatedResourceVO dedicatedCluster = _dedicatedDao.findByClusterId(cluster.getId());
-                if (dedicatedCluster != null) {
-                    avoids.addCluster(dedicatedCluster.getClusterId());
-                    if (s_logger.isDebugEnabled()) {
-                        s_logger.debug("Cannot use this dedicated Cluster " + cluster.getName() + ".");
-                    }
-                }
-            }
-            List<HostVO> hostInDc = _hostDao.listByDataCenterId(dc.getId());
-            for (HostVO host : hostInDc) {
-                DedicatedResourceVO dedicatedHost = _dedicatedDao.findByHostId(host.getId());
-                if (dedicatedHost != null) {
-                    avoids.addHost(dedicatedHost.getHostId());
-                    if (s_logger.isDebugEnabled()) {
-                        s_logger.debug("Cannot use this dedicated host " + host.getName() + ".");
-                    }
-                }
-            }
+            List<Long> allClustersInDc = _clusterDao.listAllCusters(dc.getId());
+            List<Long> allDedicatedClusters = _dedicatedDao.listAllClusters();
+            allClustersInDc.retainAll(allDedicatedClusters);
+            avoids.addClusterList(allClustersInDc);
+
+            List<Long> allHostsInDc = _hostDao.listAllHosts(dc.getId());
+            List<Long> allDedicatedHosts = _dedicatedDao.listAllHosts();
+            allHostsInDc.retainAll(allDedicatedHosts);
+            avoids.addHostList(allHostsInDc);
         }
     }
 
@@ -509,7 +530,7 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
         }
     }
 
-    private PlannerResourceUsage getPlannerUsage(DeploymentPlanner planner, VirtualMachineProfile<? extends VirtualMachine> vmProfile, DeploymentPlan plan, ExcludeList avoids) throws InsufficientServerCapacityException {
+    private PlannerResourceUsage getPlannerUsage(DeploymentPlanner planner, VirtualMachineProfile vmProfile, DeploymentPlan plan, ExcludeList avoids) throws InsufficientServerCapacityException {
         if (planner != null && planner instanceof DeploymentClusterPlanner) {
             return ((DeploymentClusterPlanner) planner).getResourceUsage(vmProfile, plan, avoids);
         } else {
@@ -667,9 +688,9 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
         return false;
     }
 
-    class HostReservationReleaseChecker extends TimerTask {
+    class HostReservationReleaseChecker extends ManagedContextTimerTask {
         @Override
-        public void run() {
+        protected void runInContext() {
             try {
                 s_logger.debug("Checking if any host reservation can be released ... ");
                 checkHostReservations();
@@ -711,7 +732,7 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
     }
 
     @Override
-    public void processConnect(HostVO host, StartupCommand cmd, boolean forRebalance) throws ConnectionException {
+    public void processConnect(Host host, StartupCommand cmd, boolean forRebalance) throws ConnectionException {
         if (!(cmd instanceof StartupRoutingCommand)) {
             return;
         }
@@ -753,6 +774,7 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
     @Override
     public boolean configure(final String name, final Map<String, Object> params) throws ConfigurationException {
         _agentMgr.registerForHostEvents(this, true, false, true);
+        VirtualMachine.State.getStateMachine().registerListener(this);
         _messageBus.subscribe("VM_ReservedCapacity_Free", new MessageSubscriber() {
             @Override
             public void onPublishMessage(String senderAddress, String subject, Object obj) {
@@ -785,6 +807,7 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
     public boolean start() {
         _timer.schedule(new HostReservationReleaseChecker(), INITIAL_RESERVATION_RELEASE_CHECKER_DELAY,
                 _hostReservationReleasePeriod);
+        cleanupVMReservations();
         return true;
     }
 
@@ -794,9 +817,29 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
         return true;
     }
 
+    @Override
+    public void cleanupVMReservations() {
+        List<VMReservationVO> reservations = _reservationDao.listAll();
+
+        for (VMReservationVO reserv : reservations) {
+            VMInstanceVO vm = _vmInstanceDao.findById(reserv.getVmId());
+            if (vm != null) {
+                if (vm.getState() == State.Starting || (vm.getState() == State.Stopped && vm.getLastHostId() == null)) {
+                    continue;
+                } else {
+                    // delete reservation
+                    _reservationDao.remove(reserv.getId());
+                }
+            } else {
+                // delete reservation
+                _reservationDao.remove(reserv.getId());
+            }
+        }
+    }
+
     // /refactoring planner methods
     private DeployDestination checkClustersforDestination(List<Long> clusterList,
-            VirtualMachineProfile<? extends VirtualMachine> vmProfile, DeploymentPlan plan, ExcludeList avoid,
+            VirtualMachineProfile vmProfile, DeploymentPlan plan, ExcludeList avoid,
             DataCenter dc, DeploymentPlanner.PlannerResourceUsage resourceUsageRequired, ExcludeList PlannerAvoidOutput) {
 
         if (s_logger.isTraceEnabled()) {
@@ -988,7 +1031,7 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
         return hostCanAccessSPool;
     }
 
-    protected List<Host> findSuitableHosts(VirtualMachineProfile<? extends VirtualMachine> vmProfile,
+    protected List<Host> findSuitableHosts(VirtualMachineProfile vmProfile,
             DeploymentPlan plan, ExcludeList avoid, int returnUpTo) {
         List<Host> suitableHosts = new ArrayList<Host>();
         for (HostAllocator allocator : _hostAllocators) {
@@ -1005,11 +1048,16 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
     }
 
     protected Pair<Map<Volume, List<StoragePool>>, List<Volume>> findSuitablePoolsForVolumes(
-            VirtualMachineProfile<? extends VirtualMachine> vmProfile, DeploymentPlan plan, ExcludeList avoid,
+            VirtualMachineProfile vmProfile, DeploymentPlan plan, ExcludeList avoid,
             int returnUpTo) {
         List<VolumeVO> volumesTobeCreated = _volsDao.findUsableVolumesForInstance(vmProfile.getId());
         Map<Volume, List<StoragePool>> suitableVolumeStoragePools = new HashMap<Volume, List<StoragePool>>();
         List<Volume> readyAndReusedVolumes = new ArrayList<Volume>();
+
+        // There should be atleast the ROOT volume of the VM in usable state
+        if (volumesTobeCreated.isEmpty()) {
+            throw new CloudRuntimeException("Unable to create deployment, no usable volumes found for the VM");
+        }
 
         // for each volume find list of suitable storage pools by calling the
         // allocators
@@ -1035,11 +1083,24 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
                 if (!pool.isInMaintenance()) {
                     if (!avoid.shouldAvoid(pool)) {
                         long exstPoolDcId = pool.getDataCenterId();
-
                         long exstPoolPodId = pool.getPodId() != null ? pool.getPodId() : -1;
                         long exstPoolClusterId = pool.getClusterId() != null ? pool.getClusterId() : -1;
+                        boolean canReusePool = false;
                         if (plan.getDataCenterId() == exstPoolDcId && plan.getPodId() == exstPoolPodId
                                 && plan.getClusterId() == exstPoolClusterId) {
+                            canReusePool = true;
+                        } else if (plan.getDataCenterId() == exstPoolDcId) {
+                            DataStore dataStore = this.dataStoreMgr.getPrimaryDataStore(pool.getId());
+                            if (dataStore != null && dataStore.getScope() != null
+                                    && dataStore.getScope().getScopeType() == ScopeType.ZONE) {
+                                canReusePool = true;
+                            }
+                        } else {
+                            s_logger.debug("Pool of the volume does not fit the specified plan, need to reallocate a pool for this volume");
+                            canReusePool = false;
+                        }
+
+                        if (canReusePool) {
                             s_logger.debug("Planner need not allocate a pool for this volume since its READY");
                             suitablePools.add(pool);
                             suitableVolumeStoragePools.put(toBeCreated, suitablePools);
@@ -1047,8 +1108,6 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
                                 readyAndReusedVolumes.add(toBeCreated);
                             }
                             continue;
-                        } else {
-                            s_logger.debug("Pool of the volume does not fit the specified plan, need to reallocate a pool for this volume");
                         }
                     } else {
                         s_logger.debug("Pool of the volume is in avoid set, need to reallocate a pool for this volume");
@@ -1167,5 +1226,74 @@ public class DeploymentPlanningManagerImpl extends ManagerBase implements Deploy
             }
         }
         return false;
+    }
+
+    @DB
+    @Override
+    public String finalizeReservation(DeployDestination plannedDestination,
+            VirtualMachineProfile vmProfile, DeploymentPlan plan, ExcludeList avoids)
+            throws InsufficientServerCapacityException, AffinityConflictException {
+
+        VirtualMachine vm = vmProfile.getVirtualMachine();
+        long vmGroupCount = _affinityGroupVMMapDao.countAffinityGroupsForVm(vm.getId());
+
+        boolean saveReservation = true;
+        final Transaction txn = Transaction.currentTxn();
+        try {
+            txn.start();
+            if (vmGroupCount > 0) {
+                List<Long> groupIds = _affinityGroupVMMapDao.listAffinityGroupIdsByVmId(vm.getId());
+                SearchCriteria<AffinityGroupVO> criteria = _affinityGroupDao.createSearchCriteria();
+                criteria.addAnd("id", SearchCriteria.Op.IN, groupIds.toArray(new Object[groupIds.size()]));
+                List<AffinityGroupVO> groups = _affinityGroupDao.lockRows(criteria, null, true);
+
+                for (AffinityGroupProcessor processor : _affinityProcessors) {
+                    if (!processor.check(vmProfile, plannedDestination)) {
+                        saveReservation = false;
+                        break;
+                    }
+                }
+            }
+
+            if (saveReservation) {
+                VMReservationVO vmReservation = new VMReservationVO(vm.getId(), plannedDestination.getDataCenter()
+                        .getId(), plannedDestination.getPod().getId(), plannedDestination.getCluster().getId(),
+                        plannedDestination.getHost().getId());
+                Map<Long, Long> volumeReservationMap = new HashMap<Long, Long>();
+
+                if (vm.getHypervisorType() != HypervisorType.BareMetal) {
+                    for (Volume vo : plannedDestination.getStorageForDisks().keySet()) {
+                        volumeReservationMap.put(vo.getId(), plannedDestination.getStorageForDisks().get(vo).getId());
+                    }
+                    vmReservation.setVolumeReservation(volumeReservationMap);
+                }
+                _reservationDao.persist(vmReservation);
+                return vmReservation.getUuid();
+            }
+        } finally {
+            txn.commit();
+        }
+        return null;
+    }
+
+    @Override
+    public boolean preStateTransitionEvent(State oldState, Event event, State newState, VirtualMachine vo,
+            boolean status, Object opaque) {
+        return true;
+    }
+
+    @Override
+    public boolean postStateTransitionEvent(State oldState, Event event, State newState, VirtualMachine vo,
+            boolean status, Object opaque) {
+        if (!status) {
+            return false;
+        }
+        if ((oldState == State.Starting) && (newState != State.Starting)) {
+            // cleanup all VM reservation entries
+            SearchCriteria<VMReservationVO> sc = _reservationDao.createSearchCriteria();
+            sc.addAnd("vmId", SearchCriteria.Op.EQ, vo.getId());
+            _reservationDao.expunge(sc);
+        }
+        return true;
     }
 }

@@ -17,23 +17,24 @@
 package com.cloud.agent.api;
 
 import java.util.List;
-import com.cloud.agent.api.to.VolumeTO;
+
+import org.apache.cloudstack.storage.to.VolumeObjectTO;
 
 public class MigrateWithStorageAnswer extends Answer {
 
-    List<VolumeTO> volumeTos;
+    List<VolumeObjectTO> volumeTos;
 
     public MigrateWithStorageAnswer(MigrateWithStorageCommand cmd, Exception ex) {
         super(cmd, ex);
         volumeTos = null;
     }
 
-    public MigrateWithStorageAnswer(MigrateWithStorageCommand cmd, List<VolumeTO> volumeTos) {
+    public MigrateWithStorageAnswer(MigrateWithStorageCommand cmd, List<VolumeObjectTO> volumeTos) {
         super(cmd, true, null);
         this.volumeTos = volumeTos;
     }
 
-    public List<VolumeTO> getVolumeTos() {
+    public List<VolumeObjectTO> getVolumeTos() {
         return volumeTos;
     }
 }

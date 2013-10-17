@@ -16,6 +16,7 @@
 // under the License.
 package com.cloud.network.dao;
 
+import com.cloud.dc.DataCenterVnetVO;
 import com.cloud.dc.Vlan.VlanType;
 import com.cloud.dc.VlanVO;
 import com.cloud.dc.dao.VlanDao;
@@ -40,6 +41,7 @@ import javax.ejb.Local;
 import javax.inject.Inject;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.Date;
 import java.util.List;
 
@@ -53,7 +55,8 @@ public class IPAddressDaoImpl extends GenericDaoBase<IPAddressVO, Long> implemen
     protected SearchBuilder<IPAddressVO> VlanDbIdSearchUnallocated;
     protected GenericSearchBuilder<IPAddressVO, Integer> AllIpCount;
     protected GenericSearchBuilder<IPAddressVO, Integer> AllocatedIpCount;
-    protected GenericSearchBuilder<IPAddressVO, Integer> AllIpCountForDashboard;    
+    protected GenericSearchBuilder<IPAddressVO, Integer> AllIpCountForDashboard;
+    protected SearchBuilder<IPAddressVO> DeleteAllExceptGivenIp;
     protected GenericSearchBuilder<IPAddressVO, Long> AllocatedIpCountForAccount;    
     @Inject protected VlanDao _vlanDao;
     protected GenericSearchBuilder<IPAddressVO, Long> CountFreePublicIps;
@@ -127,6 +130,10 @@ public class IPAddressDaoImpl extends GenericDaoBase<IPAddressVO, Long> implemen
         join.and("vlanType", join.entity().getVlanType(), Op.EQ);
         CountFreePublicIps.join("vlans", join, CountFreePublicIps.entity().getVlanId(), join.entity().getId(), JoinBuilder.JoinType.INNER);
         CountFreePublicIps.done();
+
+        DeleteAllExceptGivenIp = createSearchBuilder();
+        DeleteAllExceptGivenIp.and("vlanDbId", DeleteAllExceptGivenIp.entity().getVlanId(), Op.EQ);
+        DeleteAllExceptGivenIp.and("ip", DeleteAllExceptGivenIp.entity().getAddress(), Op.NEQ);
     }
 
     @Override
@@ -365,6 +372,22 @@ public class IPAddressDaoImpl extends GenericDaoBase<IPAddressVO, Long> implemen
     }
 
     @Override
+    public void deletePublicIPRangeExceptAliasIP(long vlanDbId, String aliasIp)  {
+        SearchCriteria<IPAddressVO> sc =DeleteAllExceptGivenIp .create();
+        sc.setParameters("vlan", vlanDbId);
+        sc.setParameters("ip", aliasIp);
+        remove(sc);
+    }
+
+    @Override
+    public boolean deletePublicIPRange(long vlanDbId) {
+        SearchCriteria<IPAddressVO> sc = AllFieldsSearch.create();
+        sc.setParameters("vlan", vlanDbId);
+        remove(sc);
+        return true;
+    }
+
+    @Override
     @DB
     public boolean remove(Long id) {
         Transaction txn = Transaction.currentTxn();
@@ -384,5 +407,12 @@ public class IPAddressDaoImpl extends GenericDaoBase<IPAddressVO, Long> implemen
         sc.setParameters("associatedWithVmId", vmId);
         sc.setParameters("associatedVmIp", vmIp);
         return findOneBy(sc);
+    }
+
+    @Override
+    public void lockRange(long vlandbId) {
+        SearchCriteria<IPAddressVO> sc = AllFieldsSearch.create();
+        sc.setParameters("vlan", vlandbId);
+        lockRows(sc,null,true);
     }
 }

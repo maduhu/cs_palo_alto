@@ -14,14 +14,18 @@
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
-
 package org.apache.cloudstack.engine.subsystem.api.storage;
 
+import com.cloud.storage.Snapshot;
 
 public interface SnapshotStrategy {
-	public boolean canHandle(SnapshotInfo snapshot);
-	public SnapshotInfo takeSnapshot(VolumeInfo volume, Long snapshotId);
-	public SnapshotInfo backupSnapshot(SnapshotInfo snapshot);
-	public boolean deleteSnapshot(SnapshotInfo snapshot);
-	public boolean revertSnapshot(SnapshotInfo snapshot);
+    SnapshotInfo takeSnapshot(SnapshotInfo snapshot);
+
+    SnapshotInfo backupSnapshot(SnapshotInfo snapshot);
+
+    boolean deleteSnapshot(Long snapshotId);
+
+    boolean revertSnapshot(Long snapshotId);
+
+    StrategyPriority.Priority canHandle(Snapshot snapshot);
 }
