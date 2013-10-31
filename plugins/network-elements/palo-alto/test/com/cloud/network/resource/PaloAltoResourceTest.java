@@ -153,7 +153,7 @@ public class PaloAltoResourceTest {
 		_context.put("public_using_ethernet", "true");
 		_context.put("private_using_ethernet", "true");
 		_context.put("has_management_profile", "true");
-		_context.put("enable_console_output", "true");
+		_context.put("enable_console_output", "true"); // CHANGE TO "false" TO DISABLE CONSOLE LOGGING OF TESTS
 		_resource.setMockContext(_context);
 	}
 
@@ -164,7 +164,7 @@ public class PaloAltoResourceTest {
 	
 	@Test 
 	public void resourceConfigureWithoutManagementProfile() throws ConfigurationException {
-		if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+		if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 			System.out.println("\nTEST: resourceConfigureWithoutManagementProfile");
 	        System.out.println("---------------------------------------------------");
 	    }
@@ -175,7 +175,7 @@ public class PaloAltoResourceTest {
 
 	@Test 
 	public void resourceConfigureWithManagementProfile() throws ConfigurationException {
-		if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+		if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 			System.out.println("\nTEST: resourceConfigureWithManagementProfile");
 			System.out.println("---------------------------------------------------");
 		}
@@ -184,7 +184,7 @@ public class PaloAltoResourceTest {
 
 	@Test (expected=ConfigurationException.class)
 	public void simulateFirewallNotConfigurable() throws ConfigurationException {
-		if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+		if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 			System.out.println("\nTEST: simulateFirewallNotConfigurable");
 	        System.out.println("---------------------------------------------------");
 	    }
@@ -196,7 +196,7 @@ public class PaloAltoResourceTest {
 
 	@Test (expected=ConfigurationException.class)
 	public void simulateFirewallCommitFailure() throws ConfigurationException {
-		if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+		if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 			System.out.println("\nTEST: simulateFirewallCommitFailure");
 	        System.out.println("---------------------------------------------------");
 	    }
@@ -208,7 +208,7 @@ public class PaloAltoResourceTest {
 
 	@Test
     public void testInitialize() throws ConfigurationException {
-    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 	        System.out.println("\nTEST: testInitialization");
 			System.out.println("---------------------------------------------------");
 		}
@@ -223,7 +223,7 @@ public class PaloAltoResourceTest {
 
 	@Test // implement public & private interfaces, source nat, guest network
 	public void implementGuestNetwork() throws ConfigurationException, ExecutionException {
-		if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+		if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 			System.out.println("\nTEST: implementGuestNetwork");
 			System.out.println("---------------------------------------------------");
 		}
@@ -243,7 +243,7 @@ public class PaloAltoResourceTest {
 
 	@Test // remove public & private interface details, source nat, guest network
 	public void shutdownGuestNetwork() throws ConfigurationException, ExecutionException {
-		if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+		if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 			System.out.println("\nTEST: shutdownGuestNetwork");
 			System.out.println("---------------------------------------------------");
 		}
@@ -268,7 +268,7 @@ public class PaloAltoResourceTest {
 
 	@Test
     public void addIngressFirewallRule() throws ConfigurationException, Exception {
-    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 	    	System.out.println("\nTEST: addIngressFirewallRule");
 			System.out.println("---------------------------------------------------");
 		}
@@ -299,7 +299,7 @@ public class PaloAltoResourceTest {
 
 	@Test
     public void removeIngressFirewallRule() throws ConfigurationException, Exception {
-    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 	    	System.out.println("\nTEST: removeIngressFirewallRule");
 			System.out.println("---------------------------------------------------");
 		}
@@ -329,7 +329,7 @@ public class PaloAltoResourceTest {
 
     @Test
     public void addEgressFirewallRule() throws ConfigurationException, Exception {
-    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 	    	System.out.println("\nTEST: addEgressFirewallRule");
 			System.out.println("---------------------------------------------------");
 		}
@@ -361,7 +361,7 @@ public class PaloAltoResourceTest {
 
 	@Test
     public void removeEgressFirewallRule() throws ConfigurationException, Exception {
-    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 	    	System.out.println("\nTEST: removeEgressFirewallRule");
 			System.out.println("---------------------------------------------------");
 		}
@@ -392,7 +392,7 @@ public class PaloAltoResourceTest {
 
     @Test
     public void addStaticNatRule() throws ConfigurationException, Exception {
-    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 	    	System.out.println("\nTEST: addStaticNatRule");
 			System.out.println("---------------------------------------------------");
 		}
@@ -420,7 +420,7 @@ public class PaloAltoResourceTest {
 
     @Test
     public void removeStaticNatRule() throws ConfigurationException, Exception {
-    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 	    	System.out.println("\nTEST: removeStaticNatRule");
 			System.out.println("---------------------------------------------------");
 		}
@@ -449,7 +449,7 @@ public class PaloAltoResourceTest {
 
     @Test
     public void addPortForwardingRule() throws ConfigurationException, Exception {
-    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 	    	System.out.println("\nTEST: addPortForwardingRule");
 			System.out.println("---------------------------------------------------");
 		}
@@ -477,7 +477,7 @@ public class PaloAltoResourceTest {
 
     @Test
     public void removePortForwardingRule() throws ConfigurationException, Exception {
-    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output") == "true") {
+    	if (_context.containsKey("enable_console_output") && _context.get("enable_console_output").equals("true")) {
 	    	System.out.println("\nTEST: removePortForwardingRule");
 			System.out.println("---------------------------------------------------");
 		}

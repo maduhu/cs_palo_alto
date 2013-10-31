@@ -1607,7 +1607,7 @@ public class PaloAltoResource implements ServerResource {
 
         debug_msg = debug_msg + prettyFormat(responseBody);
         debug_msg = debug_msg + "\n" + responseBody.replace("\"", "\\\"") + "\n\n"; // test cases
-        s_logger.debug(debug_msg); // this can be commented if we don't want to show each request in the log.
+        //s_logger.debug(debug_msg); // this can be commented if we don't want to show each request in the log.
         
         return responseBody;
     }
