@@ -36,7 +36,7 @@ import com.cloud.exception.ResourceAllocationException;
 import com.cloud.exception.ResourceUnavailableException;
 import com.cloud.network.dao.ExternalFirewallDeviceVO;
 import com.cloud.network.element.PaloAltoFirewallElementService;
-import com.cloud.user.UserContext;
+import org.apache.cloudstack.context.CallContext;
 import com.cloud.utils.exception.CloudRuntimeException;
 
 @APICommand(name = "configurePaloAltoFirewall", responseObject=PaloAltoFirewallResponse.class, description="Configures a Palo Alto firewall device")
@@ -109,6 +109,6 @@ public class ConfigurePaloAltoFirewallCmd extends BaseAsyncCmd {
 
     @Override
     public long getEntityOwnerId() {
-        return UserContext.current().getCaller().getId();
+        return CallContext.current().getCallingAccount().getId();
     }
 }

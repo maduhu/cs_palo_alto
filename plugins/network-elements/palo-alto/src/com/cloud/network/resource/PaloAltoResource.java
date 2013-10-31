@@ -466,11 +466,11 @@ public class PaloAltoResource implements ServerResource {
             String guestVlanSubnet = NetUtils.getCidrSubNet(guestVlanGateway, cidrSize);    
             
             Long publicVlanTag = null;
-            if (ip.getVlanId() != null && !ip.getVlanId().equals("untagged")) {
+            if (ip.getBroadcastUri() != null && !ip.getBroadcastUri().equals("untagged")) {
                 try {
-                    publicVlanTag = Long.parseLong(ip.getVlanId());
+                    publicVlanTag = Long.parseLong(ip.getBroadcastUri());
                 } catch (Exception e) {
-                    throw new ExecutionException("Could not parse public VLAN tag: " + ip.getVlanId());
+                    throw new ExecutionException("Could not parse public VLAN tag: " + ip.getBroadcastUri());
                 }
             } 
 

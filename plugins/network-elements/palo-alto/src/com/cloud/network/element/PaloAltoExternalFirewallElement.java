@@ -41,7 +41,7 @@ import com.cloud.api.commands.ListPaloAltoFirewallsCmd;
 import com.cloud.api.response.PaloAltoFirewallResponse;
 import com.cloud.configuration.Config;
 import com.cloud.configuration.ConfigurationManager;
-import com.cloud.configuration.dao.ConfigurationDao;
+import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
 import com.cloud.dc.DataCenter;
 import com.cloud.dc.DataCenter.NetworkType;
 import com.cloud.dc.DataCenterVO;
@@ -82,6 +82,7 @@ import com.cloud.network.rules.StaticNat;
 import com.cloud.offering.NetworkOffering;
 import com.cloud.offerings.dao.NetworkOfferingDao;
 import com.cloud.utils.NumbersUtil;
+import com.cloud.utils.db.EntityManager;
 import com.cloud.utils.exception.CloudRuntimeException;
 import com.cloud.vm.NicProfile;
 import com.cloud.vm.ReservationContext;
@@ -124,9 +125,11 @@ PortForwardingServiceProvider, IpDeployer, PaloAltoFirewallElementService, Stati
     HostDetailsDao _hostDetailDao;
     @Inject
     ConfigurationDao _configDao;
+    @Inject
+    EntityManager _entityMgr;
 
     private boolean canHandle(Network network, Service service) {
-        DataCenter zone = _configMgr.getZone(network.getDataCenterId());
+        DataCenter zone = _entityMgr.findById(DataCenter.class, network.getDataCenterId());
         if (zone.getNetworkType() == NetworkType.Advanced && network.getGuestType() != Network.GuestType.Isolated) {
             s_logger.trace("Element " + getProvider().getName() + "is not handling network type = " + network.getGuestType());
             return false;
@@ -150,7 +153,7 @@ PortForwardingServiceProvider, IpDeployer, PaloAltoFirewallElementService, Stati
     @Override
     public boolean implement(Network network, NetworkOffering offering, DeployDestination dest, ReservationContext context) throws ResourceUnavailableException, ConcurrentOperationException,
     InsufficientNetworkCapacityException {
-        DataCenter zone = _configMgr.getZone(network.getDataCenterId());
+        DataCenter zone = _entityMgr.findById(DataCenter.class, network.getDataCenterId());
 
         // don't have to implement network is Basic zone
         if (zone.getNetworkType() == NetworkType.Basic) {
@@ -173,19 +176,19 @@ PortForwardingServiceProvider, IpDeployer, PaloAltoFirewallElementService, Stati
     }
 
     @Override
-    public boolean prepare(Network config, NicProfile nic, VirtualMachineProfile<? extends VirtualMachine> vm, DeployDestination dest, ReservationContext context) throws ConcurrentOperationException,
+    public boolean prepare(Network config, NicProfile nic, VirtualMachineProfile vm, DeployDestination dest, ReservationContext context) throws ConcurrentOperationException,
     InsufficientNetworkCapacityException, ResourceUnavailableException {
         return true;
     }
 
     @Override
-    public boolean release(Network config, NicProfile nic, VirtualMachineProfile<? extends VirtualMachine> vm, ReservationContext context) {
+    public boolean release(Network config, NicProfile nic, VirtualMachineProfile vm, ReservationContext context) {
         return true;
     }
 
     @Override
     public boolean shutdown(Network network, ReservationContext context, boolean cleanup) throws ResourceUnavailableException, ConcurrentOperationException {
-        DataCenter zone = _configMgr.getZone(network.getDataCenterId());
+        DataCenter zone = _entityMgr.findById(DataCenter.class, network.getDataCenterId());
 
         // don't have to implement network is Basic zone
         if (zone.getNetworkType() == NetworkType.Basic) {
