@@ -113,7 +113,6 @@ import org.apache.cloudstack.engine.orchestration.VolumeOrchestrator;
 import org.apache.cloudstack.engine.orchestration.service.VolumeOrchestrationService;
 import org.apache.cloudstack.storage.command.DeleteCommand;
 import org.apache.cloudstack.storage.command.StorageSubSystemCommand;
-import org.apache.cloudstack.storage.to.PrimaryDataStoreTO;
 import org.apache.cloudstack.storage.to.TemplateObjectTO;
 import org.apache.cloudstack.storage.to.VolumeObjectTO;
 
@@ -1559,6 +1558,9 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
             } else {
                 args += "0";
             }
+            if (cmd.isPassive()) {
+            	args += " -p ";
+            }
         } else {
             args += " -D";
             args += " -r ";
@@ -2052,7 +2054,7 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
         String args = " -v " + vmIpAddress;
 
         if (s_logger.isDebugEnabled()) {
-            s_logger.debug("Run command on domain router " + controlIp + ", /root/savepassword.sh " + args + " -p " + StringUtils.getMaskedPasswordForDisplay(cmd.getPassword()));
+            s_logger.debug("Run command on domain router " + controlIp + ", /opt/cloud/bin/savepassword.sh " + args + " -p " + StringUtils.getMaskedPasswordForDisplay(cmd.getPassword()));
         }
 
         args += " -p " + password;
@@ -2060,7 +2062,7 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
 
         try {
             VmwareManager mgr = getServiceContext().getStockObject(VmwareManager.CONTEXT_STOCK_NAME);
-            Pair<Boolean, String> result = SshHelper.sshExecute(controlIp, DEFAULT_DOMR_SSHPORT, "root", mgr.getSystemVMKeyFile(), null, "/root/savepassword.sh " + args);
+            Pair<Boolean, String> result = SshHelper.sshExecute(controlIp, DEFAULT_DOMR_SSHPORT, "root", mgr.getSystemVMKeyFile(), null, "/opt/cloud/bin/savepassword.sh " + args);
 
             if (!result.first()) {
                 s_logger.error("savepassword command on domain router " + controlIp + " failed, message: " + result.second());
@@ -2510,7 +2512,7 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
         for (DiskTO vol : disks) {
             if (vol.getType() != Volume.Type.ISO) {
                 VolumeObjectTO volumeTO = (VolumeObjectTO)vol.getData();
-                PrimaryDataStoreTO primaryStore = (PrimaryDataStoreTO)volumeTO.getDataStore();
+                DataStoreTO primaryStore = volumeTO.getDataStore();
                 if (primaryStore.getUuid() != null && !primaryStore.getUuid().isEmpty()) {
                     validatedDisks.add(vol);
                 }
@@ -2670,7 +2672,7 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
                     Pair<ManagedObjectReference, DatastoreMO> rootDiskDataStoreDetails = null;
                     for (DiskTO vol : disks) {
                         if (vol.getType() == Volume.Type.ROOT) {
-                            PrimaryDataStoreTO primaryStore = (PrimaryDataStoreTO)vol.getData().getDataStore();
+                            DataStoreTO primaryStore = vol.getData().getDataStore();
                             rootDiskDataStoreDetails = dataStoresDetails.get(primaryStore.getUuid());
                         }
                     }
@@ -2829,7 +2831,7 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
                     deviceConfigSpecArray[i] = new VirtualDeviceConfigSpec();
                     
 	                VolumeObjectTO volumeTO = (VolumeObjectTO)vol.getData();
-	                PrimaryDataStoreTO primaryStore = (PrimaryDataStoreTO)volumeTO.getDataStore();
+	                DataStoreTO primaryStore = volumeTO.getDataStore();
 	                Pair<ManagedObjectReference, DatastoreMO> volumeDsDetails = dataStoresDetails.get(primaryStore.getUuid());
 	                assert (volumeDsDetails != null);
 	                
@@ -2981,8 +2983,10 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
     	) throws Exception {
     	
         VolumeObjectTO volumeTO = (VolumeObjectTO)vol.getData();
-        PrimaryDataStoreTO primaryStore = (PrimaryDataStoreTO)volumeTO.getDataStore();
-        
+        DataStoreTO primaryStore = volumeTO.getDataStore();
+        Map<String, String> details = vol.getDetails();
+        boolean isManaged = details != null && Boolean.parseBoolean(details.get(DiskTO.MANAGED));
+
         Pair<ManagedObjectReference, DatastoreMO> volumeDsDetails = dataStoresDetails.get(primaryStore.getUuid());
         if(volumeDsDetails == null)
         	throw new Exception("Primary datastore " + primaryStore.getUuid() + " is not mounted on host.");
@@ -2994,17 +2998,25 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
     		String disks[] = diskInfo.getDiskChain();
     		for(int i = 0; i < disks.length; i++) {
     			DatastoreFile file = new DatastoreFile(disks[i]);
-    			if(file.getDir() != null && file.getDir().isEmpty()) {
+    			if (!isManaged && file.getDir() != null && file.getDir().isEmpty()) {
     				s_logger.info("Perform run-time datastore folder upgrade. sync " + disks[i] + " to VM folder");
     				disks[i] = VmwareStorageLayoutHelper.syncVolumeToVmDefaultFolder(
     		            dcMo, vmMo.getName(), dsMo, file.getFileBaseName());
     			}
     		}
     		return disks;
-    	} 
-        
-        String datastoreDiskPath = VmwareStorageLayoutHelper.syncVolumeToVmDefaultFolder(
-            	dcMo, vmMo.getName(), dsMo, volumeTO.getPath());
+    	}
+
+        final String datastoreDiskPath;
+
+        if (isManaged) {
+            datastoreDiskPath = dsMo.getDatastorePath(dsMo.getName() + ".vmdk");
+        }
+        else {
+            datastoreDiskPath = VmwareStorageLayoutHelper.syncVolumeToVmDefaultFolder(
+                dcMo, vmMo.getName(), dsMo, volumeTO.getPath());
+        }
+
         if(!dsMo.fileExists(datastoreDiskPath)) {
     		s_logger.warn("Volume " + volumeTO.getId() + " does not seem to exist on datastore, out of sync? path: " + datastoreDiskPath);
     	}
@@ -3220,7 +3232,10 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
     	if(diskInfoBuilder != null) {
     		VolumeObjectTO volume = (VolumeObjectTO)vol.getData();
 
-    		VirtualMachineDiskInfo diskInfo = diskInfoBuilder.getDiskInfoByBackingFileBaseName(volume.getPath());
+            Map<String, String> details = vol.getDetails();
+            boolean isManaged = details != null && Boolean.parseBoolean(details.get(DiskTO.MANAGED));
+
+    		VirtualMachineDiskInfo diskInfo = diskInfoBuilder.getDiskInfoByBackingFileBaseName(isManaged ? new DatastoreFile(volume.getPath()).getFileBaseName() : volume.getPath());
     		if(diskInfo != null) {
     			s_logger.info("Found existing disk info from volume path: " + volume.getPath());
     			return diskInfo;
@@ -3415,10 +3430,19 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
         for (DiskTO vol : disks) {
             if (vol.getType() != Volume.Type.ISO) {
                 VolumeObjectTO volumeTO = (VolumeObjectTO)vol.getData();
-                PrimaryDataStoreTO primaryStore = (PrimaryDataStoreTO)volumeTO.getDataStore();
+                DataStoreTO primaryStore = volumeTO.getDataStore();
                 String poolUuid = primaryStore.getUuid();
                 if(poolMors.get(poolUuid) == null) {
-                    ManagedObjectReference morDataStore = HypervisorHostHelper.findDatastoreWithBackwardsCompatibility(hyperHost, poolUuid);
+                    boolean isManaged = false;
+                    String iScsiName = null;
+                    Map<String, String> details = vol.getDetails();
+
+                    if (details != null) {
+                        isManaged = Boolean.parseBoolean(details.get(DiskTO.MANAGED));
+                        iScsiName = details.get(DiskTO.IQN);
+                    }
+
+                    ManagedObjectReference morDataStore = HypervisorHostHelper.findDatastoreWithBackwardsCompatibility(hyperHost, isManaged ? VmwareResource.getDatastoreName(iScsiName) : poolUuid);
                     if (morDataStore == null) {
                         String msg = "Failed to get the mounted datastore for the volume's pool " + poolUuid;
                         s_logger.error(msg);
@@ -3437,7 +3461,7 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
     	Pair<ManagedObjectReference, DatastoreMO> rootDiskDataStoreDetails = null;
         for (DiskTO vol : disks) {
             if (vol.getType() == Volume.Type.ROOT) {
-                PrimaryDataStoreTO primaryStore = (PrimaryDataStoreTO)vol.getData().getDataStore();
+                DataStoreTO primaryStore = vol.getData().getDataStore();
                 rootDiskDataStoreDetails = dataStoresDetails.get(primaryStore.getUuid());
             }
         }
@@ -3591,6 +3615,8 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
         } else {
             argsBuf.append(" -d ").append(" -s ").append(cmd.getVpnServerIp());
         }
+        argsBuf.append(" -C ").append(cmd.getLocalCidr());
+        argsBuf.append(" -i ").append(cmd.getPublicInterface());
 
         try {
             VmwareManager mgr = getServiceContext().getStockObject(VmwareManager.CONTEXT_STOCK_NAME);
@@ -3857,11 +3883,11 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
                     if (getVmState(vmMo) != State.Stopped) {
                         if (vmMo.safePowerOff(_shutdown_waitMs)) {
                             state = State.Stopped;
-                            return new StopAnswer(cmd, "Stop VM " + cmd.getVmName() + " Succeed", 0, true);
+                            return new StopAnswer(cmd, "Stop VM " + cmd.getVmName() + " Succeed", true);
                         } else {
                             String msg = "Have problem in powering off VM " + cmd.getVmName() + ", let the process continue";
                             s_logger.warn(msg);
-                            return new StopAnswer(cmd, msg, 0, true);
+                            return new StopAnswer(cmd, msg, true);
                         }
                     } else {
                         state = State.Stopped;
@@ -3869,7 +3895,7 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
 
                     String msg = "VM " + cmd.getVmName() + " is already in stopped state";
                     s_logger.info(msg);
-                    return new StopAnswer(cmd, msg, 0, true);
+                    return new StopAnswer(cmd, msg, true);
                 } finally {
                     synchronized (_vms) {
                         _vms.put(cmd.getVmName(), state);
@@ -3882,7 +3908,7 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
 
                 String msg = "VM " + cmd.getVmName() + " is no longer in vSphere";
                 s_logger.info(msg);
-                return new StopAnswer(cmd, msg, 0, true);
+                return new StopAnswer(cmd, msg, true);
             }
         } catch (Exception e) {
             if (e instanceof RemoteException) {
@@ -4529,7 +4555,7 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
                 String volumeDatastorePath = String.format("[%s] %s.vmdk", dsMo.getName(), dsMo.getName());
 
                 if (!dsMo.fileExists(volumeDatastorePath)) {
-                    createVmdk(cmd, dsMo, VmwareResource.getDatastoreName(cmd.get_iScsiName()), cmd.getVolumeSize());
+                    createVmdk(cmd, dsMo, volumeDatastorePath, cmd.getVolumeSize());
                 }
             }
             else {
@@ -4585,6 +4611,35 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
             s_logger.error(msg, e);
             return new AttachVolumeAnswer(cmd, msg);
         }
+    }
+
+    @Override
+    public void removeManagedTargetsFromCluster(List<String> iqns) throws Exception {
+        List<HostInternetScsiHbaStaticTarget> lstManagedTargets = new ArrayList<HostInternetScsiHbaStaticTarget>();
+
+        VmwareContext context = getServiceContext();
+        VmwareHypervisorHost hyperHost = getHyperHost(context);
+        ManagedObjectReference morCluster = hyperHost.getHyperHostCluster();
+        ClusterMO cluster = new ClusterMO(context, morCluster);
+        List<Pair<ManagedObjectReference, String>> lstHosts = cluster.getClusterHosts();
+        HostMO host = new HostMO(context, lstHosts.get(0).first());
+        HostStorageSystemMO hostStorageSystem = host.getHostStorageSystemMO();
+
+        for (HostHostBusAdapter hba : hostStorageSystem.getStorageDeviceInfo().getHostBusAdapter()) {
+            if (hba instanceof HostInternetScsiHba) {
+                List<HostInternetScsiHbaStaticTarget> lstTargets = ((HostInternetScsiHba)hba).getConfiguredStaticTarget();
+
+                if (lstTargets != null) {
+                    for (HostInternetScsiHbaStaticTarget target : lstTargets) {
+                        if (iqns.contains(target.getIScsiName())) {
+                            lstManagedTargets.add(target);
+                        }
+                    }
+                }
+            }
+        }
+
+        addRemoveInternetScsiTargetsToAllHosts(false, lstManagedTargets, lstHosts);
     }
 
     private void addRemoveInternetScsiTargetsToAllHosts(final boolean add, final List<HostInternetScsiHbaStaticTarget> lstTargets,
@@ -5400,11 +5455,11 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
             VmwareContext context = getServiceContext();
             VmwareHypervisorHost hyperHost = getHyperHost(context);
             VolumeObjectTO vol = (VolumeObjectTO)cmd.getData();
-            PrimaryDataStoreTO store = (PrimaryDataStoreTO)vol.getDataStore();
+            DataStoreTO store = vol.getDataStore();
 
             ManagedObjectReference morDs = HypervisorHostHelper.findDatastoreWithBackwardsCompatibility(hyperHost, store.getUuid());
             if (morDs == null) {
-                String msg = "Unable to find datastore based on volume mount point " + store.getPath();
+                String msg = "Unable to find datastore based on volume mount point " + store.getUrl();
                 s_logger.error(msg);
                 throw new Exception(msg);
             }
@@ -5985,6 +6040,7 @@ public class VmwareResource implements StoragePoolResource, ServerResource, Vmwa
         cmd.setCaps("hvm");
         cmd.setDom0MinMemory(0);
         cmd.setSpeed(summary.getCpuSpeed());
+        cmd.setCpuSockets(summary.getCpuSockets());
         cmd.setCpus((int) summary.getCpuCount());
         cmd.setMemory(summary.getMemoryBytes());
     }

@@ -17,8 +17,6 @@
 
 package org.apache.cloudstack.framework.jobs.impl;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
@@ -35,7 +33,6 @@ import java.util.concurrent.TimeUnit;
 import javax.inject.Inject;
 import javax.naming.ConfigurationException;
 
-import org.apache.log4j.Logger;
 import org.apache.cloudstack.api.ApiErrorCode;
 import org.apache.cloudstack.framework.config.ConfigDepot;
 import org.apache.cloudstack.framework.config.ConfigKey;
@@ -55,15 +52,16 @@ import org.apache.cloudstack.jobs.JobInfo;
 import org.apache.cloudstack.jobs.JobInfo.Status;
 import org.apache.cloudstack.managed.context.ManagedContextRunnable;
 import org.apache.cloudstack.utils.identity.ManagementServerNode;
+import org.apache.log4j.Logger;
 
 import com.cloud.cluster.ClusterManagerListener;
 import com.cloud.cluster.ManagementServerHost;
 import com.cloud.utils.DateUtil;
 import com.cloud.utils.Predicate;
-import com.cloud.utils.PropertiesUtil;
 import com.cloud.utils.component.ManagerBase;
 import com.cloud.utils.concurrency.NamedThreadFactory;
 import com.cloud.utils.db.DB;
+import com.cloud.utils.db.DbProperties;
 import com.cloud.utils.db.GenericDao;
 import com.cloud.utils.db.GenericDaoBase;
 import com.cloud.utils.db.GenericSearchBuilder;
@@ -72,6 +70,9 @@ import com.cloud.utils.db.SearchBuilder;
 import com.cloud.utils.db.SearchCriteria;
 import com.cloud.utils.db.SearchCriteria.Op;
 import com.cloud.utils.db.Transaction;
+import com.cloud.utils.db.TransactionCallback;
+import com.cloud.utils.db.TransactionCallbackNoReturn;
+import com.cloud.utils.db.TransactionStatus;
 import com.cloud.utils.exception.CloudRuntimeException;
 import com.cloud.utils.exception.ExceptionUtil;
 import com.cloud.utils.mgmt.JmxUtil;
@@ -177,19 +178,22 @@ public class AsyncJobManagerImpl extends ManagerBase implements AsyncJobManager,
     @SuppressWarnings("unchecked")
     @Override
     @DB
-    public long submitAsyncJob(AsyncJob job, String syncObjType, long syncObjId) {
-        Transaction txt = Transaction.currentTxn();
+    public long submitAsyncJob(final AsyncJob job, final String syncObjType, final long syncObjId) {
         try {
             @SuppressWarnings("rawtypes")
-            GenericDao dao = GenericDaoBase.getDao(job.getClass());
+            final GenericDao dao = GenericDaoBase.getDao(job.getClass());
 
-            txt.start();
-            job.setInitMsid(getMsid());
-            dao.persist(job);
+            return Transaction.execute(new TransactionCallback<Long>() {
+                @Override
+                public Long doInTransaction(TransactionStatus status) {
+                    job.setInitMsid(getMsid());
+                    dao.persist(job);
 
-            syncAsyncJobExecution(job, syncObjType, syncObjId, 1);
-            txt.commit();
-            return job.getId();
+                    syncAsyncJobExecution(job, syncObjType, syncObjId, 1);
+
+                    return job.getId();
+                }
+            });
         } catch (Exception e) {
             String errMsg = "Unable to schedule async job for command " + job.getCmd() + ", unexpected exception.";
             s_logger.warn(errMsg, e);
@@ -199,123 +203,110 @@ public class AsyncJobManagerImpl extends ManagerBase implements AsyncJobManager,
 
     @Override
     @DB
-    public void completeAsyncJob(long jobId, Status jobStatus, int resultCode, String resultObject) {
+    public void completeAsyncJob(final long jobId, final Status jobStatus, final int resultCode, final String resultObject) {
         if (s_logger.isDebugEnabled()) {
             s_logger.debug("Complete async job-" + jobId + ", jobStatus: " + jobStatus + ", resultCode: " + resultCode + ", result: " + resultObject);
         }
 
-        Transaction txn = Transaction.currentTxn();
-        try {
-            txn.start();
-            AsyncJobVO job = _jobDao.findById(jobId);
-            if (job == null) {
-                if (s_logger.isDebugEnabled()) {
-                    s_logger.debug("job-" + jobId + " no longer exists, we just log completion info here. " + jobStatus + ", resultCode: " + resultCode + ", result: " +
-                                   resultObject);
-                }
-
-                txn.rollback();
-                return;
+        final AsyncJobVO job = _jobDao.findById(jobId);
+        if (job == null) {
+            if (s_logger.isDebugEnabled()) {
+                s_logger.debug("job-" + jobId + " no longer exists, we just log completion info here. " + jobStatus + ", resultCode: " + resultCode + ", result: " +
+                               resultObject);
             }
 
-            if (job.getStatus() != JobInfo.Status.IN_PROGRESS) {
-                if (s_logger.isDebugEnabled()) {
-                    s_logger.debug("job-" + jobId + " is already completed.");
-                }
-
-                txn.rollback();
-                return;
-            }
-
-            job.setCompleteMsid(getMsid());
-            job.setStatus(jobStatus);
-            job.setResultCode(resultCode);
-
-            // reset attached object
-            job.setInstanceType(null);
-            job.setInstanceId(null);
-
-            if (resultObject != null) {
-                job.setResult(resultObject);
-            }
-
-            job.setLastUpdated(DateUtil.currentGMTTime());
-            _jobDao.update(jobId, job);
-
-            List<Long> wakeupList = wakeupByJoinedJobCompletion(jobId);
-            _joinMapDao.disjoinAllJobs(jobId);
-
-            txn.commit();
-
-            for (Long id : wakeupList) {
-                // TODO, we assume that all jobs in this category is API job only
-                AsyncJobVO jobToWakeup = _jobDao.findById(id);
-                if (jobToWakeup != null && (jobToWakeup.getPendingSignals() & AsyncJob.Constants.SIGNAL_MASK_WAKEUP) != 0)
-                    scheduleExecution(jobToWakeup, false);
-            }
-
-            _messageBus.publish(null, AsyncJob.Topics.JOB_STATE, PublishScope.GLOBAL, jobId);
-        } catch (Exception e) {
-            s_logger.error("Unexpected exception while completing async job-" + jobId, e);
-            txn.rollback();
+            return;
         }
+
+        if (job.getStatus() != JobInfo.Status.IN_PROGRESS) {
+            if (s_logger.isDebugEnabled()) {
+                s_logger.debug("job-" + jobId + " is already completed.");
+            }
+
+            return;
+        }
+
+        List<Long> wakeupList = Transaction.execute(new TransactionCallback<List<Long>>() {
+            @Override
+            public List<Long> doInTransaction(TransactionStatus status) {
+                job.setCompleteMsid(getMsid());
+                job.setStatus(jobStatus);
+                job.setResultCode(resultCode);
+
+                // reset attached object
+                job.setInstanceType(null);
+                job.setInstanceId(null);
+
+                if (resultObject != null) {
+                    job.setResult(resultObject);
+                }
+
+                job.setLastUpdated(DateUtil.currentGMTTime());
+                _jobDao.update(jobId, job);
+
+                List<Long> wakeupList = wakeupByJoinedJobCompletion(jobId);
+                _joinMapDao.disjoinAllJobs(jobId);
+
+                return wakeupList;
+            }
+        });
+
+        for (Long id : wakeupList) {
+            // TODO, we assume that all jobs in this category is API job only
+            AsyncJobVO jobToWakeup = _jobDao.findById(id);
+            if (jobToWakeup != null && (jobToWakeup.getPendingSignals() & AsyncJob.Constants.SIGNAL_MASK_WAKEUP) != 0)
+                scheduleExecution(jobToWakeup, false);
+        }
+
+        _messageBus.publish(null, AsyncJob.Topics.JOB_STATE, PublishScope.GLOBAL, jobId);
     }
 
     @Override
     @DB
-    public void updateAsyncJobStatus(long jobId, int processStatus, String resultObject) {
+    public void updateAsyncJobStatus(final long jobId, final int processStatus, final String resultObject) {
         if (s_logger.isDebugEnabled()) {
             s_logger.debug("Update async-job progress, job-" + jobId + ", processStatus: " + processStatus + ", result: " + resultObject);
         }
 
-        Transaction txt = Transaction.currentTxn();
-        try {
-            txt.start();
-            AsyncJobVO job = _jobDao.findById(jobId);
-            if (job == null) {
-                if (s_logger.isDebugEnabled()) {
-                    s_logger.debug("job-" + jobId + " no longer exists, we just log progress info here. progress status: " + processStatus);
-                }
-
-                txt.rollback();
-                return;
+        final AsyncJobVO job = _jobDao.findById(jobId);
+        if (job == null) {
+            if (s_logger.isDebugEnabled()) {
+                s_logger.debug("job-" + jobId + " no longer exists, we just log progress info here. progress status: " + processStatus);
             }
 
-            job.setProcessStatus(processStatus);
-            if (resultObject != null) {
-                job.setResult(resultObject);
-            }
-            job.setLastUpdated(DateUtil.currentGMTTime());
-            _jobDao.update(jobId, job);
-            txt.commit();
-        } catch (Exception e) {
-            s_logger.error("Unexpected exception while updating async job-" + jobId + " status: ", e);
-            txt.rollback();
+            return;
         }
+
+        Transaction.execute(new TransactionCallbackNoReturn() {
+            @Override
+            public void doInTransactionWithoutResult(TransactionStatus status) {
+                job.setProcessStatus(processStatus);
+                if (resultObject != null) {
+                    job.setResult(resultObject);
+                }
+                job.setLastUpdated(DateUtil.currentGMTTime());
+                _jobDao.update(jobId, job);
+            }
+        });
     }
 
     @Override
     @DB
-    public void updateAsyncJobAttachment(long jobId, String instanceType, Long instanceId) {
+    public void updateAsyncJobAttachment(final long jobId, final String instanceType, final Long instanceId) {
         if (s_logger.isDebugEnabled()) {
             s_logger.debug("Update async-job attachment, job-" + jobId + ", instanceType: " + instanceType + ", instanceId: " + instanceId);
         }
 
-        Transaction txt = Transaction.currentTxn();
-        try {
-            txt.start();
-
-            AsyncJobVO job = _jobDao.createForUpdate();
-            job.setInstanceType(instanceType);
-            job.setInstanceId(instanceId);
-            job.setLastUpdated(DateUtil.currentGMTTime());
-            _jobDao.update(jobId, job);
-
-            txt.commit();
-        } catch (Exception e) {
-            s_logger.error("Unexpected exception while updating async job-" + jobId + " attachment: ", e);
-            txt.rollback();
-        }
+        Transaction.execute(new TransactionCallbackNoReturn() {
+            @Override
+            public void doInTransactionWithoutResult(TransactionStatus status) {
+                AsyncJobVO job = _jobDao.createForUpdate();
+                job.setInstanceType(instanceType);
+                job.setInstanceId(instanceId);
+                job.setLastUpdated(DateUtil.currentGMTTime());
+                _jobDao.update(jobId, job);
+            }
+        });
     }
 
     @Override
@@ -493,15 +484,12 @@ public class AsyncJobManagerImpl extends ManagerBase implements AsyncJobManager,
         return new ManagedContextRunnable() {
             @Override
             protected void runInContext() {
-                Transaction txn = null;
                 long runNumber = getJobRunNumber();
 
                 try {
                     //
                     // setup execution environment
                     //
-                    txn = Transaction.open(Transaction.CLOUD_DB);
-
                     try {
                         JmxUtil.registerMBean("AsyncJobManager", "Active Job " + job.getId(), new AsyncJobMBeanImpl(job));
                     } catch (Exception e) {
@@ -563,9 +551,6 @@ public class AsyncJobManagerImpl extends ManagerBase implements AsyncJobManager,
                             if (s_logger.isTraceEnabled())
                                 s_logger.trace("Unable to unregister job " + job.getId() + " to JMX monitoring due to exception " + ExceptionUtil.toString(e));
                         }
-
-                        if (txn != null)
-                            txn.close();
 
                         //
                         // clean execution environment
@@ -690,7 +675,6 @@ public class AsyncJobManagerImpl extends ManagerBase implements AsyncJobManager,
         return new ManagedContextRunnable() {
             @Override
             protected void runInContext() {
-                Transaction txn = Transaction.open("AsyncJobManagerImpl.getHeartbeatTask");
                 try {
                     List<SyncQueueItemVO> l = _queueMgr.dequeueFromAny(getMsid(), MAX_ONETIME_SCHEDULE_SIZE);
                     if (l != null && l.size() > 0) {
@@ -711,12 +695,6 @@ public class AsyncJobManagerImpl extends ManagerBase implements AsyncJobManager,
                     }
                 } catch (Throwable e) {
                     s_logger.error("Unexpected exception when trying to execute queue item, ", e);
-                } finally {
-                    try {
-                        txn.close();
-                    } catch (Throwable e) {
-                        s_logger.error("Unexpected exception", e);
-                    }
                 }
             }
         };
@@ -785,13 +763,15 @@ public class AsyncJobManagerImpl extends ManagerBase implements AsyncJobManager,
     }
 
     @DB
-    protected void expungeAsyncJob(AsyncJobVO job) {
-        Transaction txn = Transaction.currentTxn();
-        txn.start();
-        _jobDao.expunge(job.getId());
-        //purge corresponding sync queue item
-        _queueMgr.purgeAsyncJobQueueItemId(job.getId());
-        txn.commit();
+    protected void expungeAsyncJob(final AsyncJobVO job) {
+        Transaction.execute(new TransactionCallbackNoReturn() {
+            @Override
+            public void doInTransactionWithoutResult(TransactionStatus status) {
+                _jobDao.expunge(job.getId());
+                //purge corresponding sync queue item
+                _queueMgr.purgeAsyncJobQueueItemId(job.getId());
+            }
+        });
     }
 
     private long getMsid() {
@@ -825,67 +805,66 @@ public class AsyncJobManagerImpl extends ManagerBase implements AsyncJobManager,
             Collections.sort(result);
             Long[] ids = result.toArray(new Long[result.size()]);
 
-            SearchCriteria<AsyncJobVO> jobsSC = JobIdsSearch.create("ids", ids);
-            SearchCriteria<SyncQueueItemVO> queueItemsSC = QueueJobIdsSearch.create("contentIds", ids);
+            final SearchCriteria<AsyncJobVO> jobsSC = JobIdsSearch.create("ids", ids);
+            final SearchCriteria<SyncQueueItemVO> queueItemsSC = QueueJobIdsSearch.create("contentIds", ids);
 
-            Transaction txn = Transaction.currentTxn();
-            txn.start();
-            AsyncJobVO job = _jobDao.createForUpdate();
-            job.setPendingSignals(AsyncJob.Constants.SIGNAL_MASK_WAKEUP);
-            _jobDao.update(job, jobsSC);
+            Transaction.execute(new TransactionCallbackNoReturn() {
+                @Override
+                public void doInTransactionWithoutResult(TransactionStatus status) {
+                    AsyncJobVO job = _jobDao.createForUpdate();
+                    job.setPendingSignals(AsyncJob.Constants.SIGNAL_MASK_WAKEUP);
+                    _jobDao.update(job, jobsSC);
 
-            SyncQueueItemVO item = _queueItemDao.createForUpdate();
-            item.setLastProcessNumber(null);
-            item.setLastProcessMsid(null);
-            _queueItemDao.update(item, queueItemsSC);
-            txn.commit();
+                    SyncQueueItemVO item = _queueItemDao.createForUpdate();
+                    item.setLastProcessNumber(null);
+                    item.setLastProcessMsid(null);
+                    _queueItemDao.update(item, queueItemsSC);
+                }
+            });
         }
         return _joinMapDao.findJobsToWake(joinedJobId);
     }
 
     @DB
     protected List<Long> wakeupScan() {
-        Date cutDate = DateUtil.currentGMTTime();
-        Transaction txn = Transaction.currentTxn();
+        final Date cutDate = DateUtil.currentGMTTime();
 
         SearchCriteria<Long> sc = JoinJobTimeSearch.create();
         sc.setParameters("beginTime", cutDate);
         sc.setParameters("endTime", cutDate);
 
-        List<Long> result = _joinMapDao.customSearch(sc, null);
+        final List<Long> result = _joinMapDao.customSearch(sc, null);
 
-        txn.start();
-        if (result.size() > 0) {
-            Collections.sort(result);
-            Long[] ids = result.toArray(new Long[result.size()]);
+        return Transaction.execute(new TransactionCallback<List<Long>>() {
+            @Override
+            public List<Long> doInTransaction(TransactionStatus status) {
+                if (result.size() > 0) {
+                    Collections.sort(result);
+                    Long[] ids = result.toArray(new Long[result.size()]);
 
-            AsyncJobVO job = _jobDao.createForUpdate();
-            job.setPendingSignals(AsyncJob.Constants.SIGNAL_MASK_WAKEUP);
+                    AsyncJobVO job = _jobDao.createForUpdate();
+                    job.setPendingSignals(AsyncJob.Constants.SIGNAL_MASK_WAKEUP);
 
-            SearchCriteria<AsyncJobVO> sc2 = JobIdsSearch.create("ids", ids);
-            SearchCriteria<SyncQueueItemVO> queueItemsSC = QueueJobIdsSearch.create("contentIds", ids);
+                    SearchCriteria<AsyncJobVO> sc2 = JobIdsSearch.create("ids", ids);
+                    SearchCriteria<SyncQueueItemVO> queueItemsSC = QueueJobIdsSearch.create("contentIds", ids);
 
-            _jobDao.update(job, sc2);
+                    _jobDao.update(job, sc2);
 
-            SyncQueueItemVO item = _queueItemDao.createForUpdate();
-            item.setLastProcessNumber(null);
-            item.setLastProcessMsid(null);
-            _queueItemDao.update(item, queueItemsSC);
-        }
+                    SyncQueueItemVO item = _queueItemDao.createForUpdate();
+                    item.setLastProcessNumber(null);
+                    item.setLastProcessMsid(null);
+                    _queueItemDao.update(item, queueItemsSC);
+                }
 
-        List<Long> wakupIds = _joinMapDao.findJobsToWakeBetween(cutDate);
-        txn.commit();
-
-        return wakupIds;
+                return _joinMapDao.findJobsToWakeBetween(cutDate);
+            }
+        });
     }
 
     @Override
     public boolean configure(String name, Map<String, Object> params) throws ConfigurationException {
         try {
-            final File dbPropsFile = PropertiesUtil.findConfigFile("db.properties");
-            final Properties dbProps = new Properties();
-            dbProps.load(new FileInputStream(dbPropsFile));
-
+            final Properties dbProps = DbProperties.getDbProperties();
             final int cloudMaxActive = Integer.parseInt(dbProps.getProperty("db.cloud.maxActive"));
 
             int poolSize = (cloudMaxActive * 2) / 3;
@@ -933,18 +912,18 @@ public class AsyncJobManagerImpl extends ManagerBase implements AsyncJobManager,
 
     @Override
     public void onManagementNodeLeft(List<? extends ManagementServerHost> nodeList, long selfNodeId) {
-        for (ManagementServerHost msHost : nodeList) {
-            Transaction txn = Transaction.open(Transaction.CLOUD_DB);
+        for (final ManagementServerHost msHost : nodeList) {
             try {
-                txn.start();
-                List<SyncQueueItemVO> items = _queueMgr.getActiveQueueItems(msHost.getId(), true);
-                cleanupPendingJobs(items);
-                _jobDao.resetJobProcess(msHost.getId(), ApiErrorCode.INTERNAL_ERROR.getHttpCode(), "job cancelled because of management server restart");
-                txn.commit();
+                Transaction.execute(new TransactionCallbackNoReturn() {
+                    @Override
+                    public void doInTransactionWithoutResult(TransactionStatus status) {
+                        List<SyncQueueItemVO> items = _queueMgr.getActiveQueueItems(msHost.getId(), true);
+                        cleanupPendingJobs(items);
+                        _jobDao.resetJobProcess(msHost.getId(), ApiErrorCode.INTERNAL_ERROR.getHttpCode(), "job cancelled because of management server restart");
+                    }
+                });
             } catch (Throwable e) {
                 s_logger.warn("Unexpected exception ", e);
-            } finally {
-                txn.close();
             }
         }
     }

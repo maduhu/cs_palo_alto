@@ -96,8 +96,9 @@ class networkConfigBase:
                 return False
             if self.syscfg.env.bridgeType == "openvswitch" and not self.netcfg.isOvsBridge(br):
                 raise CloudInternalException("%s is not an openvswitch bridge" % br)
-            if self.syscfg.env.bridgeType == "native" and not self.netcfg.isBridge(br):
-                raise CloudInternalException("%s is not a bridge" % br)
+            if self.syscfg.env.bridgeType == "native" and not self.netcfg.isBridge(br) and not self.netcfg.isNetworkDev(br):
+                # traffic label doesn't have to be a bridge, we'll create bridges on it
+                raise CloudInternalException("%s is not a bridge and not a net device" % br)
             preCfged = True
 
         return preCfged
@@ -727,7 +728,7 @@ class sudoersConfig(serviceCfgBase):
     def config(self):
         try:
             cfo = configFileOps("/etc/sudoers", self)
-            cfo.addEntry("cloud ALL ", "NOPASSWD : ALL")
+            cfo.addEntry("cloud ALL ", "NOPASSWD : /bin/chmod, /bin/cp, /bin/mkdir, /bin/mount, /bin/umount")
             cfo.rmEntry("Defaults", "requiretty", " ")
             cfo.save()
             return True

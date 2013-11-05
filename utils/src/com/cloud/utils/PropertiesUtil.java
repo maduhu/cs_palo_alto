@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Logger;
 
 public class PropertiesUtil {
@@ -40,12 +41,12 @@ public class PropertiesUtil {
     public static File findConfigFile(String path) {
         ClassLoader cl = PropertiesUtil.class.getClassLoader();
         URL url = cl.getResource(path);
-        if (url != null) {
+        if (url != null && "file".equals(url.getProtocol())) {
             return new File(url.getFile());
         }
         
         url =  ClassLoader.getSystemResource(path);
-        if (url != null) {
+        if (url != null && "file".equals(url.getProtocol())) {
             return new File(url.getFile());
         }
         
@@ -56,12 +57,12 @@ public class PropertiesUtil {
         
         String newPath = "conf" + (path.startsWith(File.separator) ? "" : "/") + path;
         url = ClassLoader.getSystemResource(newPath);
-        if (url != null) {
+        if (url != null && "file".equals(url.getProtocol())) {
             return new File(url.getFile());
         }
         
         url = cl.getResource(newPath);
-        if (url != null) {
+        if (url != null && "file".equals(url.getProtocol())) {
             return new File(url.getFile());
         }
         
@@ -129,7 +130,7 @@ public class PropertiesUtil {
             File commandsFile = findConfigFile(configFile);
             if (commandsFile != null) {
                 try {
-                    preProcessedCommands.load(new FileInputStream(commandsFile));
+                    loadFromFile(preProcessedCommands, commandsFile);
                 } catch (FileNotFoundException fnfex) {
                     // in case of a file within a jar in classpath, try to open stream using url
                     InputStream stream = PropertiesUtil.openStreamFromURL(configFile);
@@ -155,5 +156,20 @@ public class PropertiesUtil {
             configMap.put((String)key, value);
         }
         return configMap;
+    }
+
+    /**
+     * Load a Properties object with contents from a File.
+     * @param properties the properties object to be loaded
+     * @param file  the file to load from
+     * @throws IOException 
+     */
+    public static void loadFromFile(Properties properties, File file) throws IOException {
+        InputStream stream = new FileInputStream(file);
+        try {
+            properties.load(stream);
+        } finally {
+            IOUtils.closeQuietly(stream);
+        }
     }
 }

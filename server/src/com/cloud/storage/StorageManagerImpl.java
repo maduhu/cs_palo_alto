@@ -43,6 +43,7 @@ import javax.naming.ConfigurationException;
 
 import org.apache.log4j.Logger;
 import org.springframework.stereotype.Component;
+
 import org.apache.cloudstack.api.command.admin.storage.AddImageStoreCmd;
 import org.apache.cloudstack.api.command.admin.storage.CancelPrimaryStorageMaintenanceCmd;
 import org.apache.cloudstack.api.command.admin.storage.CreateSecondaryStagingStoreCmd;
@@ -163,6 +164,9 @@ import com.cloud.utils.db.SearchBuilder;
 import com.cloud.utils.db.SearchCriteria;
 import com.cloud.utils.db.SearchCriteria.Op;
 import com.cloud.utils.db.Transaction;
+import com.cloud.utils.db.TransactionCallbackNoReturn;
+import com.cloud.utils.db.TransactionLegacy;
+import com.cloud.utils.db.TransactionStatus;
 import com.cloud.utils.exception.CloudRuntimeException;
 import com.cloud.vm.VMInstanceVO;
 import com.cloud.vm.VirtualMachine.State;
@@ -702,7 +706,7 @@ public class StorageManagerImpl extends ManagerBase implements StorageManager, C
         Map<String, String> updatedDetails = new HashMap<String, String>();
 
         if (tags != null) {
-            Map<String, String> existingDetails = _storagePoolDetailsDao.getDetails(id);
+            Map<String, String> existingDetails = _storagePoolDetailsDao.listDetailsKeyPairs(id);
             Set<String> existingKeys = existingDetails.keySet();
 
             Map<String, String> existingDetailsToKeep = new HashMap<String, String>();
@@ -1066,7 +1070,7 @@ public class StorageManagerImpl extends ManagerBase implements StorageManager, C
         String sql = "SELECT volume_id from snapshots, snapshot_store_ref WHERE snapshots.id = snapshot_store_ref.snapshot_id and store_id=? GROUP BY volume_id";
         List<Long> list = new ArrayList<Long>();
         try {
-            Transaction txn = Transaction.currentTxn();
+            TransactionLegacy txn = TransactionLegacy.currentTxn();
             ResultSet rs = null;
             PreparedStatement pstmt = null;
             pstmt = txn.prepareAutoCloseStatement(sql);
@@ -1086,7 +1090,7 @@ public class StorageManagerImpl extends ManagerBase implements StorageManager, C
     List<String> findAllSnapshotForVolume(Long volumeId) {
         String sql = "SELECT backup_snap_id FROM snapshots WHERE volume_id=? and backup_snap_id is not NULL";
         try {
-            Transaction txn = Transaction.currentTxn();
+            TransactionLegacy txn = TransactionLegacy.currentTxn();
             ResultSet rs = null;
             PreparedStatement pstmt = null;
             pstmt = txn.prepareAutoCloseStatement(sql);
@@ -1241,6 +1245,29 @@ public class StorageManagerImpl extends ManagerBase implements StorageManager, C
         lifeCycle.cancelMaintain(store);
 
         return (PrimaryDataStoreInfo) dataStoreMgr.getDataStore(primaryStorage.getId(), DataStoreRole.Primary);
+    }
+
+    @Override
+    @DB
+    public ImageStore prepareSecondaryStorageForObjectStoreMigration(Long storeId) throws ResourceUnavailableException, InsufficientCapacityException {
+        // Verify that image store exists
+        ImageStoreVO store = _imageStoreDao.findById(storeId);
+        if (store == null) {
+            throw new InvalidParameterValueException("Image store with id " + storeId + " doesn't exist");
+        } else if (!store.getProviderName().equals(DataStoreProvider.NFS_IMAGE)) {
+            throw new InvalidParameterValueException("We only support migrate NFS secondary storage to use object store!");
+        }
+        _accountMgr.checkAccessAndSpecifyAuthority(CallContext.current().getCallingAccount(), store.getDataCenterId());
+
+        DataStoreProvider provider = dataStoreProviderMgr.getDataStoreProvider(store.getProviderName());
+        DataStoreLifeCycle lifeCycle = provider.getDataStoreLifeCycle();
+        DataStore secStore = dataStoreMgr.getDataStore(storeId, DataStoreRole.Image);
+        lifeCycle.migrateToObjectStore(secStore);
+        // update store_role in template_store_ref and snapshot_store_ref to ImageCache
+        _templateStoreDao.updateStoreRoleToCachce(storeId);
+        _snapshotStoreDao.updateStoreRoleToCache(storeId);
+        // converted to an image cache store
+        return (ImageStore)_dataStoreMgr.getDataStore(storeId, DataStoreRole.ImageCache);
     }
 
     protected class StorageGarbageCollector extends ManagedContextRunnable {
@@ -1718,7 +1745,18 @@ public class StorageManagerImpl extends ManagerBase implements StorageManager, C
         // store
         associateCrosszoneTemplatesToZone(dcId);
 
+        // duplicate cache store records to region wide storage
+        if (scopeType == ScopeType.REGION) {
+            duplicateCacheStoreRecordsToRegionStore(store.getId());
+        }
+
         return (ImageStore) _dataStoreMgr.getDataStore(store.getId(), DataStoreRole.Image);
+    }
+
+    private void duplicateCacheStoreRecordsToRegionStore(long storeId) {
+        _templateStoreDao.duplicateCacheRecordsOnRegionStore(storeId);
+        _snapshotStoreDao.duplicateCacheRecordsOnRegionStore(storeId);
+        _volumeStoreDao.duplicateCacheRecordsOnRegionStore(storeId);
     }
 
     private void associateCrosszoneTemplatesToZone(Long zoneId) {
@@ -1752,7 +1790,7 @@ public class StorageManagerImpl extends ManagerBase implements StorageManager, C
 
     @Override
     public boolean deleteImageStore(DeleteImageStoreCmd cmd) {
-        long storeId = cmd.getId();
+        final long storeId = cmd.getId();
         // Verify that image store exists
         ImageStoreVO store = _imageStoreDao.findById(storeId);
         if (store == null) {
@@ -1778,8 +1816,9 @@ public class StorageManagerImpl extends ManagerBase implements StorageManager, C
         }
 
         // ready to delete
-        Transaction txn = Transaction.currentTxn();
-        txn.start();
+        Transaction.execute(new TransactionCallbackNoReturn() {
+            @Override
+            public void doInTransactionWithoutResult(TransactionStatus status) {
         // first delete from image_store_details table, we need to do that since
         // we are not actually deleting record from main
         // image_data_store table, so delete cascade will not work
@@ -1788,7 +1827,9 @@ public class StorageManagerImpl extends ManagerBase implements StorageManager, C
         _volumeStoreDao.deletePrimaryRecordsForStore(storeId);
         _templateStoreDao.deletePrimaryRecordsForStore(storeId);
         _imageStoreDao.remove(storeId);
-        txn.commit();
+            }
+        });
+
         return true;
     }
 
@@ -1862,7 +1903,7 @@ public class StorageManagerImpl extends ManagerBase implements StorageManager, C
 
     @Override
     public boolean deleteSecondaryStagingStore(DeleteSecondaryStagingStoreCmd cmd) {
-        long storeId = cmd.getId();
+        final long storeId = cmd.getId();
         // Verify that cache store exists
         ImageStoreVO store = _imageStoreDao.findById(storeId);
         if (store == null) {
@@ -1887,8 +1928,9 @@ public class StorageManagerImpl extends ManagerBase implements StorageManager, C
         }
 
         // ready to delete
-        Transaction txn = Transaction.currentTxn();
-        txn.start();
+        Transaction.execute(new TransactionCallbackNoReturn() {
+            @Override
+            public void doInTransactionWithoutResult(TransactionStatus status) {
         // first delete from image_store_details table, we need to do that since
         // we are not actually deleting record from main
         // image_data_store table, so delete cascade will not work
@@ -1897,7 +1939,9 @@ public class StorageManagerImpl extends ManagerBase implements StorageManager, C
         _volumeStoreDao.deletePrimaryRecordsForStore(storeId);
         _templateStoreDao.deletePrimaryRecordsForStore(storeId);
         _imageStoreDao.remove(storeId);
-        txn.commit();
+            }
+        });
+
         return true;
     }
 

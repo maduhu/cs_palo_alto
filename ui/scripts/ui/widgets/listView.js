@@ -767,7 +767,7 @@
             hiddenFields = preFilter();
 
         if (multiSelect) {
-            var $th = $('<th>').appendTo($thead.find('tr'));
+            var $th = $('<th>').addClass('multiselect').appendTo($thead.find('tr'));
             var content = $('<input>')
                 .attr('type', 'checkbox')
                 .addClass('multiSelectMasterCheckbox')
@@ -1054,7 +1054,8 @@
 
             if (multiSelect) {
                 var $td = $('<td>')
-                    .appendTo($tr);
+                        .addClass('multiselect')
+                        .appendTo($tr);
                 var content = $('<input>')
                     .attr('type', 'checkbox')
                     .addClass('multiSelectCheckbox')
@@ -1387,8 +1388,7 @@
                         });
                         $quickViewTooltip.css({
                             position: 'absolute',
-                            left: $tr.width() + ($quickViewTooltip.width() -
-                                ($quickViewTooltip.width() / 2)),
+                            left: $tr.offset().left + $tr.width() - $quickViewTooltip.width(),
                             top: $quickView.offset().top - 50,
                             zIndex: $tr.closest('.panel').zIndex() + 1
                         });
@@ -1713,7 +1713,10 @@
                 noActionCol: listViewData.noActionCol
             });
         createFilters($toolbar, listViewData.filters);
+                
+        if (listViewData.hideSearchBar != true) {
         createSearchBar($toolbar, listViewData);
+        }
 
         loadBody(
             $table,
@@ -2189,6 +2192,7 @@
                 false,
                 null,
                 listViewArgs.actions, {
+                    multiSelect: listViewArgs.multiSelect,
                     context: this.data('view-args').context,
                     detailView: listViewArgs.detailView
                 }

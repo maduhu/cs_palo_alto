@@ -32,13 +32,14 @@ import org.apache.cloudstack.api.command.admin.usage.GetUsageRecordsCmd;
 import org.apache.cloudstack.api.response.UsageTypeResponse;
 import org.apache.cloudstack.context.CallContext;
 import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
+import org.apache.cloudstack.usage.Usage;
 import org.apache.cloudstack.usage.UsageService;
 import org.apache.cloudstack.usage.UsageTypes;
-
 import org.apache.log4j.Logger;
 import org.springframework.stereotype.Component;
 
 import com.cloud.configuration.Config;
+import com.cloud.domain.DomainVO;
 import com.cloud.domain.dao.DomainDao;
 import com.cloud.exception.InvalidParameterValueException;
 import com.cloud.exception.PermissionDeniedException;
@@ -49,11 +50,12 @@ import com.cloud.usage.dao.UsageJobDao;
 import com.cloud.user.Account;
 import com.cloud.user.AccountVO;
 import com.cloud.user.dao.AccountDao;
+import com.cloud.utils.Pair;
 import com.cloud.utils.component.Manager;
 import com.cloud.utils.component.ManagerBase;
 import com.cloud.utils.db.Filter;
 import com.cloud.utils.db.SearchCriteria;
-import com.cloud.utils.db.Transaction;
+import com.cloud.utils.db.TransactionLegacy;
 
 @Component
 @Local(value = { UsageService.class })
@@ -86,7 +88,7 @@ public class UsageServiceImpl extends ManagerBase implements UsageService, Manag
 
     @Override
     public boolean generateUsageRecords(GenerateUsageRecordsCmd cmd) {
-        Transaction txn = Transaction.open(Transaction.USAGE_DB);
+        TransactionLegacy txn = TransactionLegacy.open(TransactionLegacy.USAGE_DB);
         try {
             UsageJobVO immediateJob = _usageJobDao.getNextImmediateJob();
             if (immediateJob == null) {
@@ -104,14 +106,14 @@ public class UsageServiceImpl extends ManagerBase implements UsageService, Manag
             txn.close();
 
             // switch back to VMOPS_DB
-            Transaction swap = Transaction.open(Transaction.CLOUD_DB);
+            TransactionLegacy swap = TransactionLegacy.open(TransactionLegacy.CLOUD_DB);
             swap.close();
         }
         return true;
     }
 
     @Override
-    public List<UsageVO> getUsageRecords(GetUsageRecordsCmd cmd) {
+    public Pair<List<? extends Usage>, Integer> getUsageRecords(GetUsageRecordsCmd cmd) {
         Long accountId = cmd.getAccountId();
         Long domainId = cmd.getDomainId();
         String accountName = cmd.getAccountName();
@@ -150,7 +152,8 @@ public class UsageServiceImpl extends ManagerBase implements UsageService, Manag
         } 
 
         boolean isAdmin = false;
-        
+        boolean isDomainAdmin = false;
+ 
         //If accountId couldn't be found using accountName and domainId, get it from userContext
         if(accountId == null){
             accountId = caller.getId();
@@ -158,6 +161,8 @@ public class UsageServiceImpl extends ManagerBase implements UsageService, Manag
             //If account_id or account_name is explicitly mentioned, list records for the specified account only even if the caller is of type admin
             if(caller.getType() == Account.ACCOUNT_TYPE_ADMIN){
                 isAdmin = true;
+            } else if(caller.getType() == Account.ACCOUNT_TYPE_DOMAIN_ADMIN){
+                isDomainAdmin = true;
             }
             s_logger.debug("Account details not available. Using userContext accountId: " + accountId);
         }
@@ -179,8 +184,18 @@ public class UsageServiceImpl extends ManagerBase implements UsageService, Manag
         
         SearchCriteria<UsageVO> sc = _usageDao.createSearchCriteria();
 
-        if (accountId != -1 && accountId != Account.ACCOUNT_ID_SYSTEM && !isAdmin) {
+        if (accountId != -1 && accountId != Account.ACCOUNT_ID_SYSTEM && !isAdmin && !isDomainAdmin) {
             sc.addAnd("accountId", SearchCriteria.Op.EQ, accountId);
+        }
+
+        if (isDomainAdmin) {
+            SearchCriteria<DomainVO> sdc = _domainDao.createSearchCriteria();
+            sdc.addOr("path", SearchCriteria.Op.LIKE, _domainDao.findById(caller.getDomainId()).getPath() + "%");
+            List<DomainVO> domains = _domainDao.search(sdc, null);
+            List<Long> domainIds = new ArrayList<Long>();
+            for(DomainVO domain:domains)
+                domainIds.add(domain.getId());
+            sc.addAnd("domainId", SearchCriteria.Op.IN, domainIds.toArray());
         }
 
         if (domainId != null) {
@@ -195,22 +210,22 @@ public class UsageServiceImpl extends ManagerBase implements UsageService, Manag
             sc.addAnd("startDate", SearchCriteria.Op.BETWEEN, adjustedStartDate, adjustedEndDate);
             sc.addAnd("endDate", SearchCriteria.Op.BETWEEN, adjustedStartDate, adjustedEndDate);
         } else {
-            return new ArrayList<UsageVO>(); // return an empty list if we fail to validate the dates
+            return new Pair<List<? extends Usage>, Integer>(new ArrayList<Usage>(), new Integer(0)); // return an empty list if we fail to validate the dates
         }
 
-        List<UsageVO> usageRecords = null;
-        Transaction txn = Transaction.open(Transaction.USAGE_DB);
+        Pair<List<UsageVO>, Integer> usageRecords = null;
+        TransactionLegacy txn = TransactionLegacy.open(TransactionLegacy.USAGE_DB);
         try {
-            usageRecords = _usageDao.searchAllRecords(sc, usageFilter);
+            usageRecords = _usageDao.searchAndCountAllRecords(sc, usageFilter);
         } finally {
             txn.close();
 
             // switch back to VMOPS_DB
-            Transaction swap = Transaction.open(Transaction.CLOUD_DB);
+            TransactionLegacy swap = TransactionLegacy.open(TransactionLegacy.CLOUD_DB);
             swap.close();
         }
-
-        return usageRecords;
+        
+        return new Pair<List<? extends Usage>, Integer>(usageRecords.first(), usageRecords.second());
     }
 
     @Override

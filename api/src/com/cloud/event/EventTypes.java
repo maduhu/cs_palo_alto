@@ -76,6 +76,7 @@ public class EventTypes {
     public static final String EVENT_VM_MIGRATE = "VM.MIGRATE";
     public static final String EVENT_VM_MOVE = "VM.MOVE";
     public static final String EVENT_VM_RESTORE = "VM.RESTORE";
+    public static final String EVENT_VM_EXPUNGE = "VM.EXPUNGE";
 
     // Domain Router
     public static final String EVENT_ROUTER_CREATE = "ROUTER.CREATE";
@@ -447,6 +448,9 @@ public class EventTypes {
     public static final String EVENT_CLEANUP_VM_RESERVATION = "VM.RESERVATION.CLEANUP";
 
     public static final String EVENT_UCS_ASSOCIATED_PROFILE = "UCS.ASSOCIATEPROFILE";
+
+    // Object store migration
+    public static final String EVENT_MIGRATE_PREPARE_SECONDARY_STORAGE = "MIGRATE.PREPARE.SS";
 
     static {
 

@@ -22,7 +22,7 @@ import java.util.Map;
 import com.cloud.host.Host;
 import com.cloud.hypervisor.Hypervisor.HypervisorType;
 import com.cloud.network.Networks.RouterPrivateIpStrategy;
-import com.cloud.utils.Pair;
+import com.cloud.utils.Ternary;
 import com.cloud.vm.VirtualMachine.State;
 
 public class StartupRoutingCommand extends StartupCommand {
@@ -42,13 +42,14 @@ public class StartupRoutingCommand extends StartupCommand {
             return host;
         }
     }
+    Integer cpuSockets;
     int cpus;
     long speed;
     long memory;
     long dom0MinMemory;
     boolean poolSync;
     Map<String, VmState> vms;
-    HashMap<String, Pair<String, State>> _clusterVMStates;
+    HashMap<String, Ternary<String, State, String>> _clusterVMStates;
     String caps;
     String pool;
     HypervisorType hypervisorType;
@@ -129,8 +130,12 @@ getHostDetails().put(RouterPrivateIpStrategy.class.getCanonicalName(), privIpStr
         }
     }
 
-    public void setClusterVMStateChanges(HashMap<String, Pair<String, State>> allStates){
+    public void setClusterVMStateChanges(HashMap<String, Ternary<String, State, String>> allStates){
     	_clusterVMStates = allStates;
+    }
+
+    public Integer getCpuSockets() {
+        return cpuSockets;
     }
 
     public int getCpus() {
@@ -157,12 +162,16 @@ getHostDetails().put(RouterPrivateIpStrategy.class.getCanonicalName(), privIpStr
         return vms;
     }
 
-    public HashMap<String, Pair<String, State>> getClusterVMStateChanges() {
+    public HashMap<String, Ternary<String, State, String>> getClusterVMStateChanges() {
         return _clusterVMStates;
     }
 
     public void setSpeed(long speed) {
         this.speed = speed;
+    }
+
+    public void setCpuSockets(Integer cpuSockets) {
+        this.cpuSockets = cpuSockets;
     }
 
     public void setCpus(int cpus) {

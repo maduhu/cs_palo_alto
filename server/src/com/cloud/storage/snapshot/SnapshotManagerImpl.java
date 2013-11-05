@@ -26,6 +26,9 @@ import javax.ejb.Local;
 import javax.inject.Inject;
 import javax.naming.ConfigurationException;
 
+import org.apache.log4j.Logger;
+import org.springframework.stereotype.Component;
+
 import org.apache.cloudstack.api.command.user.snapshot.CreateSnapshotPolicyCmd;
 import org.apache.cloudstack.api.command.user.snapshot.DeleteSnapshotPoliciesCmd;
 import org.apache.cloudstack.api.command.user.snapshot.ListSnapshotPoliciesCmd;
@@ -40,8 +43,8 @@ import org.apache.cloudstack.engine.subsystem.api.storage.SnapshotDataFactory;
 import org.apache.cloudstack.engine.subsystem.api.storage.SnapshotInfo;
 import org.apache.cloudstack.engine.subsystem.api.storage.SnapshotService;
 import org.apache.cloudstack.engine.subsystem.api.storage.SnapshotStrategy;
-import org.apache.cloudstack.engine.subsystem.api.storage.StrategyPriority;
-import org.apache.cloudstack.engine.subsystem.api.storage.StrategyPriority.Priority;
+import org.apache.cloudstack.engine.subsystem.api.storage.SnapshotStrategy.SnapshotOperation;
+import org.apache.cloudstack.engine.subsystem.api.storage.StorageStrategyFactory;
 import org.apache.cloudstack.engine.subsystem.api.storage.VolumeDataFactory;
 import org.apache.cloudstack.engine.subsystem.api.storage.VolumeInfo;
 import org.apache.cloudstack.engine.subsystem.api.storage.ZoneScope;
@@ -50,8 +53,6 @@ import org.apache.cloudstack.storage.datastore.db.PrimaryDataStoreDao;
 import org.apache.cloudstack.storage.datastore.db.SnapshotDataStoreDao;
 import org.apache.cloudstack.storage.datastore.db.SnapshotDataStoreVO;
 import org.apache.cloudstack.storage.datastore.db.StoragePoolVO;
-import org.apache.log4j.Logger;
-import org.springframework.stereotype.Component;
 
 import com.cloud.agent.AgentManager;
 import com.cloud.agent.api.Answer;
@@ -78,7 +79,7 @@ import com.cloud.host.HostVO;
 import com.cloud.hypervisor.Hypervisor.HypervisorType;
 import com.cloud.projects.Project.ListProjectResourcesCriteria;
 import com.cloud.resource.ResourceManager;
-import com.cloud.server.ResourceTag.TaggedResourceType;
+import com.cloud.server.ResourceTag.ResourceObjectType;
 import com.cloud.storage.CreateSnapshotPayload;
 import com.cloud.storage.DataStoreRole;
 import com.cloud.storage.ScopeType;
@@ -194,8 +195,7 @@ public class SnapshotManagerImpl extends ManagerBase implements SnapshotManager,
     @Inject EndPointSelector _epSelector;
     @Inject
     private ResourceManager _resourceMgr;
-    @Inject
-    protected List<SnapshotStrategy> snapshotStrategies;
+    @Inject StorageStrategyFactory _storageStrategyFactory;
 
 
     private int _totalRetries;
@@ -278,17 +278,10 @@ public class SnapshotManagerImpl extends ManagerBase implements SnapshotManager,
             }
         }
 
-        StrategyPriority.sortStrategies(snapshotStrategies, snapshot);
-
-        SnapshotStrategy snapshotStrategy = null;
-        for (SnapshotStrategy strategy : snapshotStrategies) {
-            if (strategy.canHandle(snapshot) != Priority.CANT_HANDLE) {
-                snapshotStrategy = strategy;
-                break;
-            }
-        }
+        SnapshotStrategy snapshotStrategy = _storageStrategyFactory.getSnapshotStrategy(snapshot, SnapshotOperation.REVERT);
 
         if (snapshotStrategy == null) {
+            s_logger.error("Unable to find snaphot strategy to handle snapshot with id '"+snapshotId+"'");
             return false;
         }
 
@@ -342,8 +335,6 @@ public class SnapshotManagerImpl extends ManagerBase implements SnapshotManager,
         return snapshot;
     }
 
-
-
     @Override
     public Snapshot backupSnapshot(Long snapshotId) {
         SnapshotInfo snapshot = snapshotFactory.getSnapshot(snapshotId, DataStoreRole.Image);
@@ -353,97 +344,6 @@ public class SnapshotManagerImpl extends ManagerBase implements SnapshotManager,
 
         return snapshotSrv.backupSnapshot(snapshot);
     }
-
-    /*
-    @Override
-    public void downloadSnapshotsFromSwift(SnapshotVO ss) {
-
-        long volumeId = ss.getVolumeId();
-        VolumeVO volume = _volsDao.findById(volumeId);
-        Long dcId = volume.getDataCenterId();
-        Long accountId = volume.getAccountId();
-        DataStore secStore = this.dataStoreMgr.getImageStore(dcId);
-
-        Long swiftId = ss.getSwiftId();
-        SwiftTO swift = _swiftMgr.getSwiftTO(swiftId);
-        SnapshotVO tss = ss;
-        List<String> BackupUuids = new ArrayList<String>(30);
-        while (true) {
-            BackupUuids.add(0, tss.getBackupSnapshotId());
-            if (tss.getPrevSnapshotId() == 0)
-                break;
-            Long id = tss.getPrevSnapshotId();
-            tss = _snapshotDao.findById(id);
-            assert tss != null : " can not find snapshot " + id;
-        }
-        String parent = null;
-        try {
-            for (String backupUuid : BackupUuids) {
-<<<<<<< HEAD
-                downloadSnapshotFromSwiftCommand cmd = new downloadSnapshotFromSwiftCommand(swift, secStore.getUri(), dcId, accountId, volumeId, parent, backupUuid, _backupsnapshotwait);
-=======
-                 DownloadSnapshotFromSwiftCommand cmd = new DownloadSnapshotFromSwiftCommand(swift, secondaryStoragePoolUrl, dcId, accountId, volumeId, parent, backupUuid, _backupsnapshotwait);
->>>>>>> master
-                Answer answer = _agentMgr.sendToSSVM(dcId, cmd);
-                if ((answer == null) || !answer.getResult()) {
-                    throw new CloudRuntimeException("downloadSnapshotsFromSwift failed ");
-                }
-                parent = backupUuid;
-            }
-        } catch (Exception e) {
-            throw new CloudRuntimeException("downloadSnapshotsFromSwift failed due to " + e.toString());
-        }
-
-    }
-
-    private List<String> determineBackupUuids(final SnapshotVO snapshot) {
-
-        final List<String> backupUuids = new ArrayList<String>();
-        backupUuids.add(0, snapshot.getBackupSnapshotId());
-
-        SnapshotVO tempSnapshot = snapshot;
-        while (tempSnapshot.getPrevSnapshotId() != 0) {
-            tempSnapshot = _snapshotDao.findById(tempSnapshot
-                    .getPrevSnapshotId());
-            backupUuids.add(0, tempSnapshot.getBackupSnapshotId());
-        }
-
-        return Collections.unmodifiableList(backupUuids);
-    }
-
-    @Override
-    public void downloadSnapshotsFromS3(final SnapshotVO snapshot) {
-
-        final VolumeVO volume = _volsDao.findById(snapshot.getVolumeId());
-        final Long zoneId = volume.getDataCenterId();
-        final DataStore secStore = this.dataStoreMgr.getImageStore(zoneId);
-
-        final S3TO s3 = _s3Mgr.getS3TO(snapshot.getS3Id());
-        final List<String> backupUuids = determineBackupUuids(snapshot);
-
-        try {
-            String parent = null;
-            for (final String backupUuid : backupUuids) {
-                final DownloadSnapshotFromS3Command cmd = new DownloadSnapshotFromS3Command(
-                        s3, parent, secStore.getUri(), zoneId,
-                        volume.getAccountId(), volume.getId(), backupUuid,
-                        _backupsnapshotwait);
-                final Answer answer = _agentMgr.sendToSSVM(zoneId, cmd);
-                if ((answer == null) || !answer.getResult()) {
-                    throw new CloudRuntimeException(String.format(
-                            "S3 snapshot download failed due to %1$s.",
-                            answer != null ? answer.getDetails()
-                                    : "unspecified error"));
-                }
-                parent = backupUuid;
-            }
-        } catch (Exception e) {
-            throw new CloudRuntimeException(
-                    "Snapshot download from S3 failed due to " + e.toString(),
-                    e);
-        }
-
-    }*/
 
     @Override
     public SnapshotVO getParentSnapshot(VolumeInfo volume) {
@@ -517,16 +417,13 @@ public class SnapshotManagerImpl extends ManagerBase implements SnapshotManager,
             throw new InvalidParameterValueException("unable to find a snapshot with id " + snapshotId);
         }
 
-        StrategyPriority.sortStrategies(snapshotStrategies, snapshotCheck);
-
         _accountMgr.checkAccess(caller, null, true, snapshotCheck);
-        SnapshotStrategy snapshotStrategy = null;
-        for (SnapshotStrategy strategy : snapshotStrategies) {
-            if (strategy.canHandle(snapshotCheck) != Priority.CANT_HANDLE) {
-                snapshotStrategy = strategy;
-                break;
-            }
+        SnapshotStrategy snapshotStrategy = _storageStrategyFactory.getSnapshotStrategy(snapshotCheck, SnapshotOperation.DELETE);
+        if (snapshotStrategy == null) {
+            s_logger.error("Unable to find snaphot strategy to handle snapshot with id '"+snapshotId+"'");
+            return false;
         }
+
         try {
             boolean result = snapshotStrategy.deleteSnapshot(snapshotId);
             if (result) {
@@ -545,7 +442,6 @@ public class SnapshotManagerImpl extends ManagerBase implements SnapshotManager,
             throw new CloudRuntimeException("Failed to delete snapshot:" + e.toString());
         }
     }
-
 
     @Override
     public String getSecondaryStorageURL(SnapshotVO snapshot) {
@@ -621,7 +517,7 @@ public class SnapshotManagerImpl extends ManagerBase implements SnapshotManager,
 
         if (tags != null && !tags.isEmpty()) {
             int count = 0;
-            sc.setJoinParameters("tagSearch", "resourceType", TaggedResourceType.Snapshot.toString());
+            sc.setJoinParameters("tagSearch", "resourceType", ResourceObjectType.Snapshot.toString());
             for (String key : tags.keySet()) {
                 sc.setJoinParameters("tagSearch", "key" + String.valueOf(count), key);
                 sc.setJoinParameters("tagSearch", "value" + String.valueOf(count), tags.get(key));
@@ -672,7 +568,6 @@ public class SnapshotManagerImpl extends ManagerBase implements SnapshotManager,
         return new Pair<List<? extends Snapshot>, Integer>(result.first(), result.second());
     }
 
-
     @Override
     public boolean deleteSnapshotDirsForAccount(long accountId) {
 
@@ -696,7 +591,14 @@ public class SnapshotManagerImpl extends ManagerBase implements SnapshotManager,
                 String snapshotDir = TemplateConstants.DEFAULT_SNAPSHOT_ROOT_DIR + "/" + accountId + "/" + volumeId;
                 DeleteSnapshotsDirCommand cmd = new DeleteSnapshotsDirCommand(ssHost.getTO(), snapshotDir);
                 EndPoint ep = _epSelector.select(ssHost);
-                Answer answer = ep.sendMessage(cmd);
+                Answer answer = null;
+                if (ep == null) {
+                    String errMsg = "No remote endpoint to send command, check if host or ssvm is down?";
+                    s_logger.error(errMsg);
+                    answer = new Answer(cmd, false, errMsg);
+                } else {
+                    answer = ep.sendMessage(cmd);
+                }
                 if ((answer != null) && answer.getResult()) {
                     s_logger.debug("Deleted all snapshots for volume: " + volumeId + " under account: " + accountId);
                 } else {
@@ -711,17 +613,12 @@ public class SnapshotManagerImpl extends ManagerBase implements SnapshotManager,
             // Either way delete the snapshots for this volume.
             List<SnapshotVO> snapshots = listSnapsforVolume(volumeId);
             for (SnapshotVO snapshot : snapshots) {
-                SnapshotVO snap = _snapshotDao.findById(snapshot.getId());
-                SnapshotStrategy snapshotStrategy = null;
-
-                StrategyPriority.sortStrategies(snapshotStrategies, snapshot);
-
-                for (SnapshotStrategy strategy : snapshotStrategies) {
-                    if (strategy.canHandle(snap) != Priority.CANT_HANDLE) {
-                        snapshotStrategy = strategy;
-                        break;
-                    }
+                SnapshotStrategy snapshotStrategy = _storageStrategyFactory.getSnapshotStrategy(snapshot, SnapshotOperation.DELETE);
+                if (snapshotStrategy == null) {
+                    s_logger.error("Unable to find snaphot strategy to handle snapshot with id '"+snapshot.getId()+"'");
+                    continue;
                 }
+
                 if (snapshotStrategy.deleteSnapshot(snapshot.getId())) {
                     if (snapshot.getRecurringType() == Type.MANUAL) {
                         _resourceLimitMgr.decrementResourceCount(accountId, ResourceType.snapshot);
@@ -942,8 +839,6 @@ public class SnapshotManagerImpl extends ManagerBase implements SnapshotManager,
         return null;
     }
 
-
-
     private boolean hostSupportSnapsthotForVolume(HostVO host, VolumeInfo volume) {
         if (host.getHypervisorType() != HypervisorType.KVM) {
             return true;
@@ -1045,21 +940,15 @@ public class SnapshotManagerImpl extends ManagerBase implements SnapshotManager,
         Long snapshotId = payload.getSnapshotId();
         Account snapshotOwner = payload.getAccount();
         SnapshotInfo snapshot = snapshotFactory.getSnapshot(snapshotId, volume.getDataStore());
-        boolean processed = false;
-
-        StrategyPriority.sortStrategies(snapshotStrategies, snapshot);
 
         try {
-            for (SnapshotStrategy strategy : snapshotStrategies) {
-                if (strategy.canHandle(snapshot) != Priority.CANT_HANDLE) {
-                    processed = true;
-                    snapshot = strategy.takeSnapshot(snapshot);
-                    break;
-                }
-            }
-            if (!processed) {
+            SnapshotStrategy snapshotStrategy = _storageStrategyFactory.getSnapshotStrategy(snapshot, SnapshotOperation.TAKE);
+
+            if (snapshotStrategy == null) {
                 throw new CloudRuntimeException("Can't find snapshot strategy to deal with snapshot:" + snapshotId);
             }
+
+            snapshotStrategy.takeSnapshot(snapshot);
 
             try {
                 postCreateSnapshot(volume.getId(), snapshotId, payload.getSnapshotPolicyId());
@@ -1235,4 +1124,5 @@ public class SnapshotManagerImpl extends ManagerBase implements SnapshotManager,
         }
         return snapshot;
     }
+
 }

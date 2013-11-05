@@ -26,6 +26,7 @@ import java.util.Set;
 import javax.ejb.Local;
 import javax.inject.Inject;
 
+import com.cloud.hypervisor.Hypervisor;
 import org.apache.cloudstack.acl.ControlledEntity.ACLType;
 import org.apache.cloudstack.affinity.AffinityGroupDomainMapVO;
 import org.apache.cloudstack.affinity.AffinityGroupResponse;
@@ -129,7 +130,7 @@ import com.cloud.api.query.vo.UserAccountJoinVO;
 import com.cloud.api.query.vo.UserVmJoinVO;
 import com.cloud.api.query.vo.VolumeJoinVO;
 import com.cloud.dc.DedicatedResourceVO;
-import com.cloud.dc.dao.DcDetailsDao;
+import com.cloud.dc.dao.DataCenterDetailsDao;
 import com.cloud.dc.dao.DedicatedResourceDao;
 import com.cloud.domain.Domain;
 import com.cloud.domain.DomainVO;
@@ -138,7 +139,6 @@ import com.cloud.event.dao.EventJoinDao;
 import com.cloud.exception.CloudAuthenticationException;
 import com.cloud.exception.InvalidParameterValueException;
 import com.cloud.exception.PermissionDeniedException;
-import com.cloud.exception.UnsupportedServiceException;
 import com.cloud.ha.HighAvailabilityManager;
 import com.cloud.hypervisor.Hypervisor.HypervisorType;
 import com.cloud.network.dao.NetworkDetailsDao;
@@ -155,7 +155,7 @@ import com.cloud.resource.ResourceManager;
 import com.cloud.server.Criteria;
 import com.cloud.server.ResourceMetaDataService;
 import com.cloud.server.ResourceTag;
-import com.cloud.server.ResourceTag.TaggedResourceType;
+import com.cloud.server.ResourceTag.ResourceObjectType;
 import com.cloud.server.TaggedResourceService;
 import com.cloud.service.ServiceOfferingVO;
 import com.cloud.service.dao.ServiceOfferingDao;
@@ -190,7 +190,7 @@ import com.cloud.vm.DomainRouterVO;
 import com.cloud.vm.UserVmVO;
 import com.cloud.vm.VirtualMachine;
 import com.cloud.vm.dao.DomainRouterDao;
-import com.cloud.vm.dao.NicDetailDao;
+import com.cloud.vm.dao.NicDetailsDao;
 import com.cloud.vm.dao.UserVmDao;
 import com.cloud.vm.dao.UserVmDetailsDao;
 
@@ -296,7 +296,7 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
     private VolumeDetailsDao _volumeDetailDao;
 
     @Inject
-    private NicDetailDao _nicDetailDao;
+    private NicDetailsDao _nicDetailDao;
 
     @Inject
     UserVmDetailsDao _userVmDetailDao;
@@ -328,7 +328,7 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
     private DedicatedResourceDao _dedicatedDao;
 
     @Inject
-    DcDetailsDao _dcDetailsDao;
+    DataCenterDetailsDao _dcDetailsDao;
 
     @Inject
     DomainManager _domainMgr;
@@ -353,8 +353,8 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
     public ListResponse<UserResponse> searchForUsers(ListUsersCmd cmd) throws PermissionDeniedException {
         Pair<List<UserAccountJoinVO>, Integer> result = searchForUsersInternal(cmd);
         ListResponse<UserResponse> response = new ListResponse<UserResponse>();
-        List<UserResponse> userResponses = ViewResponseHelper.createUserResponse(result.first().toArray(
-                new UserAccountJoinVO[result.first().size()]));
+        List<UserResponse> userResponses = ViewResponseHelper.createUserResponse(CallContext.current().getCallingAccount().getDomainId(), 
+                result.first().toArray(new UserAccountJoinVO[result.first().size()]));
         response.setResponses(userResponses, result.second());
         return response;
     }
@@ -1531,6 +1531,7 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
         Object haHosts = cmd.getHaHost();
         Long startIndex = cmd.getStartIndex();
         Long pageSize = cmd.getPageSizeVal();
+        Hypervisor.HypervisorType hypervisorType = cmd.getHypervisor();
 
         Filter searchFilter = new Filter(HostJoinVO.class, "id", Boolean.TRUE, startIndex, pageSize);
 
@@ -1545,6 +1546,7 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
         sb.and("podId", sb.entity().getPodId(), SearchCriteria.Op.EQ);
         sb.and("clusterId", sb.entity().getClusterId(), SearchCriteria.Op.EQ);
         sb.and("resourceState", sb.entity().getResourceState(), SearchCriteria.Op.EQ);
+        sb.and("hypervisor_type", sb.entity().getHypervisorType(), SearchCriteria.Op.EQ);
 
         String haTag = _haMgr.getHaTag();
         if (haHosts != null && haTag != null && !haTag.isEmpty()) {
@@ -1600,6 +1602,9 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
             sc.setParameters("tag", haTag);
         }
 
+        if (hypervisorType != HypervisorType.None && hypervisorType != HypervisorType.Any) {
+            sc.setParameters("hypervisor_type", hypervisorType);
+        }
         // search host details by ids
         Pair<List<HostJoinVO>, Integer> uniqueHostPair = _hostJoinDao.searchAndCount(sc, searchFilter);
         Integer count = uniqueHostPair.second();
@@ -1641,6 +1646,7 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
         String type = cmd.getType();
         Map<String, String> tags = cmd.getTags();
         boolean isRootAdmin = _accountMgr.isRootAdmin(caller.getType());
+        Long storageId = cmd.getStorageId();
 
         Long zoneId = cmd.getZoneId();
         Long podId = null;
@@ -1676,6 +1682,7 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
         sb.and("instanceId", sb.entity().getVmId(), SearchCriteria.Op.EQ);
         sb.and("dataCenterId", sb.entity().getDataCenterId(), SearchCriteria.Op.EQ);
         sb.and("podId", sb.entity().getPodId(), SearchCriteria.Op.EQ);
+        sb.and("storageId", sb.entity().getPoolId(), SearchCriteria.Op.EQ);
         // Only return volumes that are not destroyed
         sb.and("state", sb.entity().getState(), SearchCriteria.Op.NEQ);
         sb.and("systemUse", sb.entity().isSystemUse(), SearchCriteria.Op.NEQ);
@@ -1733,6 +1740,10 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
         }
         if (podId != null) {
             sc.setParameters("podId", podId);
+        }
+        
+        if (storageId != null) {
+            sc.setParameters("storageId", storageId);
         }
 
         if(!isRootAdmin){
@@ -2390,22 +2401,8 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
         Long domainId = cmd.getDomainId();
         Boolean isSystem = cmd.getIsSystem();
         String vmTypeStr = cmd.getSystemVmType();
-        Map<String, String> resourceTags = cmd.getResourceTags();
         
-        SearchBuilder<ServiceOfferingJoinVO> sb = _srvOfferingJoinDao.createSearchBuilder();
-        if (resourceTags != null && !resourceTags.isEmpty()) {
-            SearchBuilder<ResourceTagVO> tagSearch = _resourceTagDao.createSearchBuilder();
-            for (int count=0; count < resourceTags.size(); count++) {
-                tagSearch.or().op("key" + String.valueOf(count), tagSearch.entity().getKey(), SearchCriteria.Op.EQ);
-                tagSearch.and("value" + String.valueOf(count), tagSearch.entity().getValue(), SearchCriteria.Op.EQ);
-                tagSearch.cp();
-            }
-            tagSearch.and("resourceType", tagSearch.entity().getResourceType(), SearchCriteria.Op.EQ);
-            sb.groupBy(sb.entity().getId());
-            sb.join("tagSearch", tagSearch, sb.entity().getId(), tagSearch.entity().getResourceId(), JoinBuilder.JoinType.INNER);
-        }
-        
-        SearchCriteria<ServiceOfferingJoinVO> sc = sb.create();
+        SearchCriteria<ServiceOfferingJoinVO> sc = _srvOfferingJoinDao.createSearchCriteria();
 
         if (caller.getType() != Account.ACCOUNT_TYPE_ADMIN && isSystem) {
             throw new InvalidParameterValueException("Only ROOT admins can access system's offering");
@@ -2423,6 +2420,27 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
             }
         }
 
+        if (vmId != null) {
+            UserVmVO vmInstance = _userVmDao.findById(vmId);
+            if ((vmInstance == null) || (vmInstance.getRemoved() != null)) {
+                InvalidParameterValueException ex = new InvalidParameterValueException(
+                        "unable to find a virtual machine with specified id");
+                ex.addProxyObject(vmId.toString(), "vmId");
+                throw ex;
+            }
+
+            _accountMgr.checkAccess(caller, null, true, vmInstance);
+
+            ServiceOfferingVO offering = _srvOfferingDao.findByIdIncludingRemoved(vmInstance.getServiceOfferingId());
+            sc.addAnd("id", SearchCriteria.Op.NEQ, offering.getId());
+
+            // Only return offerings with the same Guest IP type and storage
+            // pool preference
+            // sc.addAnd("guestIpType", SearchCriteria.Op.EQ,
+            // offering.getGuestIpType());
+            sc.addAnd("useLocalStorage", SearchCriteria.Op.EQ, offering.getUseLocalStorage());
+        }
+
         // boolean includePublicOfferings = false;
         if ((caller.getType() == Account.ACCOUNT_TYPE_NORMAL || caller.getType() == Account.ACCOUNT_TYPE_DOMAIN_ADMIN)
                 || caller.getType() == Account.ACCOUNT_TYPE_RESOURCE_DOMAIN_ADMIN) {
@@ -2432,11 +2450,20 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
             }
             // find all domain Id up to root domain for this account
             List<Long> domainIds = new ArrayList<Long>();
-            DomainVO domainRecord = _domainDao.findById(caller.getDomainId());
-            if (domainRecord == null) {
-                s_logger.error("Could not find the domainId for account:" + caller.getAccountName());
-                throw new CloudAuthenticationException("Could not find the domainId for account:"
-                        + caller.getAccountName());
+            DomainVO domainRecord;
+            if (vmId != null) {
+                 UserVmVO vmInstance = _userVmDao.findById(vmId);
+                 domainRecord = _domainDao.findById(vmInstance.getDomainId());
+                 if ( domainRecord == null ){
+                     s_logger.error("Could not find the domainId for vmId:" + vmId);
+                     throw new CloudAuthenticationException("Could not find the domainId for vmId:" + vmId);
+                 }
+            } else {
+                 domainRecord = _domainDao.findById(caller.getDomainId());
+                 if ( domainRecord == null ){
+                     s_logger.error("Could not find the domainId for account:" + caller.getAccountName());
+                     throw new CloudAuthenticationException("Could not find the domainId for account:" + caller.getAccountName());
+                 }
             }
             domainIds.add(domainRecord.getId());
             while (domainRecord.getParent() != null) {
@@ -2466,25 +2493,6 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
             ssc.addOr("name", SearchCriteria.Op.LIKE, "%" + keyword + "%");
 
             sc.addAnd("name", SearchCriteria.Op.SC, ssc);
-        } else if (vmId != null) {
-            UserVmVO vmInstance = _userVmDao.findById(vmId);
-            if ((vmInstance == null) || (vmInstance.getRemoved() != null)) {
-                InvalidParameterValueException ex = new InvalidParameterValueException(
-                        "unable to find a virtual machine with specified id");
-                ex.addProxyObject(vmId.toString(), "vmId");
-                throw ex;
-            }
-
-            _accountMgr.checkAccess(caller, null, true, vmInstance);
-
-            ServiceOfferingVO offering = _srvOfferingDao.findByIdIncludingRemoved(vmInstance.getServiceOfferingId());
-            sc.addAnd("id", SearchCriteria.Op.NEQ, offering.getId());
-
-            // Only return offerings with the same Guest IP type and storage
-            // pool preference
-            // sc.addAnd("guestIpType", SearchCriteria.Op.EQ,
-            // offering.getGuestIpType());
-            sc.addAnd("useLocalStorage", SearchCriteria.Op.EQ, offering.getUseLocalStorage());
         }
 
         if (id != null) {
@@ -2503,17 +2511,6 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
 
         if (vmTypeStr != null) {
             sc.addAnd("vm_type", SearchCriteria.Op.EQ, vmTypeStr);
-        }
-        
-        
-        if (resourceTags != null && !resourceTags.isEmpty()) {
-            int count = 0;
-            sc.setJoinParameters("tagSearch", "resourceType", TaggedResourceType.ServiceOffering.toString());
-            for (String key : resourceTags.keySet()) {
-                sc.setJoinParameters("tagSearch", "key" + String.valueOf(count), key);
-                sc.setJoinParameters("tagSearch", "value" + String.valueOf(count), resourceTags.get(key));
-                count++;
-            }
         }
 
         return _srvOfferingJoinDao.searchAndCount(sc, searchFilter);
@@ -2536,9 +2533,23 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
         String keyword = cmd.getKeyword();
         String name = cmd.getName();
         String networkType = cmd.getNetworkType();
-
+        Map<String, String> resourceTags = cmd.getTags();
+        
+        SearchBuilder<DataCenterJoinVO> sb = _dcJoinDao.createSearchBuilder();
+        if (resourceTags != null && !resourceTags.isEmpty()) {
+            SearchBuilder<ResourceTagVO> tagSearch = _resourceTagDao.createSearchBuilder();
+            for (int count=0; count < resourceTags.size(); count++) {
+                tagSearch.or().op("key" + String.valueOf(count), tagSearch.entity().getKey(), SearchCriteria.Op.EQ);
+                tagSearch.and("value" + String.valueOf(count), tagSearch.entity().getValue(), SearchCriteria.Op.EQ);
+                tagSearch.cp();
+            }
+            tagSearch.and("resourceType", tagSearch.entity().getResourceType(), SearchCriteria.Op.EQ);
+            sb.groupBy(sb.entity().getId());
+            sb.join("tagSearch", tagSearch, sb.entity().getId(), tagSearch.entity().getResourceId(), JoinBuilder.JoinType.INNER);
+        }
+        
         Filter searchFilter = new Filter(DataCenterJoinVO.class, null, false, cmd.getStartIndex(), cmd.getPageSizeVal());
-        SearchCriteria<DataCenterJoinVO> sc = _dcJoinDao.createSearchCriteria();
+        SearchCriteria<DataCenterJoinVO> sc = sb.create();
 
         if (networkType != null) {
             sc.addAnd("networkType", SearchCriteria.Op.EQ, networkType);
@@ -2685,6 +2696,16 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
                     }
 
                 }
+            }
+        }
+        
+        if (resourceTags != null && !resourceTags.isEmpty()) {
+            int count = 0;
+            sc.setJoinParameters("tagSearch", "resourceType", ResourceObjectType.Zone.toString());
+            for (String key : resourceTags.keySet()) {
+                sc.setJoinParameters("tagSearch", "key" + String.valueOf(count), key);
+                sc.setJoinParameters("tagSearch", "value" + String.valueOf(count), resourceTags.get(key));
+                count++;
             }
         }
 
@@ -2874,7 +2895,8 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
                     }
 
                     // get all child domain ID's
-                    if (_accountMgr.isAdmin(account.getType())) {
+                    if (_accountMgr.isAdmin(account.getType()) 
+                            || (templateFilter == TemplateFilter.featured || templateFilter == TemplateFilter.community)) {
                         List<DomainVO> allChildDomains = _domainDao.findAllChildren(accountDomain.getPath(),
                                 accountDomain.getId());
                         for (DomainVO childDomain : allChildDomains) {
@@ -2936,9 +2958,9 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
                     scTag.addAnd("tagKey", SearchCriteria.Op.EQ, key);
                     scTag.addAnd("tagValue", SearchCriteria.Op.EQ, tags.get(key));
                     if (isIso) {
-                        scTag.addAnd("tagResourceType", SearchCriteria.Op.EQ, TaggedResourceType.ISO);
+                        scTag.addAnd("tagResourceType", SearchCriteria.Op.EQ, ResourceObjectType.ISO);
                     } else {
-                        scTag.addAnd("tagResourceType", SearchCriteria.Op.EQ, TaggedResourceType.Template);
+                        scTag.addAnd("tagResourceType", SearchCriteria.Op.EQ, ResourceObjectType.Template);
                     }
                     scc.addOr("tagKey", SearchCriteria.Op.SC, scTag);
                     count++;
@@ -3251,58 +3273,31 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
     }
 
     @Override
-    public List<ResourceDetailResponse> listResource(ListResourceDetailsCmd cmd) {
+    public List<ResourceDetailResponse> listResourceDetails(ListResourceDetailsCmd cmd) {
         String key = cmd.getKey();
-        ResourceTag.TaggedResourceType resourceType = cmd.getResourceType();
-        String resourceId = cmd.getResourceId();
-        Long id = _taggedResourceMgr.getResourceId(resourceId, resourceType);
-        List<ResourceDetailResponse> responseList = new ArrayList<ResourceDetailResponse>();
-        List<? extends ResourceDetail> detailList = new ArrayList<ResourceDetail>();
+        Boolean forDisplay = cmd.forDisplay();
+        ResourceTag.ResourceObjectType resourceType = cmd.getResourceType();
+        String resourceIdStr = cmd.getResourceId();
+        long resourceId = _taggedResourceMgr.getResourceId(resourceIdStr, resourceType);
+        List<? extends ResourceDetail> detailList = new ArrayList<ResourceDetail>();        
         ResourceDetail requestedDetail = null;
 
-        
-        if (resourceType == ResourceTag.TaggedResourceType.Volume) {
-            if (key == null) {
-                detailList = _volumeDetailDao.findDetails(id);
-            } else {
-                requestedDetail = _volumeDetailDao.findDetail(id, key);
+        if (key == null) {
+            detailList = _resourceMetaDataMgr.getDetailsList(resourceId, resourceType, forDisplay);
+        } else {
+            requestedDetail = _resourceMetaDataMgr.getDetail(resourceId, resourceType, key);
+            if (forDisplay != null && requestedDetail.isDisplay() != forDisplay) {
+                requestedDetail = null;
             }
-        } else if (resourceType == ResourceTag.TaggedResourceType.Nic){
-            if (key == null) {
-                detailList = _nicDetailDao.findDetails(id);
-            } else {
-                requestedDetail = _nicDetailDao.findDetail(id, key);
-            }
-        } else if (resourceType == ResourceTag.TaggedResourceType.UserVm){
-            if (key == null) {
-                detailList = _userVmDetailDao.findDetailsList(id);
-            } else {
-                requestedDetail = _userVmDetailDao.findDetail(id, key);
-            }
-        } else if (resourceType == ResourceTag.TaggedResourceType.Zone){
-            if (key == null) {
-                detailList = _dcDetailsDao.findDetailsList(id);
-            } else {
-                requestedDetail = _dcDetailsDao.findDetail(id, key);
-            }
-        } else if (resourceType == TaggedResourceType.Network){
-            if (key == null) {
-                detailList = _networkDetailsDao.findDetails(id);
-            } else {
-                requestedDetail = _networkDetailsDao.findDetail(id, key);
-            }
-        }else {
-            throw new UnsupportedServiceException("Resource type " + resourceType + " is not supported by the cloudStack");
         }
         
+        List<ResourceDetailResponse> responseList = new ArrayList<ResourceDetailResponse>();
         if (requestedDetail != null) {
-            ResourceDetailResponse detailResponse = createResourceDetailsResponse(id, requestedDetail.getName(), requestedDetail.getValue(),
-                    resourceType);
+            ResourceDetailResponse detailResponse = createResourceDetailsResponse(requestedDetail, resourceType);
             responseList.add(detailResponse);
         } else {
             for (ResourceDetail detail : detailList) {
-                ResourceDetailResponse detailResponse = createResourceDetailsResponse(id, detail.getName(), detail.getValue(),
-                        resourceType);
+                ResourceDetailResponse detailResponse = createResourceDetailsResponse(detail, resourceType);
                 responseList.add(detailResponse);
             }
         }
@@ -3311,12 +3306,13 @@ public class QueryManagerImpl extends ManagerBase implements QueryService {
     }
 
     
-    protected ResourceDetailResponse createResourceDetailsResponse(long resourceId, String key, String value, ResourceTag.TaggedResourceType type) {
+    protected ResourceDetailResponse createResourceDetailsResponse(ResourceDetail requestedDetail, ResourceTag.ResourceObjectType resourceType) {
         ResourceDetailResponse resourceDetailResponse = new ResourceDetailResponse();
-        resourceDetailResponse.setResourceId(String.valueOf(resourceId));
-        resourceDetailResponse.setName(key);
-        resourceDetailResponse.setValue(value);
-        resourceDetailResponse.setResourceType(type.toString());
+        resourceDetailResponse.setResourceId(String.valueOf(requestedDetail.getResourceId()));
+        resourceDetailResponse.setName(requestedDetail.getName());
+        resourceDetailResponse.setValue(requestedDetail.getValue());
+        resourceDetailResponse.setForDisplay(requestedDetail.isDisplay());
+        resourceDetailResponse.setResourceType(resourceType.toString().toString());
         resourceDetailResponse.setObjectName("resourcedetail");
         return resourceDetailResponse;
     }

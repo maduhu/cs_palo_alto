@@ -19,13 +19,28 @@
 """
 
 #Import Local Modules
-from marvin.cloudstackTestCase import *
-from marvin.integration.lib.base import *
-from marvin.integration.lib.common import *
+from marvin.integration.lib.base import (VirtualMachine,
+                                         SSHKeyPair,
+                                         Account,
+                                         Template,
+                                         ServiceOffering,
+                                         EgressFireWallRule)
+from marvin.integration.lib.common import (get_domain,
+                                           get_zone,
+                                           get_template,
+                                           list_virtual_machines,
+                                           list_volumes)
+from marvin.integration.lib.utils import (cleanup_resources,
+                                          random_gen,
+                                          validateList)
+from marvin.cloudstackTestCase import cloudstackTestCase, unittest
+from marvin.codes import PASS, RUNNING
+
 #Import System modules
 import tempfile
 import os
 from nose.plugins.attrib import attr
+import time
 
 
 class Services:
@@ -81,6 +96,18 @@ class Services:
             "timeout": 10,
             "mode": 'advanced',
         }
+
+def wait_vm_start(apiclient, vmid, timeout, sleep):
+    while timeout:
+        vms = VirtualMachine.list(apiclient, id=vmid)
+        vm_list_validation_result = validateList(vms)
+        if vm_list_validation_result[0] == PASS and vm_list_validation_result[1].state == RUNNING:
+            return timeout
+        time.sleep(sleep)
+        timeout = timeout - 1
+
+    return timeout
+
 
 class TestResetSSHKeypair(cloudstackTestCase):
 
@@ -339,7 +366,6 @@ class TestResetSSHKeypair(cloudstackTestCase):
         except Exception as e:
             self.fail("Failed to reset SSH key: %s, %s" %
                                                 (virtual_machine.name, e))
-        return
         self.debug("Starting the virtual machine after resetting the keypair")
         try:
             virtual_machine.start(self.apiclient)
@@ -347,17 +373,13 @@ class TestResetSSHKeypair(cloudstackTestCase):
             self.fail("Failed to start virtual machine: %s, %s" %
                                                     (virtual_machine.name, e))
 
-        while True:
-            vms = VirtualMachine.list(
-                                  self.apiclient,
-                                  account=self.account.name,
-                                  domainid=self.account.domainid,
-                                  listall=True
-                                  )
-            if vms[0].state == "Running":
-                break
-            self.debug("Vm not in Running state sleep 60s")
-            time.sleep(60)
+        timeout = wait_vm_start(self.apiclient, virtual_machine.id, self.services["timeout"],
+                            self.services["sleep"])
+
+        if timeout == 0:
+            self.fail("The virtual machine %s failed to start even after %s minutes"
+                   % (virtual_machine.name, self.services["timeout"]))
+
         self.debug("SSH key path: %s" % str(keyPairFilePath))
         try:
             virtual_machine.get_ssh_client(keyPairFileLocation=str(keyPairFilePath))
@@ -461,17 +483,12 @@ class TestResetSSHKeypair(cloudstackTestCase):
             self.fail("Failed to start virtual machine: %s, %s" %
                                                     (virtual_machine.name, e))
 
-        while True:
-            vms = VirtualMachine.list(
-                                  self.apiclient,
-                                  account=self.account.name,
-                                  domainid=self.account.domainid,
-                                  listall=True
-                                  )
-            if vms[0].state == "Running":
-                break
-            self.debug("Vm not in Running state sleep 60s")
-            time.sleep(60)
+        timeout = wait_vm_start(self.apiclient, virtual_machine.id, self.services["timeout"],
+                            self.services["sleep"])
+
+        if timeout == 0:
+            self.fail("The virtual machine %s failed to start even after %s minutes"
+                   % (virtual_machine.name, self.services["timeout"]))
 
         self.debug("SSHing with new keypair")
         try:
@@ -575,17 +592,13 @@ class TestResetSSHKeypair(cloudstackTestCase):
         except Exception as e:
             self.fail("Failed to start virtual machine: %s, %s" %
                                                     (virtual_machine.name, e))
-        while True:
-            vms = VirtualMachine.list(
-                                  self.apiclient,
-                                  account=self.account.name,
-                                  domainid=self.account.domainid,
-                                  listall=True
-                                  )
-            if vms[0].state == "Running":
-                break
-            self.debug("Vm not in Running state sleep 60s")
-            time.sleep(60)
+
+        timeout = wait_vm_start(self.apiclient, virtual_machine.id, self.services["timeout"],
+                            self.services["sleep"])
+
+        if timeout == 0:
+            self.fail("The virtual machine %s failed to start even after %s minutes"
+                   % (virtual_machine.name, self.services["timeout"]))
 
         self.debug("SSHing with new keypair")
         try:
@@ -690,17 +703,13 @@ class TestResetSSHKeypair(cloudstackTestCase):
         except Exception as e:
             self.fail("Failed to start virtual machine: %s, %s" %
                                                     (virtual_machine.name, e))
-        while True:
-            vms = VirtualMachine.list(
-                                  self.apiclient,
-                                  account=self.account.name,
-                                  domainid=self.account.domainid,
-                                  listall=True
-                                  )
-            if vms[0].state == "Running":
-                break
-            self.debug("Vm not in Running state sleep 60s")
-            time.sleep(60)
+
+        timeout = wait_vm_start(self.apiclient, virtual_machine.id, self.services["timeout"],
+                            self.services["sleep"])
+
+        if timeout == 0:
+            self.fail("The virtual machine %s failed to start even after %s minutes"
+                   % (virtual_machine.name, self.services["timeout"]))
 
         self.debug("SSHing with new keypair")
         try:
@@ -1206,18 +1215,14 @@ class TestResetSSHKeyUserRights(cloudstackTestCase):
             virtual_machine.start(self.apiclient)
         except Exception as e:
             self.fail("Failed to start virtual machine: %s, %s" %
-                                                    (virtual_machine.name, e))
-        while True:
-            vms = VirtualMachine.list(
-                                  self.apiclient,
-                                  account=self.user_account.name,
-                                  domainid=self.user_account.domainid,
-                                  listall=True
-                                  )
-            if vms[0].state == "Running":
-                break
-            self.debug("Vm not in Running state sleep 60s")
-            time.sleep(60)
+                                           (virtual_machine.name, e))
+
+        timeout = wait_vm_start(self.apiclient, virtual_machine.id, self.services["timeout"],
+                            self.services["sleep"])
+
+        if timeout == 0:
+            self.fail("The virtual machine %s failed to start even after %s minutes"
+                   % (vms[0].name, self.services["timeout"]))
 
         self.debug("SSHing with new keypair")
         try:
@@ -1350,17 +1355,13 @@ class TestResetSSHKeyUserRights(cloudstackTestCase):
         except Exception as e:
             self.fail("Failed to start virtual machine: %s, %s" %
                                                     (virtual_machine.name, e))
-        while True:
-            vms = VirtualMachine.list(
-                                  self.apiclient,
-                                  account=self.account.name,
-                                  domainid=self.account.domainid,
-                                  listall=True
-                                  )
-            if vms[0].state == "Running":
-                break
-            self.debug("Vm not in Running state sleep 60s")
-            time.sleep(60)
+
+        timeout = wait_vm_start(self.apiclient, virtual_machine.id, self.services["timeout"],
+                            self.services["sleep"])
+
+        if timeout == 0:
+            self.fail("The virtual machine %s failed to start even after %s minutes"
+                   % (virtual_machine.name, self.services["timeout"]))
 
         self.debug("SSHing with new keypair")
         try:
@@ -1494,17 +1495,13 @@ class TestResetSSHKeyUserRights(cloudstackTestCase):
         except Exception as e:
             self.fail("Failed to start virtual machine: %s, %s" %
                                                     (virtual_machine.name, e))
-        while True:
-            vms = VirtualMachine.list(
-                                  self.apiclient,
-                                  account=self.account.name,
-                                  domainid=self.account.domainid,
-                                  listall=True
-                                  )
-            if vms[0].state == "Running":
-                break
-            self.debug("Vm not in Running state sleep 60s")
-            time.sleep(60)
+
+        timeout = wait_vm_start(self.apiclient, virtual_machine.id, self.services["timeout"],
+                            self.services["sleep"])
+
+        if timeout == 0:
+            self.fail("The virtual machine %s failed to start even after %s minutes"
+                   % (virtual_machine.name, self.services["timeout"]))
 
         self.debug("SSHing with new keypair")
         try:

@@ -364,7 +364,7 @@
                                         return total;
                                     };
 
-                                    complete($.extend(data, {
+                                    dataFns.socketInfo($.extend(data, {
                                         cpuCapacityTotal: capacityTotal(1, cloudStack.converters.convertHz),
                                         memCapacityTotal: capacityTotal(0, cloudStack.converters.convertBytes),
                                         storageCapacityTotal: capacityTotal(2, cloudStack.converters.convertBytes)
@@ -372,12 +372,18 @@
                                 }
                             });
                         } else {
-                            complete($.extend(data, {
+                            dataFns.socketInfo($.extend(data, {
                                 cpuCapacityTotal: cloudStack.converters.convertHz(0),
                                 memCapacityTotal: cloudStack.converters.convertBytes(0),
                                 storageCapacityTotal: cloudStack.converters.convertBytes(0)
                             }));
                         }
+                    },
+
+                    socketInfo: function(data) {
+                        complete($.extend(data, {
+                            socketCount: 0
+                        }));
                     }
                 };
 
@@ -1146,7 +1152,7 @@
                                         label: 'label.state'
                                     },
                                     vlan: {
-                                        label: 'VLAN Range(s)',
+                                        label: 'VLAN/VNI Range(s)',
                                         isEditable: true
                                     },
                                     tags: {
@@ -1378,7 +1384,7 @@
                                             label: 'label.type'
                                         },
                                         vlan: {
-                                            label: 'label.vlan.id'
+                                            label: 'label.vnet.id'
                                         },
                                         broadcasturi: {
                                             label: 'broadcast URI'
@@ -1814,13 +1820,13 @@
                             },
 
                             dedicatedGuestVlanRanges: {
-                                title: 'Dedicated VLAN Ranges',
+                                title: 'Dedicated VLAN/VNI Ranges',
                                 listView: {
                                     section: 'dedicatedGuestVlanRanges',
                                     id: 'dedicatedGuestVlanRanges',
                                     fields: {
                                         guestvlanrange: {
-                                            label: 'VLAN Range(s)'
+                                            label: 'VLAN/VNI Range(s)'
                                         },
                                         domain: {
                                             label: 'label.domain'
@@ -1845,17 +1851,17 @@
                                     },
                                     actions: {
                                         add: {
-                                            label: 'Dedicate VLAN Range',
+                                            label: 'Dedicate VLAN/VNI Range',
                                             messages: {
                                                 notification: function(args) {
-                                                    return 'Dedicate VLAN Range';
+                                                    return 'Dedicate VLAN/VNI Range';
                                                 }
                                             },
                                             createForm: {
-                                                title: 'Dedicate VLAN Range',
+                                                title: 'Dedicate VLAN/VNI Range',
                                                 fields: {
                                                     vlanrange: {
-                                                        label: 'VLAN Range',
+                                                        label: 'VLAN/VNI Range',
                                                         /*  select: function(args) {
                               var items = [];
                               if(args.context.physicalNetworks[0].vlan != null && args.context.physicalNetworks[0].vlan.length > 0) {
@@ -7393,6 +7399,47 @@
                                     }
                                 }
                             });
+
+                            return listView;
+                        },
+
+                        sockets: function() {
+                            var listView = {
+                                id: 'sockets',
+                                fields: {
+                                    hypervisor: { label: 'label.hypervisor' },                                    
+                                    hosts: { label: 'label.hosts' },
+                                    sockets: { label: 'label.sockets' }
+                                },
+                                dataProvider: function(args) {
+                                    $.ajax({
+                                        url: createURL('listHypervisors'),
+                                        success: function(json) {
+                                            args.response.success({
+                                                data: $(json.listhypervisorsresponse.hypervisor).map(function(index, hypervisor) {                                                	
+                                                	var hostCount;
+                                                	$.ajax({
+                                                		url: createURL('listHosts'),
+                                                		async: false,
+                                                		data: {
+                                                			hypervisortype: hypervisor.name
+                                                		},
+                                                		success: function(json) {                                                			
+                                                			hostCount = json.listhostsresponse.count;
+                                                		}
+                                                	});                                                	                                               	
+                                                	
+                                                    return {
+                                                        hypervisor: hypervisor.name,
+                                                        hosts: hostCount,
+                                                        sockets: 0                                                        
+                                                    };
+                                                })
+                                            });
+                                        }
+                                    });
+                                }
+                            };
 
                             return listView;
                         }
@@ -14305,6 +14352,7 @@
                                 title: 'Blades',
                                 listView: {
                                     id: 'blades',
+                                    hideSearchBar: true,
                                     fields: {
                                         chassis: {
                                             label: 'Chassis'
@@ -14813,6 +14861,7 @@
                                                                     $form.find('.form-item[rel=sockettimeout]').css('display', 'inline-block');
 
                                                                     $form.find('.form-item[rel=createNfsCache]').find('input').attr('checked', 'checked');
+                                                                    $form.find('.form-item[rel=createNfsCache]').find('input').attr('disabled', 'disabled');  //Create NFS staging is required for S3 at this moment. So, disallow user to uncheck "Create NFS Secondary Staging" checkbox
                                                                     $form.find('.form-item[rel=createNfsCache]').css('display', 'inline-block');
                                                                     $form.find('.form-item[rel=nfsCacheZoneid]').css('display', 'inline-block');
                                                                     $form.find('.form-item[rel=nfsCacheNfsServer]').css('display', 'inline-block');
@@ -15202,7 +15251,38 @@
                             detailView: {
                                 name: 'Secondary storage details',
                                 isMaximized: true,
-                                actions: {
+                                actions: {                                	
+                                	prepareObjectStoreMigration: {
+                                        label: 'Prepare Object Store Migration',
+                                        messages: {
+                                            confirm: function(args) {
+                                                return 'Please confirm you want to prepare migration of secondary storage to object store.';
+                                            },
+                                            notification: function(args) {
+                                                return 'Prepare Object Store Migration';
+                                            }
+                                        },
+                                        action: function(args) {                                        	
+                                            $.ajax({
+                                                url: createURL('prepareSecondaryStorageForMigration'),
+                                                data: {
+                                                    id: args.context.secondaryStorage[0].id
+                                                },                                                
+                                                success: function(json) {                                                    
+                                                	var jid = json.preparesecondarystorageformigrationresponse.jobid;
+                                                    args.response.success({
+                                                        _custom: {
+                                                            jobId: jid
+                                                        }
+                                                    });                                                    
+                                                }
+                                            });
+                                        },
+                                        notification: {
+                                            poll: pollAsyncJobResult
+                                        }
+                                    },                                	
+                                	
                                     remove: {
                                         label: 'label.action.delete.secondary.storage',
                                         messages: {
@@ -16710,6 +16790,11 @@
         var jsonObj = args.context.item;
         var allowedActions = [];
         allowedActions.push("remove");
+                
+        if (jsonObj.providername == 'NFS') {
+        	allowedActions.push("prepareObjectStoreMigration");
+        }
+        
         return allowedActions;
     }
 

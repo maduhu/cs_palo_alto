@@ -40,6 +40,7 @@ import org.apache.cloudstack.engine.subsystem.api.storage.EndPoint;
 import org.apache.cloudstack.engine.subsystem.api.storage.EndPointSelector;
 import org.apache.cloudstack.engine.subsystem.api.storage.ObjectInDataStoreStateMachine;
 import org.apache.cloudstack.engine.subsystem.api.storage.ObjectInDataStoreStateMachine.Event;
+import org.apache.cloudstack.engine.subsystem.api.storage.PrimaryDataStore;
 import org.apache.cloudstack.engine.subsystem.api.storage.PrimaryDataStoreDriver;
 import org.apache.cloudstack.engine.subsystem.api.storage.Scope;
 import org.apache.cloudstack.engine.subsystem.api.storage.SnapshotInfo;
@@ -55,9 +56,6 @@ import org.apache.cloudstack.framework.config.dao.ConfigurationDao;
 import org.apache.cloudstack.storage.command.CommandResult;
 import org.apache.cloudstack.storage.command.CopyCmdAnswer;
 import org.apache.cloudstack.storage.command.DeleteCommand;
-import org.apache.cloudstack.storage.datastore.DataObjectManager;
-import org.apache.cloudstack.storage.datastore.ObjectInDataStoreManager;
-import org.apache.cloudstack.storage.datastore.PrimaryDataStore;
 import org.apache.cloudstack.storage.datastore.PrimaryDataStoreProviderManager;
 import org.apache.cloudstack.storage.datastore.db.VolumeDataStoreDao;
 import org.apache.cloudstack.storage.datastore.db.VolumeDataStoreVO;
@@ -102,10 +100,6 @@ public class VolumeServiceImpl implements VolumeService {
     VolumeDao volDao;
     @Inject
     PrimaryDataStoreProviderManager dataStoreMgr;
-    @Inject
-    ObjectInDataStoreManager objectInDataStoreMgr;
-    @Inject
-    DataObjectManager dataObjectMgr;
     @Inject
     DataMotionService motionSrv;
     @Inject
@@ -171,12 +165,24 @@ public class VolumeServiceImpl implements VolumeService {
         DataObject volumeOnStore = dataStore.create(volume);
         volumeOnStore.processEvent(Event.CreateOnlyRequested);
 
-        CreateVolumeContext<VolumeApiResult> context = new CreateVolumeContext<VolumeApiResult>(null, volumeOnStore,
-                future);
-        AsyncCallbackDispatcher<VolumeServiceImpl, CreateCmdResult> caller = AsyncCallbackDispatcher.create(this);
-        caller.setCallback(caller.getTarget().createVolumeCallback(null, null)).setContext(context);
+        try {
+            CreateVolumeContext<VolumeApiResult> context = new CreateVolumeContext<VolumeApiResult>(null, volumeOnStore,
+                    future);
+            AsyncCallbackDispatcher<VolumeServiceImpl, CreateCmdResult> caller = AsyncCallbackDispatcher.create(this);
+            caller.setCallback(caller.getTarget().createVolumeCallback(null, null)).setContext(context);
 
-        dataStore.getDriver().createAsync(dataStore, volumeOnStore, caller);
+            dataStore.getDriver().createAsync(dataStore, volumeOnStore, caller);
+        } catch (CloudRuntimeException ex) {
+            // clean up already persisted volume_store_ref entry in case of createVolumeCallback is never called
+            VolumeDataStoreVO volStoreVO = _volumeStoreDao.findByStoreVolume(dataStore.getId(), volume.getId());
+            if (volStoreVO != null) {
+                VolumeInfo volObj = volFactory.getVolume(volume, dataStore);
+                volObj.processEvent(ObjectInDataStoreStateMachine.Event.OperationFailed);
+            }
+            VolumeApiResult volResult = new VolumeApiResult((VolumeObject)volumeOnStore);
+            volResult.setResult(ex.getMessage());
+            future.complete(volResult);
+        }
         return future;
     }
 
@@ -400,8 +406,12 @@ public class VolumeServiceImpl implements VolumeService {
 
         VMTemplateStoragePoolVO templatePoolRef = _tmpltPoolDao.findByPoolTemplate(dataStore.getId(), template.getId());
         if (templatePoolRef == null) {
-            throw new CloudRuntimeException("Failed to find template " + template.getUniqueName()
-                    + " in VMTemplateStoragePool");
+            throw new CloudRuntimeException("Failed to find template " + template.getUniqueName() + " in storage pool " + dataStore.getId());
+        } else {
+            if (s_logger.isDebugEnabled()) {
+                s_logger.debug("Found template " + template.getUniqueName() + " in storage pool " + dataStore.getId() + " with VMTemplateStoragePool id: "
+                        + templatePoolRef.getId());
+            }
         }
         long templatePoolRefId = templatePoolRef.getId();
         CreateBaseImageContext<CreateCmdResult> context = new CreateBaseImageContext<CreateCmdResult>(null, volume,
@@ -411,9 +421,15 @@ public class VolumeServiceImpl implements VolumeService {
 
         int storagePoolMaxWaitSeconds = NumbersUtil.parseInt(
                 configDao.getValue(Config.StoragePoolMaxWaitSeconds.key()), 3600);
+        if (s_logger.isDebugEnabled()) {
+            s_logger.debug("Acquire lock on VMTemplateStoragePool " + templatePoolRefId + " with timeout " + storagePoolMaxWaitSeconds + " seconds");
+        }
         templatePoolRef = _tmpltPoolDao.acquireInLockTable(templatePoolRefId, storagePoolMaxWaitSeconds);
 
         if (templatePoolRef == null) {
+            if (s_logger.isDebugEnabled()) {
+                s_logger.info("Unable to acquire lock on VMTemplateStoragePool " + templatePoolRefId);
+            }
             templatePoolRef = _tmpltPoolDao.findByPoolTemplate(dataStore.getId(), template.getId());
             if (templatePoolRef.getState() == ObjectInDataStoreStateMachine.State.Ready ) {
                 s_logger.info("Unable to acquire lock on VMTemplateStoragePool " + templatePoolRefId + ", But Template " + template.getUniqueName() + " is already copied to primary storage, skip copying");
@@ -423,25 +439,28 @@ public class VolumeServiceImpl implements VolumeService {
             throw new CloudRuntimeException("Unable to acquire lock on VMTemplateStoragePool: " + templatePoolRefId);
         }
 
+        if (s_logger.isDebugEnabled()) {
+            s_logger.info("lock is acquired for VMTemplateStoragePool " + templatePoolRefId);
+        }
         try {
-            // lock acquired
             if (templatePoolRef.getState() == ObjectInDataStoreStateMachine.State.Ready ) {
                 s_logger.info("Template " + template.getUniqueName() + " is already copied to primary storage, skip copying");
                 createVolumeFromBaseImageAsync(volume, templateOnPrimaryStoreObj, dataStore, future);
                 return;
             }
-            // remove the leftover hanging entry
-            dataStore.delete(templateOnPrimaryStoreObj);
-            // create a new entry to restart copying process
-            templateOnPrimaryStoreObj = dataStore.create(template);
             templateOnPrimaryStoreObj.processEvent(Event.CreateOnlyRequested);
             motionSrv.copyAsync(template, templateOnPrimaryStoreObj, caller);
         } catch (Throwable e) {
             s_logger.debug("failed to create template on storage", e);
             templateOnPrimaryStoreObj.processEvent(Event.OperationFailed);
+            dataStore.create(template);  // make sure that template_spool_ref entry is still present so that the second thread can acquire the lock
             VolumeApiResult result = new VolumeApiResult(volume);
             result.setResult(e.toString());
             future.complete(result);
+        } finally {
+            if (s_logger.isDebugEnabled()) {
+                s_logger.info("releasing lock for VMTemplateStoragePool " + templatePoolRefId);
+            }
             _tmpltPoolDao.releaseFromLockTable(templatePoolRefId);
         }
         return;
@@ -713,7 +732,7 @@ public class VolumeServiceImpl implements VolumeService {
 
             srcVolume.processEvent(Event.OperationSuccessed);
             destVolume.processEvent(Event.OperationSuccessed, result.getAnswer());
-            // srcVolume.getDataStore().delete(srcVolume);
+            srcVolume.getDataStore().delete(srcVolume);
             future.complete(res);
         } catch (Exception e) {
             res.setResult(e.toString());
@@ -1016,13 +1035,25 @@ public class VolumeServiceImpl implements VolumeService {
 
         volumeOnStore.processEvent(Event.CreateOnlyRequested);
 
-        CreateVolumeContext<VolumeApiResult> context = new CreateVolumeContext<VolumeApiResult>(null, volumeOnStore,
-                future);
-        AsyncCallbackDispatcher<VolumeServiceImpl, CreateCmdResult> caller = AsyncCallbackDispatcher.create(this);
-        caller.setCallback(caller.getTarget().registerVolumeCallback(null, null));
-        caller.setContext(context);
+        try {
+            CreateVolumeContext<VolumeApiResult> context = new CreateVolumeContext<VolumeApiResult>(null, volumeOnStore,
+                    future);
+            AsyncCallbackDispatcher<VolumeServiceImpl, CreateCmdResult> caller = AsyncCallbackDispatcher.create(this);
+            caller.setCallback(caller.getTarget().registerVolumeCallback(null, null));
+            caller.setContext(context);
 
-        store.getDriver().createAsync(store, volumeOnStore, caller);
+            store.getDriver().createAsync(store, volumeOnStore, caller);
+        } catch (CloudRuntimeException ex) {
+            // clean up already persisted volume_store_ref entry in case of createVolumeCallback is never called
+            VolumeDataStoreVO volStoreVO = _volumeStoreDao.findByStoreVolume(store.getId(), volume.getId());
+            if (volStoreVO != null) {
+                VolumeInfo volObj = volFactory.getVolume(volume, store);
+                volObj.processEvent(ObjectInDataStoreStateMachine.Event.OperationFailed);
+            }
+            VolumeApiResult res = new VolumeApiResult((VolumeObject)volumeOnStore);
+            res.setResult(ex.getMessage());
+            future.complete(res);
+        }
         return future;
     }
 
@@ -1252,7 +1283,14 @@ public class VolumeServiceImpl implements VolumeService {
                         tmplTO.setId(tInfo.getId());
                         DeleteCommand dtCommand = new DeleteCommand(tmplTO);
                         EndPoint ep = _epSelector.select(store);
-                        Answer answer = ep.sendMessage(dtCommand);
+                        Answer answer = null;
+                        if (ep == null) {
+                            String errMsg = "No remote endpoint to send command, check if host or ssvm is down?";
+                            s_logger.error(errMsg);
+                            answer = new Answer(dtCommand, false, errMsg);
+                        } else {
+                            answer = ep.sendMessage(dtCommand);
+                        }
                         if (answer == null || !answer.getResult()) {
                             s_logger.info("Failed to deleted volume at store: " + store.getName());
 
@@ -1277,7 +1315,14 @@ public class VolumeServiceImpl implements VolumeService {
     private Map<Long, TemplateProp> listVolume(DataStore store) {
         ListVolumeCommand cmd = new ListVolumeCommand(store.getTO(), store.getUri());
         EndPoint ep = _epSelector.select(store);
-        Answer answer = ep.sendMessage(cmd);
+        Answer answer = null;
+        if (ep == null) {
+            String errMsg = "No remote endpoint to send command, check if host or ssvm is down?";
+            s_logger.error(errMsg);
+            answer = new Answer(cmd, false, errMsg);
+        } else {
+            answer = ep.sendMessage(cmd);
+        }
         if (answer != null && answer.getResult()) {
             ListVolumeAnswer tanswer = (ListVolumeAnswer) answer;
             return tanswer.getTemplateInfo();

@@ -2792,7 +2792,12 @@
                                                     }
                                                 });
                                             }
-                                        }
+                                        },                                        
+                                        passive: {
+                                            label: 'Passive',                                            
+                                            isBoolean: true,
+                                            isChecked: false
+                                        }                                        
                                     }
                                 },
                                 action: function(args) {
@@ -2819,7 +2824,8 @@
                                         url: createURL('createVpnConnection'),
                                         data: {
                                             s2svpngatewayid: vpngatewayid,
-                                            s2scustomergatewayid: args.data.vpncustomergatewayid
+                                            s2scustomergatewayid: args.data.vpncustomergatewayid,
+                                            passive: (args.data.passive == 'on'? true: false)
                                         },
                                         success: function(json) {
                                             var jid = json.createvpnconnectionresponse.jobid;
@@ -2852,13 +2858,13 @@
                                         id: {
                                             label: 'label.id'
                                         },
-
-                                        //s2svpngatewayid: { label: 'VPN gateway ID' },
+                                        passive: {
+                                            label: 'Passive',
+                                            converter: cloudStack.converters.toBooleanText
+                                        },                                                                                
                                         publicip: {
                                             label: 'label.ip.address'
-                                        },
-
-                                        //s2scustomergatewayid: { label: 'Customer gateway ID' },
+                                        },                                        
                                         gateway: {
                                             label: 'label.gateway'
                                         },

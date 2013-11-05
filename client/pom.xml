@@ -22,6 +22,16 @@
   <dependencies>
     <dependency>
       <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-framework-spring-module</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-framework-spring-lifecycle</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
       <artifactId>cloud-plugin-storage-volume-solidfire</artifactId>
       <version>${project.version}</version>
     </dependency>
@@ -78,6 +88,7 @@
     <dependency>
       <groupId>org.apache.cloudstack</groupId>
       <artifactId>cloud-plugin-network-palo-alto</artifactId>
+      <artifactId>cloud-plugin-network-contrail</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -145,6 +156,11 @@
           <artifactId>servlet-api</artifactId>
         </exclusion>
       </exclusions>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.cloudstack</groupId>
+      <artifactId>cloud-plugin-hypervisor-hyperv</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>org.apache.cloudstack</groupId>
@@ -473,21 +489,6 @@
             </configuration>
           </execution>
           <execution>
-            <id>process-simulator-context</id>
-            <phase>process-resources</phase>
-            <goals>
-              <goal>run</goal>
-            </goals>
-            <configuration>
-              <target if="${simulator}">
-                <echo>test</echo>
-                <replaceregexp file="${basedir}/target/generated-webapp/WEB-INF/web.xml"
-                  match="classpath:componentContext.xml"
-                  replace="classpath:simulatorComponentContext.xml" byline="true"/>
-              </target>
-            </configuration>
-          </execution>
-          <execution>
             <id>process-noredist-spring-context</id>
             <phase>process-resources</phase>
             <goals>
@@ -504,22 +505,6 @@
                     <include name="**/*"/>
                   </fileset>
                 </copy>
-              </target>
-            </configuration>
-          </execution>
-          <execution>
-            <id>process-quickcloud-spring-context</id>
-            <phase>process-resources</phase>
-            <goals>
-              <goal>run</goal>
-            </goals>
-            <configuration>
-              <target if="${quickcloud}">
-                <echo>quickcloud</echo>
-                <replaceregexp
-                  file="${basedir}/target/generated-webapp/WEB-INF/classes/applicationContext.xml"
-                  match="com.cloud.consoleproxy.ConsoleProxyManagerImpl"
-                  replace="com.cloud.consoleproxy.StaticConsoleProxyManager" byline="true"/>
               </target>
             </configuration>
           </execution>
@@ -731,6 +716,21 @@
         <dependency>
           <groupId>org.apache.cloudstack</groupId>
           <artifactId>cloud-plugin-network-cisco-vnmc</artifactId>
+          <version>${project.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
+      <id>quickcloud</id>
+      <activation>
+        <property>
+          <name>quickcloud</name>
+        </property>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>org.apache.cloudstack</groupId>
+          <artifactId>cloud-quickcloud</artifactId>
           <version>${project.version}</version>
         </dependency>
       </dependencies>

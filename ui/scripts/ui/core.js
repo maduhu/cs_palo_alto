@@ -61,6 +61,10 @@
                 );
             }
 
+            if (args.isPlugin) {
+                $li.hide();
+            }
+
             $li.appendTo($navList);
 
             return true;
@@ -84,18 +88,25 @@
             return $(this).hasClass(sectionID);
         });
         var data = args.sections[sectionID];
+        var isPlugin = data.isPlugin;
 
         data.$browser = $browser;
-        $navItem.siblings().removeClass('active');
-        $navItem.addClass('active');
 
         // Reset browser panels
-        $browser.cloudBrowser('removeAllPanels');
+        if (!isPlugin) {
+            $navItem.siblings().removeClass('active');
+            $navItem.addClass('active');
+            $browser.cloudBrowser('removeAllPanels');
+        }
+        
         $browser.cloudBrowser('addPanel', {
             title: '<span class="section">' + _l(data.title) + '</span>' + '<span class="subsection"></span>',
             data: '',
             complete: function($panel, $breadcrumb) {
-                $breadcrumb.attr('title', _l(data.title));
+                if(!isPlugin) {
+                    $breadcrumb.attr('title', _l(data.title));
+                }
+                
                 data.$breadcrumb = $breadcrumb;
 
                 // Hide breadcrumb if this is the home section
@@ -247,7 +258,7 @@
                     $('<div>').attr({
                         id: 'breadcrumbs'
                     })
-                    .append($('<div>').addClass('home'))
+                    .append($('<div>').addClass('home').html(_l('label.home')))
                     .append($('<div>').addClass('end'))
             )
 
@@ -291,7 +302,7 @@
         var $options = $('<div>').attr({
             id: 'user-options'
         })
-            .appendTo($('#header'));
+            .appendTo($('#user'));
 
         $(['label.logout', 'label.help', 'label.about']).each(function() {
             var $link = $('<a>')

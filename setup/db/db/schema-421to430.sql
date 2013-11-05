@@ -33,11 +33,22 @@ ALTER TABLE `cloud`.`async_job` ADD COLUMN `job_dispatcher` VARCHAR(64);
 ALTER TABLE `cloud`.`async_job` ADD COLUMN `job_executing_msid` bigint;
 ALTER TABLE `cloud`.`async_job` ADD COLUMN `job_pending_signals` int(10) NOT NULL DEFAULT 0;
 
+ALTER TABLE `cloud`.`network_offerings` ADD COLUMN `keep_alive_enabled` int(1) unsigned NOT NULL DEFAULT 1 COMMENT 'true if connection should be reset after requests.';
+
 ALTER TABLE `cloud`.`vm_instance` ADD COLUMN `power_state` VARCHAR(74) DEFAULT 'PowerUnknown';
 ALTER TABLE `cloud`.`vm_instance` ADD COLUMN `power_state_update_time` DATETIME;
 ALTER TABLE `cloud`.`vm_instance` ADD COLUMN `power_state_update_count` INT DEFAULT 0;
 ALTER TABLE `cloud`.`vm_instance` ADD COLUMN `power_host` bigint unsigned;
 ALTER TABLE `cloud`.`vm_instance` ADD CONSTRAINT `fk_vm_instance__power_host` FOREIGN KEY (`power_host`) REFERENCES `cloud`.`host`(`id`);
+
+DROP TABLE IF EXISTS `cloud`.`vm_snapshot_details`;
+CREATE TABLE `cloud`.`vm_snapshot_details` (
+  `id` bigint unsigned UNIQUE NOT NULL,
+  `vm_snapshot_id` bigint unsigned NOT NULL,
+  `name` varchar(255) NOT NULL,
+  `value` varchar(255) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE `cloud`.`vm_work_job` (
   `id` bigint unsigned UNIQUE NOT NULL,
@@ -104,6 +115,11 @@ UPDATE `cloud`.`disk_offering` SET `removed`=NULL;
 UPDATE `cloud`.`vm_template` SET `state`='Inactive' WHERE `removed` IS NOT NULL;
 UPDATE `cloud`.`vm_template` SET `state`='Active' WHERE `removed` IS NULL;
 UPDATE `cloud`.`vm_template` SET `removed`=NULL;
+
+ALTER TABLE `cloud`.`remote_access_vpn` MODIFY COLUMN `network_id` bigint unsigned;
+ALTER TABLE `cloud`.`remote_access_vpn` ADD COLUMN `vpc_id` bigint unsigned default NULL;
+
+ALTER TABLE `cloud`.`s2s_vpn_connection` ADD COLUMN `passive` int(1) unsigned NOT NULL DEFAULT 0;
 
 DROP VIEW IF EXISTS `cloud`.`disk_offering_view`;
 CREATE VIEW `cloud`.`disk_offering_view` AS
@@ -444,3 +460,104 @@ CREATE VIEW `cloud`.`storage_pool_view` AS
         `cloud`.`async_job` ON async_job.instance_id = storage_pool.id
             and async_job.instance_type = 'StoragePool'
             and async_job.job_status = 0;
+
+ALTER TABLE `cloud`.`host` ADD COLUMN `cpu_sockets` int(10) unsigned DEFAULT NULL COMMENT "the number of CPU sockets on the host" AFTER pod_id;
+
+DROP VIEW IF EXISTS `cloud`.`host_view`;
+CREATE VIEW `cloud`.`host_view` AS
+    select
+        host.id,
+        host.uuid,
+        host.name,
+        host.status,
+        host.disconnected,
+        host.type,
+        host.private_ip_address,
+        host.version,
+        host.hypervisor_type,
+        host.hypervisor_version,
+        host.capabilities,
+        host.last_ping,
+        host.created,
+        host.removed,
+        host.resource_state,
+        host.mgmt_server_id,
+        host.cpu_sockets,
+        host.cpus,
+        host.speed,
+        host.ram,
+        cluster.id cluster_id,
+        cluster.uuid cluster_uuid,
+        cluster.name cluster_name,
+        cluster.cluster_type,
+        data_center.id data_center_id,
+        data_center.uuid data_center_uuid,
+        data_center.name data_center_name,
+        data_center.networktype data_center_type,
+        host_pod_ref.id pod_id,
+        host_pod_ref.uuid pod_uuid,
+        host_pod_ref.name pod_name,
+        host_tags.tag,
+        guest_os_category.id guest_os_category_id,
+        guest_os_category.uuid guest_os_category_uuid,
+        guest_os_category.name guest_os_category_name,
+        mem_caps.used_capacity memory_used_capacity,
+        mem_caps.reserved_capacity memory_reserved_capacity,
+        cpu_caps.used_capacity cpu_used_capacity,
+        cpu_caps.reserved_capacity cpu_reserved_capacity,
+        async_job.id job_id,
+        async_job.uuid job_uuid,
+        async_job.job_status job_status,
+        async_job.account_id job_account_id
+    from
+        `cloud`.`host`
+            left join
+        `cloud`.`cluster` ON host.cluster_id = cluster.id
+            left join
+        `cloud`.`data_center` ON host.data_center_id = data_center.id
+            left join
+        `cloud`.`host_pod_ref` ON host.pod_id = host_pod_ref.id
+            left join
+        `cloud`.`host_details` ON host.id = host_details.host_id
+            and host_details.name = 'guest.os.category.id'
+            left join
+        `cloud`.`guest_os_category` ON guest_os_category.id = CONVERT( host_details.value , UNSIGNED)
+            left join
+        `cloud`.`host_tags` ON host_tags.host_id = host.id
+            left join
+        `cloud`.`op_host_capacity` mem_caps ON host.id = mem_caps.host_id
+            and mem_caps.capacity_type = 0
+            left join
+        `cloud`.`op_host_capacity` cpu_caps ON host.id = cpu_caps.host_id
+            and cpu_caps.capacity_type = 1
+            left join
+        `cloud`.`async_job` ON async_job.instance_id = host.id
+            and async_job.instance_type = 'Host'
+            and async_job.job_status = 0;
+
+CREATE TABLE `cloud`.`firewall_rule_details` (
+  `id` bigint unsigned NOT NULL auto_increment,
+  `firewall_rule_id` bigint unsigned NOT NULL COMMENT 'Firewall rule id',
+  `name` varchar(255) NOT NULL,
+  `value` varchar(1024) NOT NULL,
+  `display` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'True if the detail can be displayed to the end user',
+  PRIMARY KEY (`id`),
+  CONSTRAINT `fk_firewall_rule_details__firewall_rule_id` FOREIGN KEY `fk_firewall_rule_details__firewall_rule_id`(`firewall_rule_id`) REFERENCES `firewall_rules`(`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+
+ALTER TABLE `cloud`.`data_center_details` ADD COLUMN `display` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'True if the detail can be displayed to the end user';
+ALTER TABLE `cloud`.`network_details` CHANGE `display_detail` `display` tinyint(0) NOT NULL DEFAULT '0' COMMENT 'True if the detail can be displayed to the end user';
+ALTER TABLE `cloud`.`vm_template_details` ADD COLUMN `display` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'True if the detail can be displayed to the end user';
+ALTER TABLE `cloud`.`volume_details` CHANGE `display_detail` `display` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'True if the detail can be displayed to the end user';
+ALTER TABLE `cloud`.`nic_details` CHANGE `display_detail` `display` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'True if the detail can be displayed to the end user';
+ALTER TABLE `cloud`.`user_vm_details` CHANGE `display_detail` `display` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'True if the detail can be displayed to the end user';
+ALTER TABLE `cloud`.`service_offering_details` ADD COLUMN `display` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'True if the detail can be displayed to the end user';
+ALTER TABLE `cloud`.`storage_pool_details` ADD COLUMN `display` tinyint(1) NOT NULL DEFAULT '0' COMMENT 'True if the detail can be displayed to the end user';
+
+INSERT IGNORE INTO `cloud`.`configuration` VALUES ('Advanced', 'DEFAULT', 'management-server', 'ldap.group.object', 'groupOfUniqueNames',
+'Sets the object type of groups within LDAP','groupOfUniqueNames',NULL,NULL,0);
+INSERT IGNORE INTO `cloud`.`configuration` VALUES ('Advanced', 'DEFAULT', 'management-server', 'ldap.group.user.uniquemember', 'uniquemember',
+'Sets the attribute for uniquemembers within a group','uniquemember',NULL,NULL,0);
+
+UPDATE `cloud`.`volumes` SET display_volume=1 where id>0;
