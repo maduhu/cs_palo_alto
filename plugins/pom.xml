@@ -44,6 +44,7 @@
     <module>network-elements/elastic-loadbalancer</module>
     <module>network-elements/ovs</module>
     <module>network-elements/juniper-contrail</module>
+    <module>network-elements/palo-alto</module>
     <module>network-elements/nicira-nvp</module>
     <module>network-elements/bigswitch-vns</module>
     <module>network-elements/midonet</module>
@@ -151,17 +152,6 @@
       </activation>
       <modules>
         <module>network-elements/juniper-srx</module>
-      </modules>
-    </profile>
-    <profile>
-      <id>paloalto</id>
-      <activation>
-        <property>
-          <name>nonoss</name>
-        </property>
-      </activation>
-      <modules>
-        <module>network-elements/palo-alto</module>
       </modules>
     </profile>
     <profile>
